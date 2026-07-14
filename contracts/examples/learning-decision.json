@@ -1,0 +1,10 @@
+{
+  "next_mode": "STUDENT",
+  "strategy": "PROBE_MISSING_CONCEPT",
+  "difficulty": 1,
+  "confidence": 0.35,
+  "reason": "User described recursion but missed the base case or termination criteria.",
+  "active_concept": "Termination Criteria",
+  "should_offer_termination": false,
+  "should_restore_interrupted_question": false
+}

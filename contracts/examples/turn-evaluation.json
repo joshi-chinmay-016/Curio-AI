@@ -1,0 +1,15 @@
+{
+  "correctness": 0.8,
+  "clarity": 0.9,
+  "completeness": 0.6,
+  "depth": 0.5,
+  "relevance": 1.0,
+  "stuck_probability": 0.0,
+  "misconceptions": [],
+  "missing_concepts": ["base case"],
+  "undefined_terms": [],
+  "mastered_concepts": ["recursive call"],
+  "knowledge_gap": "Does not explain termination mechanism or base cases.",
+  "recommended_strategy": "PROBE_MISSING_CONCEPT",
+  "recommended_difficulty": 1
+}
