@@ -1,37 +1,40 @@
 <div align="center">
 
-# 🎭 Curio AI
+# 🦉 Curio AI
 
-### *Learn by Teaching — The Reverse-Tutor AI Platform Powered by the Feynman Technique*
+### *The Stateful Reverse-Tutor AI Platform Powered by the Feynman Technique*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Next.js 14](https://img.shields.io/badge/Next.js-14.1.0-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109.2-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3%2B-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Groq LLM](https://img.shields.io/badge/LLM_Inference-Groq_Cloud-F55036?style=for-the-badge)](https://groq.com/)
+[![Groq Cloud](https://img.shields.io/badge/LLM_Inference-Groq_Cloud-F55036?style=for-the-badge)](https://groq.com/)
+[![LangGraph](https://img.shields.io/badge/State_Machine-LangGraph-FF6F00?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
 [![Docker Ready](https://img.shields.io/badge/Docker-Compose_Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](docker-compose.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](https://github.com/joshi-chinmay-016/Curio-AI/pulls)
 
 <p align="center">
-  <b>Most AI educational tools answer your questions. Curio AI makes you answer theirs.</b><br>
-  <i>By reversing the conversational dynamic, Curio AI turns you into the teacher and the AI into an inquisitive, curious student—identifying your cognitive gaps, challenging vague definitions, and solidifying genuine comprehension.</i>
+  <b>"You learn by teaching." — The Feynman Technique Reimagined.</b><br>
+  <i>Most AI educational tools answer your questions. Curio AI makes you answer theirs. By reversing the conversational dynamic, Curio AI turns you into the teacher and the AI into an inquisitive student—challenging your assumptions, probing edge cases, detecting subtle misconceptions, and intervening only when you are truly stuck.</i>
 </p>
 
 <p align="center">
-  <a href="#-the-feynman-principle-why-curio-ai">The Feynman Principle</a> •
+  <a href="#-core-philosophy--the-feynman-technique">Core Philosophy</a> •
+  <a href="#-the-three-core-modes--state-machine">Core Modes</a> •
   <a href="#-interactive-session-walkthrough">Session Walkthrough</a> •
-  <a href="#-core-features">Core Features</a> •
+  <a href="#-structured-turn-evaluation-pipeline">Evaluation Pipeline</a> •
+  <a href="#-adaptive-intelligence-engines">Adaptive Engines</a> •
+  <a href="#-dynamic-mistake-injection">Mistake Injection</a> •
+  <a href="#-file--pdf-learning-mode-rag">Document RAG</a> •
+  <a href="#-persistent-chat-history--session-restoration">Session Restoration</a> •
   <a href="#-system-architecture">System Architecture</a> •
-  <a href="#-state-machine--deterministic-decision-engine">State Machine</a> •
-  <a href="#-database-schema--entity-relationships">Database ERD</a> •
-  <a href="#-tech-stack--architectural-rationale">Tech Stack</a> •
-  <a href="#-repository-structure">Project Layout</a> •
+  <a href="#-database-schema--entity-relationships">Database Schema</a> •
   <a href="#-rest-api-reference">API Reference</a> •
+  <a href="#-two-person-team-ownership--the-golden-rules">Team Ownership</a> •
+  <a href="#-8-week-development-roadmap">8-Week Roadmap</a> •
   <a href="#-quickstart-guide">Quickstart</a> •
-  <a href="#-code-ownership--team-boundaries">Code Ownership</a> •
   <a href="#-frequently-asked-questions">FAQ</a>
 </p>
 
@@ -39,21 +42,16 @@
 
 ---
 
-## 🎯 The Feynman Principle: Why Curio AI?
+## 🎯 Core Philosophy & The Feynman Technique
 
 > [!IMPORTANT]
 > **"If you want to master something, teach it. The ultimate test of your knowledge is your capacity to convey it to another."** — *Richard Feynman*
 
 ### The Problem: The "Illusion of Competence"
-Traditional AI chatbots encourage **passive consumption**. When an LLM explains quantum computing or binary search trees, it produces articulate, perfectly structured answers. The reader nods along, experiencing the cognitive bias known as the *illusion of competence*—mistaking recognition for true understanding. The moment they are asked to implement or defend the concept without assistance, their knowledge breaks down.
+Traditional AI chatbots encourage **passive consumption**. When an LLM explains quantum computing, database isolation levels, or binary search trees, it produces articulate, perfectly structured answers. The learner nods along, experiencing the cognitive bias known as the *illusion of competence*—mistaking recognition for true mastery. The moment they are asked to implement, defend, or explain the concept without AI assistance, their knowledge breaks down.
 
 ### The Solution: The Reverse-Tutor Paradigm
-Curio AI turns the traditional learning loop upside down:
-1. **You Choose the Topic**: Pick any subject, or upload a textbook PDF or lecture notes.
-2. **You Teach the Student**: Curio AI assumes the role of a curious, novice student with no prior assumptions.
-3. **The AI Challenges You**: Curio AI asks foundational questions, probes edge cases, flags buzzwords, and tests trade-offs.
-4. **Autonomous Role Reversal**: If you freeze, contradict yourself, or type *"I don't know"*, Curio switches into **Teacher Mode** to walk you through the missing mental model, then prompts you to explain it back before resuming the student persona.
-5. **Comprehensive Diagnostic Report**: When the session concludes, you receive a full mastery audit with concept breakdowns, identified misconceptions, and an actionable learning roadmap.
+Curio AI reverses the conversational dynamic:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -69,154 +67,447 @@ Curio AI turns the traditional learning loop upside down:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+1. **User Teaches, AI Inquires**: The user selects a topic (or uploads a reference document) and attempts to teach it. Curio assumes the persona of a curious, skeptical student.
+2. **Evaluates Every Explanation**: Every response is evaluated across five objective dimensions: **Correctness, Clarity, Completeness, Depth, and Relevance**.
+3. **Adaptive Probing**: Questions scale dynamically across 5 difficulty levels based on demonstrated mastery, not message count.
+4. **Socratic Interventions**: When the user freezes, types *"I don't know"*, or repeats misconceptions, Curio transitions from **STUDENT** to **TEACHER** mode to explain *only* the specific gap causing confusion.
+5. **Verifiable Understanding**: After explaining the gap, Curio prompts the user to explain it back in their own words before restoring the interrupted inquiry.
+6. **Mastery Report**: Upon session completion, **EVALUATOR** mode compiles a comprehensive mastery dossier with an actionable roadmap.
+
+---
+
+## 🔄 The Three Core Modes & State Machine
+
+Curio AI operates across three primary pedagogical modes, one transition checkpoint, and a final completion state.
+
+```mermaid
+stateDiagram-v2
+    [*] --> SESSION_INIT : POST /sessions
+    SESSION_INIT --> STUDENT : Session Created
+    
+    state STUDENT {
+        [*] --> AskSingleQuestion : Exactly 1 Question
+        AskSingleQuestion --> TurnEvaluation : User Explains
+        TurnEvaluation --> AdaptiveProbe : Solid Explanation (Scale Difficulty)
+        TurnEvaluation --> ClarifyVagueness : Vague / Undefined Terms
+    }
+
+    state TEACHER {
+        [*] --> ExplainExactGap : Teach ONLY Confused Concept
+        ExplainExactGap --> VerifyUnderstanding : Ask User to Explain Back
+        VerifyUnderstanding --> ExplainExactGap : Still Confused (Simpler / Analogy)
+    }
+
+    state TERMINATION_CHECK {
+        [*] --> PromptUser : Confidence >= 0.75
+    }
+
+    state EVALUATOR {
+        [*] --> AggregateMetrics : Compile Turn Evaluations
+        AggregateMetrics --> GenerateReport : Produce Mastery Dossier
+    }
+
+    STUDENT --> TEACHER : stuck_prob >= 0.85\nOR Explicit "I don't know"\nOR misconception_count >= 2\nOR repeated failure
+    
+    TEACHER --> STUDENT : Understanding Verified\n(Restore interrupted_question_id & active concept)
+
+    STUDENT --> TERMINATION_CHECK : Understanding Confidence >= 0.75
+    TERMINATION_CHECK --> STUDENT : User selects "Continue with harder challenges"
+    TERMINATION_CHECK --> EVALUATOR : User selects "End session and view report"
+    
+    STUDENT --> EVALUATOR : User clicks "End Session" (Manual)
+    TEACHER --> EVALUATOR : User clicks "End Session" (Manual)
+
+    EVALUATOR --> COMPLETED : Report Saved to Database
+    COMPLETED --> [*]
+```
+
+### 1. 🧑‍🎓 STUDENT MODE (Active Inquisitor)
+- **Exactly ONE Question per Turn**: The AI never overwhelms the learner with multi-part questions.
+- **Starts with Foundations**: Begins with foundational definitions, moving toward mechanisms, applications, edge-cases, and trade-offs.
+- **Demands Definition of Terms**: If a user mentions unexplained jargon (e.g., *"V = IR"* without explaining *V*, *I*, or *R*), Curio asks them to clarify.
+- **Tests Edge Cases & Trade-offs**: Challenges unsupported assumptions (*"Why are you assuming recursion is always slower than iteration?"*).
+- **Never Reveals the Answer**: In Student Mode, Curio never teaches or provides solutions.
+
+### 2. 💡 TEACHER MODE (Socratic Intervention)
+- **Trigger Conditions**:
+  - *Explicit Stuck Signal*: User inputs *"I don't know"*, *"I have no idea"*, *"Can you explain?"*, *"I'm stuck"*, *"I don't understand"*.
+  - *High Stuck Probability*: Mathematical `stuck_probability >= 0.85`.
+  - *Persistent Misconceptions*: `misconception_count >= 2` for the same core concept.
+  - *Repeated Failure*: Inability to explain a concept after two consecutive clarifications.
+- **Teaches ONLY the Exact Gap**: Curio **never** restarts the topic from the beginning. It targets the precise missing mental model.
+- **Active Verification Loop**: Curio does not accept a simple *"Yes, I understand"*. It demands a small verification explanation back (*"Great! Then in your own words, why is the base case necessary?"*).
+- **Seamless Context Restoration**: Once verified, Curio returns to **STUDENT MODE** and restores the `interrupted_question_id`, `interrupted_concept`, and difficulty level.
+
+### 3. 📊 EVALUATOR MODE (Mastery Dossier)
+- **Activates Upon**: Manual termination, user acceptance of the $\ge 75\%$ confidence checkpoint, or topic completion.
+- **Mastery Score & Tiers**:
+  - `0% – 39%` ➔ **Beginner**
+  - `40% – 59%` ➔ **Developing**
+  - `60% – 79%` ➔ **Proficient**
+  - `80% – 100%` ➔ **Mastery**
+- **Outputs**:
+  - Overall Understanding Score ($0 - 100\%$)
+  - Prioritized Learning Gaps (High, Medium, Low)
+  - Misconceptions Detected vs. Resolved
+  - Teacher Interventions Required vs. Independent Corrections Made
+  - Personalized Learning Roadmap & Recommended Practice Exercises
+  - Downloadable PDF / Markdown Dossier
+
 ---
 
 ## 🖥️ Interactive Session Walkthrough
 
-Experience how Curio AI navigates a learning session across its three core operational modes:
-
-### 1. 🧑‍🎓 Student Mode (Active Inquisitor)
-*The AI acts as an inquisitive beginner seeking foundational clarity and real-world mechanisms.*
-
+### Turn 1: Student Probes Foundations
 ```text
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
 │ CURIO AI [STUDENT MODE // DIFFICULTY 1]                                                   │
-│ "I'm trying to learn Recursion! Can you explain to me what actually happens when a       │
-│  function calls itself? How does it avoid repeating forever?"                             │
+│ "I'm trying to understand Ohm's Law. Can you explain the basic idea to me?"              │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
                                               ▲
-                                              │ USER RESPONSE
+                                              │ USER EXPLANATION
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
 │ USER [TEACHER]                                                                            │
-│ "A function calls itself with a smaller input, and it stops when it hits a base case."    │
+│ "V = IR."                                                                                 │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
                                               ▼
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ CURIO AI [STUDENT MODE // DIFFICULTY 2 // EVALUATION: CORRECT=0.8, CLARITY=0.9]           │
-│ "That makes sense! But what physically happens in the computer's memory while all those   │
-│  calls are waiting for the base case to finish? What is the call stack doing?"            │
+│ EVALUATOR: Correctness=0.95 | Clarity=0.30 | Completeness=0.25 | Undefined=["V", "I", "R"] │
+│ STRATEGY: CLARIFY_TERM // DIFFICULTY: 1                                                   │
+│                                                                                           │
+│ CURIO AI [STUDENT MODE]:                                                                  │
+│ "I recognize the formula, but what do V, I, and R actually stand for in a circuit?"       │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-### 2. 💡 Teacher Mode (Socratic Intervention)
-*When the user becomes stuck or expresses uncertainty, the deterministic engine switches roles.*
-
+### Turn 2: User Explains Deeply ➔ Difficulty Advances
 ```text
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
 │ USER [TEACHER]                                                                            │
-│ "Honestly, idk how stack frames work under the hood. I'm stuck."                          │
+│ "V is voltage (electrical potential), I is current (the flow of charge), and R is         │
+│  resistance (opposition to current). Increasing voltage pushes more current through a     │
+│  fixed resistance."                                                                       │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
                                               ▼
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ ⚠️ TRIGGER: stuck_probability=0.92 // is_stuck_phrase=True ──▶ TRANSITION TO TEACHER MODE │
-│ Current question ID saved to `interrupted_question_id`.                                   │
+│ EVALUATOR: Correctness=1.0 | Clarity=0.95 | Completeness=0.90 | Depth=0.85                │
+│ STRATEGY: PROBE_WHY // ADVANCE DIFFICULTY: 1 ──▶ 2 (MECHANISM)                             │
+│                                                                                           │
+│ CURIO AI [STUDENT MODE]:                                                                  │
+│ "That makes sense! But at an atomic level, why does increasing resistance require more    │
+│  voltage just to maintain the exact same current flow?"                                   │
+└───────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Turn 3: User Stuck ➔ Socratic Intervention & Context Restoration
+```text
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│ USER [TEACHER]                                                                            │
+│ "Honestly, I don't know what happens at the atomic level. I'm stuck."                      │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
                                               ▼
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ CURIO AI [TEACHER MODE // EXPLAINING KNOWLEDGE GAP]                                       │
-│ "No worries at all! Let's pause and break this down together.                             │
+│ ⚠️ TRIGGER: Explicit Stuck Word Detected ("I don't know", "I'm stuck")                    │
+│ State Machine: STUDENT ──▶ TEACHER // Save interrupted_question_id                        │
 │                                                                                           │
-│  Think of the call stack like a stack of cafeteria trays. Each time a function calls      │
-│  itself, a new frame (tray) is pushed on top with its local variables. The computer      │
-│  can only execute the tray at the very top. When the base case returns, trays are popped  │
-│  off one by one. If you never hit a base case, you overflow the stack.                    │
+│ CURIO AI [TEACHER MODE // TEACHING EXACT GAP]:                                            │
+│ "No worries at all! Let's zoom into the wire. Current is electrons flowing through a      │
+│  metal lattice. Resistance is caused by those electrons colliding with vibrating atoms.   │
+│  If resistance increases (more collisions), you need a stronger electric field (higher    │
+│  voltage) to push the same number of electrons through each second.                       │
 │                                                                                           │
-│  Now, to make sure this clicked: in your own words, what would cause a Stack Overflow     │
-│  error in a recursive countdown function?"                                                │
+│  In your own words: what physically causes electrical resistance inside the conductor?"   │
+└───────────────────────────────────────────────────────────────────────────────────────────┘
+                                              ▲
+                                              │ USER VERIFICATION
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│ USER [TEACHER]                                                                            │
+│ "It's the moving electrons colliding with the atoms in the metal structure."              │
+└───────────────────────────────────────────────────────────────────────────────────────────┘
+                                              ▼
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│ ✅ VERIFIED: Correctness=0.95 // State Machine: TEACHER ──▶ STUDENT                       │
+│ Recovering interrupted_question_id // Difficulty: 2                                       │
+│                                                                                           │
+│ CURIO AI [STUDENT MODE // RESUMED FROM INTERRUPTION]:                                     │
+│ "Awesome, that clicked! Now jumping back: if heating a wire makes its atoms vibrate more, │
+│  what would you expect to happen to its resistance?"                                      │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 3. 📊 Evaluator Mode (Mastery Audit & Roadmap)
-*Upon session completion, Curio synthesizes turn-by-turn telemetry into a rich performance dossier.*
+## ⚙️ Structured Turn Evaluation Pipeline
+
+Curio AI strictly prevents combining answer evaluation and response generation into a single prompt. Doing so causes hallucinated mode flips and conversational drift. Instead, Curio runs a **Two-Call Decoupled Pipeline**:
+
+```
+                       User Explanation
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────┐
+│              LLM CALL 1: Structured Evaluator             │
+│  (Evaluates semantic dimensions against concept rubrics)  │
+└─────────────────────────────┬─────────────────────────────┘
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────┐
+│                 Validated Pydantic JSON                   │
+│                 (TurnEvaluation Schema)                   │
+└─────────────────────────────┬─────────────────────────────┘
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────┐
+│          Deterministic Python Decision Engine             │
+│  - Evaluates stuck signals & persistent misconceptions    │
+│  - Calculates mathematical Understanding Confidence       │
+│  - Steps State Machine: STUDENT ⇄ TEACHER ⇄ EVALUATOR    │
+│  - Selects 1 of 8 Question Strategies                     │
+│  - Evaluates Dynamic Mistake Eligibility (10-20%)         │
+└─────────────────────────────┬─────────────────────────────┘
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────┐
+│             LLM CALL 2: Response Generator                │
+│  (Grounded strictly by selected Mode, Strategy & Depth)   │
+└─────────────────────────────┬─────────────────────────────┘
+                              │
+                              ▼
+               Final AI Message (Exactly 1 Question)
+```
+
+### TurnEvaluation Schema
+```json
+{
+  "correctness": 0.95,
+  "clarity": 0.35,
+  "completeness": 0.25,
+  "depth": 0.15,
+  "relevance": 1.0,
+  "stuck_probability": 0.05,
+  "misconceptions": [],
+  "undefined_terms": ["V", "I", "R"],
+  "mastered_concepts": ["ohms_law_formula"],
+  "missing_concepts": ["voltage", "current", "resistance"],
+  "recommended_strategy": "CLARIFY_TERM",
+  "recommended_difficulty": 1
+}
+```
+
+---
+
+## 🧠 Adaptive Intelligence Engines
+
+### 1. 🎚️ Adaptive Difficulty Engine (5 Levels)
+Difficulty increments **only** when the user demonstrates consistent understanding, not based on turn count.
+
+| Level | Classification | Focus Area | Example Inquiry |
+| :--- | :--- | :--- | :--- |
+| **Level 1** | **Definition** | Terminology, notation, and basic meaning | *"What is recursion?"* |
+| **Level 2** | **Mechanism** | How and why the concept operates internally | *"Why does a recursive function require a base case?"* |
+| **Level 3** | **Application** | Applying principles to concrete scenarios | *"How would you calculate factorial using recursion?"* |
+| **Level 4** | **Edge Cases** | Stress testing assumptions & failure modes | *"What happens if recursive calls increase input value instead of decreasing?"* |
+| **Level 5** | **Synthesis** | Architecture trade-offs, memory & alternatives| *"When is iteration preferable to recursion considering call stack memory?"* |
+
+#### Turn Quality Formula:
+$$\text{Turn Quality} = 0.30 \cdot \text{Correctness} + 0.20 \cdot \text{Completeness} + 0.15 \cdot \text{Clarity} + 0.20 \cdot \text{Depth} + 0.15 \cdot \text{Independence}$$
+
+- **Advance Difficulty ($+1$)**: $\text{Recent Average Quality} \ge 0.80$ AND no unresolved critical misconceptions AND concept sufficiently covered.
+- **Decrease Difficulty ($-1$)**: Repeated failures occur OR critical prerequisite gap discovered.
+
+---
+
+### 2. 🎯 Question Strategy Engine (8 Strategies)
+Curio selects from eight strategies based on an explicit priority hierarchy:
+
+```
+                  ┌───────────────────────────────┐
+                  │ Does explanation contain      │──YES──▶ [1. CLARIFY_TERM]
+                  │ undefined technical terms?    │
+                  └──────────────┬────────────────┘
+                                 │ NO
+                  ┌──────────────▼────────────────┐
+                  │ Is explanation vague or       │──YES──▶ [2. PROBE_WHY / 3. PROBE_HOW]
+                  │ missing core mechanisms?      │
+                  └──────────────┬────────────────┘
+                                 │ NO
+                  ┌──────────────▼────────────────┐
+                  │ Would a concrete example      │──YES──▶ [4. REQUEST_EXAMPLE]
+                  │ verify understanding?         │
+                  └──────────────┬────────────────┘
+                                 │ NO
+                  ┌──────────────▼────────────────┐
+                  │ Are there untested edge cases │──YES──▶ [5. TEST_EDGE_CASE]
+                  │ or boundary conditions?       │
+                  └──────────────┬────────────────┘
+                                 │ NO
+                  ┌──────────────▼────────────────┐
+                  │ Did user state an unproven or │──YES──▶ [6. CHALLENGE_ASSUMPTION]
+                  │ unsupported assumption?       │
+                  └──────────────┬────────────────┘
+                                 │ NO
+                  ┌──────────────▼────────────────┐
+                  │ Can concept connect to an     │──YES──▶ [7. CONNECT_CONCEPTS]
+                  │ earlier mastered topic?       │
+                  └──────────────┬────────────────┘
+                                 │ NO
+                                 ▼
+                       [8. DEPTH_EXPANSION]
+```
+
+---
+
+### 3. 📈 Confidence-Based Termination Engine
+The Understanding Confidence score $C \in [0.0, 1.0]$ is a deterministic composite of measurable learning signals:
+
+$$C = (0.30 \cdot \text{Coverage}) + (0.25 \cdot \text{Quality}) + (0.20 \cdot \text{Difficulty}) + (0.15 \cdot \text{Consistency}) + (0.10 \cdot \text{Correction}) - P_{\text{misconception}} - P_{\text{help}}$$
+
+| Component | Weight | Pedagogical Meaning |
+| :--- | :--- | :--- |
+| **Concept Coverage** | `30%` | Percentage of foundational topics explored and addressed |
+| **Recent Answer Quality** | `25%` | Quality score of the latest explanation turns |
+| **Difficulty Achievement**| `20%` | Highest normalized difficulty level reached ($\text{level} / 5.0$) |
+| **Consistency** | `15%` | Ratio of consecutive strong vs. weak responses |
+| **Independent Correction**| `10%` | Ability to self-correct upon probing without teacher mode |
+| **Misconception Penalty** | `-0.15` | Deducted for every active, unresolved misconception |
+| **Help Penalty** | `-0.20` | Deducted while active in Teacher Mode (help dependency) |
+
+#### 🎯 75% Checkpoint Protocol
+When $C \ge 0.75$, Curio prompts the user:
+> *"Your understanding seems strong — 82%. Would you like to continue with harder challenges or end the session and view your report?"*
+- **[Continue with harder challenges]** ➔ Increments difficulty toward Level 5; remains in Student Mode.
+- **[End session and view report]** ➔ Transitions to Evaluator Mode; compiles report.
+
+---
+
+## 🎭 Dynamic Mistake Injection
+
+Curio AI can intentionally introduce subtle, plausible mistakes into its questions to test whether the user is actively analyzing explanations or passively agreeing.
 
 ```text
-╔═══════════════════════════════════════════════════════════════════════════════════════════╗
-║                               CURIO AI MASTERY DOSSIER                                    ║
-╠═══════════════════════════════════════════════════════════════════════════════════════════╣
-║  Topic: Recursion & Stack Frames                       Mastery Level: PROFICIENT          ║
-║  Overall Understanding Score: 84%                      Max Difficulty Reached: 4 / 5      ║
-║  Teacher Interventions: 1                              Confidence Rating: 0.81            ║
-╠═══════════════════════════════════════════════════════════════════════════════════════════╣
-║                                                                                           ║
-║  CONCEPT COVERAGE RADAR:                                                                  ║
-║  [████████████████████░░░░] 82% Core Definition & Self-Invocation                         ║
-║  [████████████████████████] 100% Base Case & Termination Logic                            ║
-║  [██████████████░░░░░░░░░░] 60% Stack Frame Lifecycle & Memory Overhead                   ║
-║  [████████████████░░░░░░░░] 68% Tail Call Optimization & Iterative Equivalents            ║
-║                                                                                           ║
-║  ✅ MASTERED CONCEPTS:                                                                     ║
-║     • Base Case Guard Clauses      • Call Stack LIFO Unwinding   • Divide-and-Conquer     ║
-║                                                                                           ║
-║  ⚠️ MISCONCEPTIONS RESOLVED:                                                              ║
-║     • "Assumed recursive functions share the same local scope variables across calls"     ║
-║                                                                                           ║
-║  🗺️ PERSONALIZED ACTION PLAN:                                                             ║
-║     1. Practice converting recursive Fibonacci to Tail-Call Optimized (TCO) syntax.       ║
-║     2. Implement Depth-First Search (DFS) on a binary tree using an explicit stack.       ║
-║                                                                                           ║
-╚═══════════════════════════════════════════════════════════════════════════════════════════╝
+USER: "Binary search repeatedly halves a sorted search space."
+
+CURIO AI [MISTAKE INJECTED]:
+"So if I sort any unsorted array first and then apply binary search, the entire 
+ operation is always O(log n), right?"
 ```
+*(Pedagogical Test: Binary search is $O(\log n)$, but sorting takes $O(n \log n)$. Does the teacher spot the fallacy?)*
+
+### Mistake Injection Guardrails
+- **10% – 20% of Suitable Advanced Turns**: Never injected on every turn.
+- **Independent Verifier Step**: Candidate mistakes are verified by a second pass to ensure they are subtly incorrect, grounded in the concept, safe, and solvable.
+- **Strict Ineligibility Gates**:
+  - ❌ User is already struggling or confused.
+  - ❌ An active misconception is unresolved.
+  - ❌ Teacher Mode is currently active.
+  - ❌ Topic involves sensitive safety/security constraints.
 
 ---
 
-## ✨ Core Features
+## 📄 File / PDF Learning Mode (RAG)
 
-| Feature | Description |
-| :--- | :--- |
-| **🔄 Reverse-Tutoring Interaction** | Flips standard AI education; user teaches the AI, forcing active recall and articulation. |
-| **⚙️ Deterministic State Machine** | AI provider *does not* decide mode switches. A deterministic rule engine uses structured evaluation metrics to calculate state transitions safely. |
-| **🛡️ DB-AI Architectural Isolation** | Zero coupling between database models and AI prompts; application services maintain a strict safety and validation boundary. |
-| **⚡ Mock-First Architecture (ADR-001)** | Complete TypeScript client (`MockCurioApi`) simulates state machines and latency so frontend development never waits for backend services. |
-| **📄 Grounded Document Tutoring (RAG)** | Upload lecture notes, syllabus chapters, or PDFs (`/documents`) to anchor Curio's curiosity to specific curricula. |
-| **📈 Multi-Factor Confidence Metric** | Dynamically calculates user comprehension using a 5-factor weighted algorithm with penalization for misconceptions. |
-| **🎚️ Adaptive Difficulty Scaling** | Automatically steps questions from level 1 (definitions) through level 5 (systemic trade-offs and edge cases). |
-| **📊 Turn-by-Turn Telemetry** | Every response is evaluated for correctness, clarity, completeness, depth, and stuck probability. |
+Users can upload lecture slides, PDF textbooks, or research notes. Curio AI grounds its student curiosity exclusively in the provided material.
+
+```mermaid
+flowchart LR
+    PDF[PDF Upload] --> Extract[Extract Text & Headings]
+    Extract --> Chunk[Semantic Chunking]
+    Chunk --> Embed[Generate Embeddings]
+    Embed --> PG[(PostgreSQL + pgvector)]
+    
+    UserAns[User Answer] --> Retrieve[Cosine Similarity Search]
+    PG --> Retrieve
+    Retrieve --> SourceEval{Evidence Check}
+    
+    SourceEval --> S1[SUPPORTED]
+    SourceEval --> S2[CONTRADICTED]
+    SourceEval --> S3[PARTIALLY_SUPPORTED]
+    SourceEval --> S4[NOT_IN_SOURCE]
+    SourceEval --> S5[UNCERTAIN]
+```
+
+> [!TIP]
+> **Source Grounding Rule**: Curio never marks a user incorrect simply because a concept is omitted from the PDF. If unmentioned, Curio states: *"That point isn't covered in the selected material, so I can't evaluate it against this source."*
+
+---
+
+## 💾 Persistent Chat History & Session Restoration
+
+> [!CAUTION]
+> **Core Architectural Principle: Chat History $\neq$ Learning State.**
+
+Standard chatbots simply save an array of message strings. When refreshed, they lose all context of what was learned. Curio AI persists the **complete learning state**:
+
+```text
+Session Record
+├── Messages History (User & Assistant exchanges)
+├── Current Mode (STUDENT, TEACHER, TERMINATION_CHECK, EVALUATOR)
+├── Current Difficulty (1 to 5)
+├── Understanding Confidence (0.0 to 1.0)
+├── Active Concept
+├── Current Question ID
+├── Interrupted Question ID (Preserved during Teacher interventions)
+├── Concept Mastery Map (UNSEEN, INTRODUCED, SHAKY, DEVELOPING, MASTERED)
+├── Unresolved Misconceptions
+├── Teacher Intervention Count & History
+├── Turn-by-Turn Evaluations
+├── Dynamic Mistake Injections & User Detections
+├── Attached Source Documents
+└── Final Evaluator Dossier
+```
+
+### Seamless Session Resumption
+If a user closes their browser mid-explanation in Teacher Mode:
+1. They return tomorrow and select the session from the sidebar.
+2. The backend restores the exact state: Teacher mode, interrupted question ID, difficulty, and confidence.
+3. The conversation resumes **at the exact point of interruption**, without ever restarting with *"What is recursion?"*.
 
 ---
 
 ## 🏗️ System Architecture
 
-Curio AI is engineered as a clean monorepo separating client presentation, REST orchestration, persistent storage, and cognitive reasoning.
+Curio AI is architected as a clean monorepo separating presentation, REST orchestration, persistent relational storage, and cognitive reasoning.
 
 ```mermaid
 graph TD
-    subgraph ClientLayer ["Client Layer (Next.js 14)"]
-        UI["React Server & Client Components"]
-        Zustand["Zustand Global Store<br/>(Session & Chat State)"]
+    subgraph ClientLayer ["Client Layer (Next.js 14 + shadcn/ui)"]
+        UI["React Dashboard & Chat Interface"]
+        Zustand["Zustand State Store<br/>(Session & Chat State)"]
+        VoiceModule["Voice UI (MediaRecorder & STT)"]
         ClientAdapter{"API Client Selector<br/>(NEXT_PUBLIC_USE_MOCK_API)"}
-        MockClient["MockCurioApi<br/>(In-Memory Simulation)"]
-        HttpClient["HttpCurioApi<br/>(REST Fetch Client)"]
+        MockClient["MockCurioApi<br/>(ADR-001 In-Memory Engine)"]
+        HttpClient["HttpCurioApi<br/>(Fetch / SSE Client)"]
         
         UI <--> Zustand
+        VoiceModule --> UI
         Zustand <--> ClientAdapter
         ClientAdapter -->|mock=true| MockClient
         ClientAdapter -->|mock=false| HttpClient
     end
 
     subgraph ApiGateway ["API Gateway & Services (FastAPI)"]
-        Router["FastAPI REST Router<br/>(/api/v1/sessions, /messages, /reports)"]
+        Router["FastAPI REST Router<br/>(/sessions, /messages, /documents, /reports)"]
         Services["Application Services Layer<br/>(SessionService, ChatService, ReportService)"]
         
         Router <--> Services
     end
 
-    subgraph DataLayer ["Persistence Layer (PostgreSQL)"]
+    subgraph DataLayer ["Persistence Layer (PostgreSQL + Redis)"]
         Repo["Repository Layer<br/>(SQLAlchemy 2.0 ORM)"]
         DB[("PostgreSQL Database<br/>+ pgvector Extension")]
+        RedisCache[("Redis Cache & Locks")]
         
         Services <--> Repo
         Repo <--> DB
+        Services <--> RedisCache
     end
 
-    subgraph AIEngine ["Cognitive AI Engine (app/ai/)"]
-        Orchestrator["AI Orchestrator"]
-        Evaluator["Turn Evaluator<br/>(TurnEvaluation Schema)"]
-        DecisionEngine["Deterministic Decision Engine<br/>(State Transitions & Confidence)"]
-        Generator["Response Generator<br/>(Student, Teacher, Evaluator Prompts)"]
+    subgraph AIEngine ["Cognitive AI Engine (LangGraph + Python)"]
+        Orchestrator["Curio Orchestrator"]
+        Evaluator["Turn Evaluator (LLM Call 1)"]
+        DecisionEngine["Deterministic Decision Engine<br/>(State Machine, Difficulty, Confidence)"]
+        MistakeEngine["Mistake Injection & Verifier"]
+        Generator["Response Generator (LLM Call 2)"]
         ProviderInterface{"LLM Provider Factory"}
         GroqProvider["Groq Cloud API<br/>(Llama 3 / Mixtral)"]
         MockLLM["Mock LLM Provider<br/>(Offline Fallback)"]
@@ -224,386 +515,294 @@ graph TD
         Services <-->|AIContext / AIResponse| Orchestrator
         Orchestrator --> Evaluator
         Evaluator --> DecisionEngine
-        DecisionEngine --> Generator
+        DecisionEngine --> MistakeEngine
+        MistakeEngine --> Generator
         Generator --> ProviderInterface
         ProviderInterface --> GroqProvider
         ProviderInterface --> MockLLM
     end
 
-    HttpClient <-->|HTTP REST / JSON| Router
+    HttpClient <-->|HTTP REST / SSE| Router
 
     classDef client fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#fff;
     classDef api fill:#1e1e2e,stroke:#a855f7,stroke-width:2px,color:#fff;
     classDef db fill:#1e293b,stroke:#22c55e,stroke-width:2px,color:#fff;
     classDef ai fill:#2a1b3d,stroke:#f43f5e,stroke-width:2px,color:#fff;
 
-    class UI,Zustand,ClientAdapter,MockClient,HttpClient client;
+    class UI,Zustand,VoiceModule,ClientAdapter,MockClient,HttpClient client;
     class Router,Services api;
-    class Repo,DB db;
-    class Orchestrator,Evaluator,DecisionEngine,Generator,ProviderInterface,GroqProvider,MockLLM ai;
-```
-
-### 🔒 The DB-AI Isolation Rule
-To maintain codebase maintainability and ensure modular development:
-- **No Database Imports in AI Engine**: Files inside `backend/app/ai/` must **never** import `sqlalchemy`, database sessions, or models from `backend/app/models/`.
-- **Pure Functional Boundary**: The `ChatService` loads data from PostgreSQL, maps records into static Pydantic schemas (`AIContext`), invokes `orchestrator.step()`, and commits the output (`TurnEvaluation`, `LearningDecision`, `Message`) back to PostgreSQL.
-
----
-
-## 🔄 State Machine & Deterministic Decision Engine
-
-Curio AI does not permit the LLM to make state machine decisions, avoiding unpredictable mode thrashing and conversation drift. Instead, the LLM outputs a structured assessment (`TurnEvaluation`), and the **Deterministic Decision Engine** (`decision_engine.py`) transitions modes via mathematical rules.
-
-```mermaid
-stateDiagram-v2
-    [*] --> STUDENT : POST /sessions (Session Created)
-    
-    state STUDENT {
-        [*] --> AskQuestion : Difficulty 1 (Definitions)
-        AskQuestion --> EvaluateAnswer : User Submits Explanation
-        EvaluateAnswer --> AskQuestion : Strong Answer (Advance Difficulty +1)
-        EvaluateAnswer --> AskQuestion : Partial Answer (Probe Missing Concepts)
-    }
-
-    state TEACHER {
-        [*] --> ExplainGap : Break Down Concept
-        ExplainGap --> VerifyUnderstanding : User Explains Concept Back
-        VerifyUnderstanding --> ExplainGap : Still Struggling / Stuck
-    }
-
-    state EVALUATOR {
-        [*] --> CompileHistory : Aggregate Turn Evaluations
-        CompileHistory --> GenerateDossier : Output Mastery Report
-    }
-
-    STUDENT --> TEACHER : stuck_probability > 0.7\nOR user message contains stuck phrase\nOR consecutive_weak >= 2
-    STUDENT --> EVALUATOR : Confidence >= 0.75 & Accepted\nOR User POST /sessions/{id}/end
-    
-    TEACHER --> STUDENT : Correctness > 0.7 & stuck_prob < 0.3\n(Restores interrupted_question)
-    TEACHER --> EVALUATOR : User POST /sessions/{id}/end
-    
-    EVALUATOR --> COMPLETED : Session Locked & Stored
-    COMPLETED --> [*]
-```
-
-### Decision Transition Matrix
-
-| Current Mode | Trigger Condition | Next Mode | Next Strategy | Action / Side Effect |
-| :--- | :--- | :--- | :--- | :--- |
-| **`STUDENT`** | `stuck_probability > 0.7` or helper phrase (`"idk"`, `"can you explain"`) | **`TEACHER`** | `TEACH_GAP` | Stores active question in `interrupted_question_id`. |
-| **`STUDENT`** | `misconceptions > 0` AND `consecutive_weak >= 1` | **`TEACHER`** | `TEACH_GAP` | Intervenes on repeated cognitive errors. |
-| **`STUDENT`** | `correctness > 0.7` AND `consecutive_strong >= 2` | **`STUDENT`** | `INCREASE_DIFFICULTY` | Increments difficulty level (`min(5, difficulty + 1)`). |
-| **`STUDENT`** | `correctness > 0.7` AND `consecutive_strong < 2` | **`STUDENT`** | `PROBE_WHY` | Probes deeper mechanism or nuance. |
-| **`STUDENT`** | `correctness <= 0.7` | **`STUDENT`** | `PROBE_MISSING_CONCEPT` | Asks about unaddressed foundational criteria. |
-| **`TEACHER`** | `correctness > 0.7` AND `stuck_probability < 0.3` | **`STUDENT`** | `RESTORE_INTERRUPTED_QUESTION` | Concept verified. Restores `interrupted_question_id`. |
-| **`TEACHER`** | `correctness <= 0.7` OR `stuck_probability >= 0.3` | **`TEACHER`** | `VERIFY_UNDERSTANDING` | Retains Teacher mode; re-explains from a new angle. |
-| **`STUDENT`** | `confidence >= 0.75` | **`STUDENT`** | `OFFER_TERMINATION` | Signals frontend to prompt user for session conclusion. |
-| **ANY** | `POST /sessions/{id}/end` | **`EVALUATOR`** | `GENERATE_REPORT` | Compiles final dossier; status becomes `COMPLETED`. |
-
-### Confidence Metric Mathematical Model
-The user's mastery confidence score $C \in [0.0, 1.0]$ is computed deterministically per turn:
-
-$$C = \sum (W_i \cdot M_i) - P_{\text{misconception}} - P_{\text{dependency}}$$
-
-```python
-CONFIDENCE_WEIGHTS = {
-    "concept_coverage":       0.30,   # Percentage of foundational concepts explored
-    "recent_answer_quality":  0.25,   # Correctness of latest explanation
-    "difficulty_achievement": 0.20,   # Normalized current difficulty (level / 5.0)
-    "consistency":            0.15,   # Ratio of strong vs weak responses
-    "independent_correction": 0.10    # Successfully self-correcting without teacher aid
-}
-
-# Penalties:
-# Misconception Penalty: -0.15 per active misconception
-# Help Dependency Penalty: -0.20 while active in TEACHER mode
+    class Repo,DB,RedisCache db;
+    class Orchestrator,Evaluator,DecisionEngine,MistakeEngine,Generator,ProviderInterface,GroqProvider,MockLLM ai;
 ```
 
 ---
 
 ## 🗄️ Database Schema & Entity Relationships
 
-The data model uses PostgreSQL with UUIDv4 primary keys, JSONB serialization for dynamic lists, and cascading relationship constraints.
+The complete PostgreSQL relational architecture consists of 17 core entities supporting session lifecycle, turn evaluation, concept mastery, document RAG, and learning analytics.
 
 ```mermaid
 erDiagram
-    USERS ||--o{ SESSIONS : "creates"
+    USERS ||--o{ TOPICS : "creates"
+    USERS ||--o{ SESSIONS : "starts"
+    USERS ||--o{ DOCUMENTS : "uploads"
+    USERS ||--o{ USER_DAILY_ACTIVITY : "records"
+    USERS ||--o{ USER_TOPIC_PROGRESS : "tracks"
+
+    TOPICS ||--o{ SESSIONS : "categorizes"
+    TOPICS ||--o{ CONCEPTS : "defines"
+
     SESSIONS ||--o{ MESSAGES : "contains"
-    SESSIONS ||--|| SESSION_STATES : "maintains"
-    SESSIONS ||--o| SESSION_REPORTS : "evaluates into"
-    SESSIONS ||--o| DOCUMENTS : "grounds to"
+    SESSIONS ||--|| SESSION_STATE : "maintains"
+    SESSIONS ||--o{ TURN_EVALUATIONS : "records"
+    SESSIONS ||--o{ SESSION_CONCEPT_MASTERY : "tracks"
+    SESSIONS ||--o{ MISCONCEPTIONS : "detects"
+    SESSIONS ||--o{ TEACHER_INTERVENTIONS : "logs"
+    SESSIONS ||--o{ MISTAKE_INJECTIONS : "evaluates"
+    SESSIONS ||--o{ SESSION_DOCUMENTS : "associates"
+    SESSIONS ||--o| SESSION_REPORTS : "compiles into"
+
+    DOCUMENTS ||--o{ DOCUMENT_CHUNKS : "chunks into"
+    DOCUMENTS ||--o{ SESSION_DOCUMENTS : "references"
+
     MESSAGES ||--o| TURN_EVALUATIONS : "evaluated by"
 
     USERS {
         uuid id PK
-        string email
+        string username
+        string email UK
+        string avatar_url
+        string timezone
         timestamp created_at
     }
 
     SESSIONS {
         uuid id PK
         uuid user_id FK
-        string topic
-        string source_type "GENERAL | DOCUMENT"
-        uuid document_id FK "nullable"
-        string status "ACTIVE | PAUSED | COMPLETED"
-        timestamp created_at
+        uuid topic_id FK
+        string title
+        enum status "ACTIVE | PAUSED | COMPLETED | ARCHIVED"
+        enum current_mode "STUDENT | TEACHER | TERMINATION_CHECK | EVALUATOR"
+        int current_difficulty
+        float understanding_confidence
+        string active_concept
+        uuid interrupted_question_id FK
+        boolean source_mode
+        int message_count
+        string last_message_preview
+        timestamp started_at
         timestamp last_active_at
-        timestamp ended_at "nullable"
     }
 
-    SESSION_STATES {
+    SESSION_STATE {
         uuid session_id PK, FK
-        string current_mode "STUDENT | TEACHER | EVALUATOR"
-        int difficulty "1 to 5"
-        float confidence "0.0 to 1.0"
+        enum current_mode
+        int current_difficulty
+        float understanding_confidence
         string active_concept
-        uuid current_question_id FK "nullable"
-        uuid interrupted_question_id FK "nullable"
-        int consecutive_strong_answers
-        int consecutive_weak_answers
-        jsonb unresolved_misconceptions
-        jsonb mastered_concepts
+        uuid current_question_id FK
+        uuid interrupted_question_id FK
+        int consecutive_failures
+        int consecutive_successes
+        int teacher_attempt_count
+        jsonb recent_strategy_history
+        jsonb misconception_counts
+        jsonb graph_checkpoint
+        int version
+        timestamp updated_at
     }
 
     MESSAGES {
         uuid id PK
         uuid session_id FK
-        string sender "USER | AI"
+        uuid parent_message_id FK
+        enum role "USER | ASSISTANT | SYSTEM"
+        enum mode "STUDENT | TEACHER | EVALUATOR"
         text content
-        string input_type "TEXT | VOICE"
+        enum input_type "TEXT | VOICE"
+        int sequence_number
+        enum status "PENDING | STREAMING | COMPLETED | FAILED"
+        string model_used
+        int prompt_tokens
+        int completion_tokens
         timestamp created_at
     }
 
     TURN_EVALUATIONS {
-        uuid message_id PK, FK
-        float correctness "0.0 to 1.0"
-        float clarity "0.0 to 1.0"
-        float completeness "0.0 to 1.0"
-        float depth "0.0 to 1.0"
-        float relevance "0.0 to 1.0"
-        float stuck_probability "0.0 to 1.0"
+        uuid id PK
+        uuid session_id FK
+        uuid user_message_id FK
+        float correctness
+        float clarity
+        float completeness
+        float depth
+        float relevance
+        float stuck_probability
         jsonb misconceptions
         jsonb missing_concepts
         jsonb undefined_terms
         jsonb mastered_concepts
-        text knowledge_gap
-        string recommended_strategy
-        int recommended_difficulty
+        string strategy_used
+        int difficulty
+        jsonb raw_evaluation
+        timestamp created_at
     }
 
     SESSION_REPORTS {
-        uuid session_id PK, FK
-        float understanding_score "0.0 to 100.0"
-        string mastery_level "BEGINNER | DEVELOPING | PROFICIENT | MASTER"
-        jsonb strengths
-        jsonb high_priority_learning_gaps
-        jsonb medium_priority_learning_gaps
-        jsonb low_priority_learning_gaps
-        jsonb misconceptions_detected
-        jsonb concepts_mastered
-        int teacher_interventions_required
-        int difficulty_achieved
-        jsonb personalized_roadmap
-        jsonb recommended_exercises
-        timestamp created_at
-    }
-
-    DOCUMENTS {
         uuid id PK
-        string filename
-        int file_size
-        string mime_type
-        text raw_content
-        timestamp created_at
+        uuid session_id UK, FK
+        float understanding_score
+        enum mastery_level "BEGINNER | DEVELOPING | PROFICIENT | MASTERY"
+        jsonb strengths
+        jsonb high_priority_gaps
+        jsonb medium_priority_gaps
+        jsonb low_priority_gaps
+        jsonb misconceptions
+        jsonb mastered_concepts
+        jsonb personalized_roadmap
+        jsonb practice_exercises
+        timestamp generated_at
     }
-```
-
----
-
-## 🛠️ Tech Stack & Architectural Rationale
-
-| Layer | Technology | Selection Rationale |
-| :--- | :--- | :--- |
-| **Frontend Framework** | **Next.js 14 (App Router)** | High-performance React framework with server-side layout caching and streamlined routing for dashboard and chat interfaces. |
-| **UI Styling** | **Tailwind CSS** | Utility-first styling enabling rapid theme customization, responsive breakpoints, and modern dark-mode aesthetic. |
-| **State Management** | **Zustand** | Minimalist, unopinionated client-side state store; avoids Context re-render cascades during live message streaming. |
-| **Icons & Visuals** | **Lucide React** | Clean, consistent, lightweight SVG icon package. |
-| **Backend Framework** | **FastAPI (Python 3.10+)** | Async native REST API with auto-generated OpenAPI/Swagger documentation, strict dependency injection, and native Pydantic validation. |
-| **Data Validation** | **Pydantic v2** | High-speed C-based schema validation powering API payloads, database models, and LLM JSON generation contracts. |
-| **ORM & Migrations** | **SQLAlchemy 2.0 + Alembic** | Robust relational mapper with declarative typing and predictable database schema version control. |
-| **Database** | **PostgreSQL + pgvector** | Battle-tested relational database with native JSONB querying and vector similarity search readiness for RAG knowledge grounding. |
-| **LLM Inference** | **Groq Cloud API** | Ultra-low latency Llama-3-70b / Mixtral inference (500+ tokens/sec) providing instant, human-like student responses. |
-| **Containerization** | **Docker & Docker Compose** | Reproducible multi-service deployment orchestrating PostgreSQL with pgvector, FastAPI, and local environment isolation. |
-
----
-
-## 📂 Repository Structure
-
-```text
-Curio-AI/
-├── .env.example                     # Unified environment variable template
-├── .github/
-│   ├── pull_request_template.md     # Mandatory PR checklist (contracts, migrations)
-│   └── workflows/
-│       └── ci.yml                   # GitHub Actions pipeline (test, lint, build)
-├── docker-compose.yml               # PostgreSQL + pgvector and backend orchestrator
-├── Dockerfile                       # Production container build for FastAPI service
-├── Readme.md                        # Project documentation (this file)
-│
-├── backend/                         # FastAPI Backend Application (Owner: Vishal)
-│   ├── requirements.txt             # Python production dependencies
-│   ├── alembic/                     # Database migrations
-│   ├── app/
-│   │   ├── main.py                  # Application factory, CORS, exception handlers
-│   │   ├── core/                    # App settings, logging, custom exceptions
-│   │   ├── db/                      # SQLAlchemy session lifecycle, base model
-│   │   ├── models/                  # Relational database models (User, Session, Message)
-│   │   ├── schemas/                 # API request & response Pydantic contracts
-│   │   ├── repositories/            # Data access objects (CRUD operations)
-│   │   ├── services/                # Business logic boundary (DB ⇄ AI mapping)
-│   │   ├── api/
-│   │   │   ├── router.py            # API v1 route aggregator
-│   │   │   └── v1/                  # Endpoints (sessions, messages, reports, docs)
-│   │   └── ai/                      # Cognitive AI Engine (Owner: Chinmay)
-│   │       ├── orchestrator.py      # Core execution loop
-│   │       ├── evaluator.py         # Response analysis & TurnEvaluation generator
-│   │       ├── decision_engine.py   # Deterministic mode transitions & strategies
-│   │       ├── confidence.py        # Weighted multi-factor mastery calculation
-│   │       ├── student.py           # Student question generation prompt logic
-│   │       ├── teacher.py           # Teacher gap explanation prompt logic
-│   │       ├── evaluator_mode.py    # Final evaluation & report synthesizer
-│   │       ├── schemas.py           # Internal AI Pydantic data schemas
-│   │       ├── providers/           # LLM drivers (GroqProvider, MockProvider)
-│   │       └── rag/                 # Document ingestion & semantic retrieval
-│   └── tests/                       # Unit & integration test suite
-│       ├── ai/                      # Decision engine & confidence unit tests
-│       └── api/                     # REST health & session integration tests
-│
-├── frontend/                        # Next.js 14 Application (Owner: Chinmay)
-│   ├── package.json                 # Node dependencies (Next.js, Tailwind, Zustand)
-│   ├── tsconfig.json                # TypeScript compiler configuration
-│   ├── tailwind.config.js           # Design tokens and theme styling
-│   ├── app/
-│   │   ├── layout.tsx               # Root application shell & metadata
-│   │   ├── page.tsx                 # Primary dashboard layout
-│   │   └── globals.css              # Global styles & Tailwind directives
-│   ├── components/
-│   │   ├── chat/                    # Chat container, message bubbles, input bar
-│   │   ├── reports/                 # Evaluation report card & mastery radar
-│   │   ├── sessions/                # Sidebar session history & lifecycle controls
-│   │   └── topic/                   # Topic initiator & document upload modal
-│   ├── stores/                      # Zustand global state (session-store.ts)
-│   ├── types/                       # TypeScript interfaces mirroring API contracts
-│   └── lib/api/                     # Client adapters (MockCurioApi, HttpCurioApi)
-│
-├── contracts/                       # Shared Single Source of Truth
-│   ├── api-contract.md              # REST endpoints schema contract
-│   ├── ai-contract.md               # AI Engine internal schemas contract
-│   ├── events-contract.md           # Real-time WebSocket / SSE telemetry specs
-│   └── examples/                    # JSON mock payloads for rapid testing
-│
-├── docs/                            # Deep Technical Documentation
-│   ├── architecture.md              # High-level architecture & component flow
-│   ├── state-machine.md             # Mode transitions & deterministic rules
-│   ├── database.md                  # Database schema & indexing strategy
-│   ├── ownership.md                 # Code ownership matrix & developer boundaries
-│   ├── development-workflow.md      # Git conventions & contract change protocol
-│   └── adr/
-│       └── adr-001-mock-first-api.md # ADR: Mock-first frontend development
-│
-└── scripts/                         # Automation & Developer Tooling
-    ├── setup.ps1                    # PowerShell full-environment bootstrapper
-    └── setup.sh                     # Bash full-environment bootstrapper
 ```
 
 ---
 
 ## 📡 REST API Reference
 
-The FastAPI service exposes a strictly typed REST interface documented via OpenAPI at `http://localhost:8000/docs`.
+The FastAPI service exposes a strictly typed REST interface documented via Swagger UI at `http://localhost:8000/docs`.
 
-### Session Endpoints
-
+### 1. Sessions Lifecycle & Navigation
 | Method | Endpoint | Description | Status Code |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | API & Database health check | `200 OK` |
 | `POST` | `/api/v1/sessions` | Create a new learning session for a topic | `201 Created` |
-| `GET` | `/api/v1/sessions` | List all historical and active sessions | `200 OK` |
+| `GET` | `/api/v1/sessions` | List sessions (supports pagination, search, status filter) | `200 OK` |
 | `GET` | `/api/v1/sessions/{id}` | Retrieve complete session metadata and state | `200 OK` |
-| `PATCH` | `/api/v1/sessions/{id}` | Update session configurations (rename topic) | `200 OK` |
-| `DELETE`| `/api/v1/sessions/{id}` | Delete session and cascade delete all messages | `204 No Content` |
-| `POST` | `/api/v1/sessions/{id}/pause` | Pause an active learning session | `200 OK` |
-| `POST` | `/api/v1/sessions/{id}/resume`| Resume a paused learning session | `200 OK` |
-| `POST` | `/api/v1/sessions/{id}/end` | Lock session and trigger `EVALUATOR` report | `200 OK` |
+| `PATCH`| `/api/v1/sessions/{id}` | Update session title or status | `200 OK` |
+| `POST` | `/api/v1/sessions/{id}/archive` | Archive session from primary sidebar view | `200 OK` |
+| `DELETE`| `/api/v1/sessions/{id}`| Delete session and cascade-delete child records | `204 No Content` |
+| `POST` | `/api/v1/sessions/{id}/continue` | Continue past the 75% confidence checkpoint | `200 OK` |
+| `POST` | `/api/v1/sessions/{id}/end` | End session and trigger report compilation | `200 OK` |
 
-### Interaction & Report Endpoints
-
+### 2. Conversation Turns & Messages
 | Method | Endpoint | Description | Status Code |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/sessions/{id}/messages` | Submit teacher response; executes evaluation step | `200 OK` |
-| `GET` | `/api/v1/sessions/{id}/messages` | Retrieve chronological message logs | `200 OK` |
-| `GET` | `/api/v1/sessions/{id}/report` | Retrieve compiled mastery dossier (requires ended session) | `200 OK` |
-| `POST` | `/api/v1/documents` | Upload PDF or text file for grounded session context | `201 Created` |
-| `GET` | `/api/v1/documents/{id}` | Retrieve uploaded document metadata | `200 OK` |
+| `POST` | `/api/v1/sessions/{id}/messages` | Submit teacher response; executes evaluation and AI question | `200 OK` |
+| `GET` | `/api/v1/sessions/{id}/messages` | Retrieve chronological paginated message history | `200 OK` |
 
-#### Example: Send Message Payload (`POST /api/v1/sessions/{id}/messages`)
-```json
-{
-  "content": "In recursion, each function call pushes a new frame onto the stack with its local variables.",
-  "input_type": "TEXT"
-}
+### 3. Evaluation Reports & Analytics
+| Method | Endpoint | Description | Status Code |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/sessions/{id}/report` | Retrieve completed session mastery dossier | `200 OK` |
+| `GET` | `/api/v1/sessions/{id}/report/download` | Export report as standalone PDF / Markdown | `200 OK` |
+| `GET` | `/api/v1/profile/activity` | Retrieve user daily streaks and heatmap data | `200 OK` |
+| `GET` | `/api/v1/profile/progress` | Retrieve topic mastery metrics across all sessions | `200 OK` |
+
+### 4. Document Management (RAG)
+| Method | Endpoint | Description | Status Code |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/documents` | Upload PDF/document for grounded learning | `201 Created` |
+| `GET` | `/api/v1/documents/{id}` | Check document processing status and metadata | `200 OK` |
+
+---
+
+## 👥 Two-Person Team Ownership & The Golden Rules
+
+To enable independent development without blocking or merge collisions, Curio AI establishes a strict code ownership boundary.
+
+```
+┌──────────────────────────────────────────────┐  ┌──────────────────────────────────────────────┐
+│        PERSON 1 (Vishal S Naik)              │  │        PERSON 2 (Chinmay Joshi)              │
+│    Backend, Data, RAG & Infrastructure       │  │     Frontend & AI Learning Engine            │
+├──────────────────────────────────────────────┤  ├──────────────────────────────────────────────┤
+│ • backend/app/api/ (FastAPI Routes)          │  │ • frontend/ (Next.js 14, Tailwind, shadcn)   │
+│ • backend/app/models/ (SQLAlchemy 2.0 ORM)   │  │ • frontend/components/ (Chat, Sidebar, Voice)│
+│ • backend/app/repositories/ (CRUD & DB)      │  │ • backend/app/ai/ (Prompts, Evaluators)      │
+│ • backend/app/services/ (Service Layer)      │  │ • backend/app/graph/ (LangGraph State Machine│
+│ • backend/alembic/ (Database Migrations)     │  │ • Adaptive Difficulty & Confidence Logic     │
+│ • PostgreSQL + pgvector & Redis Config       │  │ • Dynamic Mistake Injection Engine           │
+│ • Persistent Chat History & Restoration      │  │ • Prompt Architecture & Evaluation Datasets  │
+└──────────────────────────────────────────────┘  └──────────────────────────────────────────────┘
+                        ▲                                                ▲
+                        │                                                │
+                        └──────────────────────┬─────────────────────────┘
+                                               │
+                                               ▼
+                              ┌──────────────────────────────────┐
+                              │      SHARED CONTRACTS LAYER      │
+                              │           contracts/             │
+                              │  • api-contract.md               │
+                              │  • ai-contract.md                │
+                              │  • events.md                     │
+                              └──────────────────────────────────┘
 ```
 
-#### Example: Response Payload
-```json
-{
-  "user_message": {
-    "message_id": "43956417-743a-4467-bc18-974fe0fb7891",
-    "sender": "USER",
-    "content": "In recursion, each function call pushes a new frame onto the stack with its local variables."
-  },
-  "ai_message": {
-    "message_id": "b18f090c-be4e-4b47-ae86-5384617a2a07",
-    "sender": "AI",
-    "content": "That makes sense! So what happens to those frames once the base case is reached?"
-  },
-  "evaluation": {
-    "correctness": 0.9,
-    "clarity": 0.85,
-    "completeness": 0.7,
-    "depth": 0.65,
-    "stuck_probability": 0.0,
-    "misconceptions": [],
-    "mastered_concepts": ["Call Stack", "Stack Frames"]
-  },
-  "decision": {
-    "next_mode": "STUDENT",
-    "strategy": "PROBE_WHY",
-    "difficulty": 2,
-    "confidence": 0.48,
-    "should_offer_termination": false
-  }
-}
+### 🚫 The Golden Rules of Collaboration
+1. **Never Touch Each Other’s Core Files**: Person 1 owns `models/`, `api/`, `repositories/`, and `services/`. Person 2 owns `frontend/`, `ai/`, `graph/`, and `prompts/`.
+2. **Contract-First Changes**: Neither developer changes an API endpoint or Pydantic schema without first opening a PR against `contracts/`. Once both approve, implementation proceeds in parallel.
+3. **The Mock-First Protocol (ADR-001)**:
+   - If Person 1 has not finished an endpoint, Person 2 uses `MockCurioApi` in TypeScript.
+   - If Person 2 has not finished the real LLM evaluator, Person 1 uses `MockLLMProvider` in Python.
+   - **Neither developer is ever blocked.**
+
+---
+
+## 🗺️ 8-Week Development Roadmap
+
+```mermaid
+gantt
+    title Curio AI 8-Week 2-Person Development Plan
+    dateFormat  YYYY-MM-DD
+    section Week 1: Foundation
+    Monorepo, DB, Models & Session CRUD (Person 1)   :done,    w1_p1, 2026-07-01, 7d
+    Next.js, Tailwind, Sidebar & Mock Student (Person 2):done, w1_p2, 2026-07-01, 7d
+    section Week 2: Persistent Chat
+    Message Persistence & Pagination (Person 1)     :done,    w2_p1, 2026-07-08, 7d
+    Evaluator Prompt & Streaming UI (Person 2)      :done,    w2_p2, 2026-07-08, 7d
+    section Week 3: Teacher Mode
+    Atomic State Persistence & Interventions (Person 1):active, w3_p1, 2026-07-15, 7d
+    LangGraph Transition & Gap Resumption (Person 2)   :active, w3_p2, 2026-07-15, 7d
+    section Week 4: Core MVP
+    Confidence History & Error Recovery (Person 1)  :         w4_p1, 2026-07-22, 7d
+    Adaptive Difficulty & 75% Checkpoint (Person 2) :         w4_p2, 2026-07-22, 7d
+    section Week 5: Analytics
+    Report Persistence & Daily Activity (Person 1)  :         w5_p1, 2026-07-29, 7d
+    Report UI, Heatmap & Topic Mastery (Person 2)   :         w5_p2, 2026-07-29, 7d
+    section Week 6: Document RAG
+    pgvector & Document Ingestion Pipeline (Person 1):        w6_p1, 2026-08-05, 7d
+    Semantic Chunking & Source Evaluator (Person 2) :         w6_p2, 2026-08-05, 7d
+    section Week 7: Mistakes & Voice
+    Mistake Tables & Rate Limiting (Person 1)       :         w7_p1, 2026-08-12, 7d
+    Mistake Generator, Verifier & Voice UI (Person 2):        w7_p2, 2026-08-12, 7d
+    section Week 8: Production Hardening
+    Deploy Backend, Postgres & Sentry (Person 1)    :         w8_p1, 2026-08-19, 7d
+    Synthetic Eval Benchmark & Deploy Web (Person 2):         w8_p2, 2026-08-19, 7d
 ```
+
+| Week | Person 1 (Backend & Infra) | Person 2 (Frontend & AI Engine) | Milestone |
+| :---: | :--- | :--- | :--- |
+| **Week 1** | Monorepo scaffold, async SQLAlchemy, Alembic, Session/User models, `/health`, Session CRUD | Next.js 14 setup, Tailwind CSS, shadcn/ui, sidebar navigation, mock Student Mode | Topic creation & basic session listing |
+| **Week 2** | Message persistence, paginated history, sidebar grouping, session restoration endpoint | Real LLM integration (Groq), Student Mode prompt, structured evaluator, streaming UI | Full persistent conversation loop |
+| **Week 3** | Turn evaluations, concepts, misconceptions tables, atomic state transaction service | LangGraph state machine, stuck detection, gap-specific Teacher mode, context resumption | Socratic interventions & recovery |
+| **Week 4** | Concept mastery APIs, confidence history, database indexes, idempotency & retries | Adaptive difficulty (Levels 1–5), confidence formula, 75% checkpoint, gap report | **CORE MVP COMPLETE** |
+| **Week 5** | Session reports schema, download endpoint, daily activity streaks, search APIs | Evaluator report UI, PDF export, profile page, GitHub-style activity heatmap | Complete learning dashboard |
+| **Week 6** | Document upload API, pgvector configuration, chunking schema, background ingestion | PDF extraction, semantic chunking, embeddings, grounded evaluator & question generator | Source-grounded document tutoring |
+| **Week 7** | Mistake injection table, token & model telemetry, rate limiting, cost monitoring | Mistake generator & verifier, browser MediaRecorder, Whisper STT, Read Aloud TTS | Voice tutoring & mistake detection |
+| **Week 8** | Production deployment (Render/Railway), managed PostgreSQL, Sentry logging, backups | 50–100 synthetic conversation benchmark, prompt tuning, mobile responsiveness, Vercel | **PRODUCTION BETA LAUNCH** |
 
 ---
 
 ## 🚀 Quickstart Guide
 
-Get Curio AI running on your local machine in minutes.
-
 ### Prerequisites
 - **Node.js**: v18.0.0 or higher
 - **Python**: v3.10 or higher
-- **Docker & Docker Compose**: (Recommended for PostgreSQL)
-- **Groq API Key**: (Optional: only needed for live LLM generation; mock mode works out of the box)
+- **Docker & Docker Compose**: Recommended for local PostgreSQL & pgvector
+- **Groq API Key**: (Optional: only needed for live LLM inference; mock mode works 100% offline)
 
 ---
 
 ### Step 1: Clone and Configure Environment
 ```bash
-# Clone the repository
 git clone https://github.com/joshi-chinmay-016/Curio-AI.git
 cd Curio-AI
 
@@ -611,23 +810,21 @@ cd Curio-AI
 cp .env.example .env
 ```
 
-*Optionally edit `.env` to supply your Groq API key if you want live inference:*
+*Optionally add your Groq API key to `.env` for real-time Llama 3 generation:*
 ```env
 GROQ_API_KEY=gsk_your_groq_api_key_here
 ```
 
 ---
 
-### Step 2: Automated Bootstrap (Recommended)
+### Step 2: Automated Bootstrap (One Command)
 
-Run the bootstrap script for your operating system:
-
-**On Windows (PowerShell):**
+**Windows (PowerShell):**
 ```powershell
 .\scripts\setup.ps1
 ```
 
-**On Linux / macOS (Bash):**
+**Linux / macOS (Bash):**
 ```bash
 chmod +x ./scripts/setup.sh
 ./scripts/setup.sh
@@ -637,17 +834,15 @@ chmod +x ./scripts/setup.sh
 
 ### Step 3: Run the Application
 
-You can run Curio AI in two ways:
-
 #### Option A: Frontend Mock Mode (Zero Backend Required)
-*Ideal for UI development, designing state machines, and styling without starting Python or Docker.*
-1. Ensure `NEXT_PUBLIC_USE_MOCK_API=true` in `.env`.
-2. Start the Next.js dev server:
+*Ideal for frontend development, UI components, and state machine testing without Docker or Python:*
+1. Set `NEXT_PUBLIC_USE_MOCK_API=true` in `.env`.
+2. Launch the frontend:
    ```bash
    cd frontend
    npm run dev
    ```
-3. Open [http://localhost:3000](http://localhost:3000) in your browser. All API interactions will execute via `MockCurioApi` in client memory!
+3. Open [http://localhost:3000](http://localhost:3000). The app runs entirely in-memory using `MockCurioApi`!
 
 ---
 
@@ -668,161 +863,71 @@ source venv/bin/activate
 # On Windows:
 .\venv\Scripts\activate
 
-# Launch the API server:
+# Start the API server:
 uvicorn backend.app.main:app --reload --port 8000
 ```
-*API interactive documentation will be live at [http://localhost:8000/docs](http://localhost:8000/docs).*
+*API docs available at [http://localhost:8000/docs](http://localhost:8000/docs).*
 
 **Terminal 3 — Start the Next.js Frontend:**
 ```bash
 cd frontend
 
-# Set mock mode to false in your .env:
-# NEXT_PUBLIC_USE_MOCK_API=false
-
+# Set NEXT_PUBLIC_USE_MOCK_API=false in your .env
 npm run dev
 ```
-*Frontend UI will be live at [http://localhost:3000](http://localhost:3000).*
+*Frontend UI available at [http://localhost:3000](http://localhost:3000).*
 
 ---
 
-#### Option C: Full Containerized Stack (Docker Compose)
-Run the entire environment via Docker:
+#### Option C: Full Containerized Stack
 ```bash
 docker-compose up --build
 ```
 
 ---
 
-## ⚙️ Environment Configuration
-
-| Variable | Default Value | Service | Description |
-| :--- | :--- | :--- | :--- |
-| `PROJECT_NAME` | `"Curio AI"` | Backend | Display name of the application. |
-| `POSTGRES_SERVER` | `localhost` | Backend | Database host address. |
-| `POSTGRES_PORT` | `5432` | Backend | Database port. |
-| `POSTGRES_USER` | `postgres` | Backend | Database superuser account. |
-| `POSTGRES_PASSWORD` | `postgres` | Backend | Database password. |
-| `POSTGRES_DB` | `curio_db` | Backend | PostgreSQL database name. |
-| `DATABASE_URL` | *(derived)* | Backend | Full SQLAlchemy connection URI (`postgresql://...`). |
-| `GROQ_API_KEY` | *(empty)* | Backend / AI | Groq Cloud API key for high-speed Llama 3 generation. |
-| `NEXT_PUBLIC_USE_MOCK_API` | `true` | Frontend | When `true`, routes all UI actions to `MockCurioApi`. |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api/v1` | Frontend | Base URL for FastAPI backend endpoints. |
-
----
-
-## 👥 Code Ownership & Team Boundaries
-
-To maximize developer velocity, Curio AI enforces clear architectural ownership boundaries:
-
-| Component / Subpath | Primary Owner | Architectural Responsibilities |
-| :--- | :--- | :--- |
-| `frontend/` | **Chinmay Joshi** | Next.js app, Zustand stores, responsive Tailwind styling, UI components. |
-| `backend/app/ai/` | **Chinmay Joshi** | Prompt engineering, evaluator schemas, state machine decision engine, LLM providers. |
-| `backend/app/api/` | **Vishal S Naik** | FastAPI routes, input validation, error handling, route registration. |
-| `backend/app/models/` | **Vishal S Naik** | SQLAlchemy ORM entity models, foreign keys, cascading configurations. |
-| `backend/app/repositories/` | **Vishal S Naik** | Database access objects, CRUD queries, index optimization. |
-| `backend/app/services/` | **Vishal S Naik** | Orchestration layer; maps DB entities to `AIContext` schemas and commits outputs. |
-| `backend/app/db/` & `alembic/`| **Vishal S Naik** | Database connection pooling, Alembic migration scripts. |
-| `contracts/` & `docs/` | **Shared** | API endpoints, LLM JSON contracts, architectural decision records. |
-
-### Development & Branch Conventions
-- **Vishal**: Use `feat/backend-*` or `fix/backend-*` (e.g., `feat/backend-session-api`)
-- **Chinmay**: Use `feat/frontend-*` or `feat/ai-*` (e.g., `feat/ai-evaluator-engine`)
-- **Contract Changes**: Any modifications to files in `contracts/` require formal review and approval from both team members before implementation.
-
----
-
 ## 🧪 Testing & Quality Assurance
 
-### Backend Unit & Integration Tests
-Curio AI includes test suites for the decision engine, state transitions, confidence calculations, and REST API health:
-
 ```bash
-cd backend
-source venv/bin/activate  # Or .\venv\Scripts\activate on Windows
+# Run backend AI state machine & decision engine tests
+pytest -v backend/tests/ai/test_decision_engine.py
 
-# Run all test suites
-pytest
+# Run API health tests
+pytest -v backend/tests/api/test_health.py
 
-# Run tests with verbose output
-pytest -v -s backend/tests/ai/test_decision_engine.py
-```
-
-### Frontend Linting & Type Checking
-```bash
+# Run frontend linting & TypeScript verification
 cd frontend
-
-# Verify TypeScript type correctness
-npm run build
-
-# Run ESLint validation
 npm run lint
+npm run build
 ```
-
----
-
-## 🗺️ Project Roadmap
-
-- [x] **Phase 1: Architecture & Monorepo Foundation**
-  - [x] End-to-end monorepo scaffolding with FastAPI & Next.js 14
-  - [x] Strict API contract specifications (`contracts/api-contract.md`)
-  - [x] In-memory mock API client (`MockCurioApi`) for decoupled UI development
-  - [x] Deterministic state machine with weighted confidence calculations
-- [ ] **Phase 2: Live AI Integration & Persistence**
-  - [x] PostgreSQL relational schema with JSONB array storage
-  - [x] Groq API integration (Llama 3 70B & Mixtral 8x7B)
-  - [ ] Alembic automated migration pipeline
-  - [ ] Server-Sent Events (SSE) for streaming student questioning
-- [ ] **Phase 3: Multimodal & Grounded Tutoring**
-  - [ ] PDF document ingestion with pgvector semantic chunk retrieval (RAG)
-  - [ ] Real-time voice-to-voice interaction (WebRTC + Whisper speech-to-text)
-  - [ ] Interactive whiteboard canvas where the user can sketch architectural diagrams
-- [ ] **Phase 4: Classroom & Team Analytics**
-  - [ ] Professor dashboard tracking cohort knowledge blindspots
-  - [ ] Exportable competency certificates based on verifiable mastery dossiers
 
 ---
 
 ## ❓ Frequently Asked Questions
 
 <details>
-<summary><b>1. How does Curio AI differ from just asking ChatGPT to "quiz me"?</b></summary>
+<summary><b>1. Why is Curio AI built as a stateful learning engine instead of a chatbot with system prompts?</b></summary>
 <br>
-Standard LLMs tend to be sycophantic; they readily accept vague user answers, validate hallucinations, and struggle to stay in a strict pedagogical role. Curio AI separates <b>evaluation</b> from <b>conversation</b>. A dedicated, structured evaluator inspects your answer for undefined terms, missing concepts, and stuck probability. Then, a <b>deterministic decision engine</b> controls mode switching—ensuring the AI cannot hallucinate out of its student persona unless mathematically justified.
+A chatbot with prompts has no concept of what has been taught, what misconceptions persist, or why difficulty changed. Curio explicitly tracks <i>who is learning, what concepts are mastered, what questions were interrupted, and what difficulty level was earned</i>. The LLM generates natural language and evaluates responses, but deterministic Python code controls state transitions, difficulty rules, and session lifecycle.
 </details>
 
 <details>
-<summary><b>2. Do I need an expensive GPU or API key to try Curio AI locally?</b></summary>
+<summary><b>2. How does Curio prevent the user from feeling interrogated?</b></summary>
 <br>
-Not at all! Curio AI is built with an <b>ADR-001 Mock-First Architecture</b>. With <code>NEXT_PUBLIC_USE_MOCK_API=true</code>, the entire Next.js frontend runs offline in your browser using simulated responses, mock state transitions, and instant feedback. To use real AI on the backend, Groq provides a generous free tier with high inference speeds.
+Curio enforces a strict <b>rule of exactly one question per turn</b>. Questions are phrased from a position of genuine, curious skepticism rather than a stern examiner. If a learner becomes frustrated or expresses difficulty, Curio seamlessly shifts into Teacher Mode with supportive, visual analogies.
 </details>
 
 <details>
-<summary><b>3. Why is the state machine deterministic rather than LLM-directed?</b></summary>
+<summary><b>3. How does the 75% confidence termination check prevent premature session endings?</b></summary>
 <br>
-Prompting an LLM to decide when to change modes causes unpredictable state flips, circular questioning, and conversational drift. By extracting evaluation metrics (e.g., <code>stuck_probability</code>, <code>correctness</code>) into typed Pydantic models, our deterministic engine applies predictable, battle-tested pedagogical rules to decide state transitions.
+Understanding confidence is calculated via a multi-factor formula that requires sustained concept coverage, high answer quality, and consistency across turns, while heavily penalizing recurring misconceptions. Reaching 75% requires demonstrated competence across multiple dimensions, at which point the learner is given the explicit choice to continue with advanced synthesis challenges or conclude.
 </details>
 
 <details>
-<summary><b>4. How does Curio AI avoid database queries inside AI prompt modules?</b></summary>
+<summary><b>4. What happens if the server crashes during a session?</b></summary>
 <br>
-Through our <b>DB-AI Isolation Rule</b>. The AI engine (<code>backend/app/ai/</code>) is purely functional; it only accepts <code>AIContext</code> Pydantic models and emits <code>AIResponse</code> schemas. The <code>ChatService</code> layer handles all database reads, mapping, and database writes.
+Because learning state is committed atomically to PostgreSQL alongside each message turn (including active concept, difficulty, confidence, and interrupted question ID), any browser refresh or server restart allows the session to be re-hydrated to its exact prior state from the sidebar history.
 </details>
-
----
-
-## 🤝 Contributing
-
-Contributions make the open-source community an exceptional space to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feat/amazing-feature`)
-3. Commit your Changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the Branch (`git push origin feat/amazing-feature`)
-5. Open a Pull Request
-
-Please ensure your changes conform to the existing conventions in `docs/development-workflow.md` and pass all `pytest` and `npm run lint` checks.
 
 ---
 
@@ -835,8 +940,8 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 ---
 
 **Built with ❤️ by Chinmay Joshi & Vishal S Naik**<br>
-*Reversing the learning loop to help the world master deep concepts through the art of teaching.*
+*Reversing the learning dynamic to help the world achieve deep conceptual mastery through the art of teaching.*
 
-[⭐ Star on GitHub](https://github.com/joshi-chinmay-016/Curio-AI) • [🐛 Report a Bug](https://github.com/joshi-chinmay-016/Curio-AI/issues) • [💡 Request a Feature](https://github.com/joshi-chinmay-016/Curio-AI/issues)
+[⭐ Star on GitHub](https://github.com/joshi-chinmay-016/Curio-AI) • [🐛 Report an Issue](https://github.com/joshi-chinmay-016/Curio-AI/issues) • [💡 Request a Feature](https://github.com/joshi-chinmay-016/Curio-AI/issues)
 
 </div>
