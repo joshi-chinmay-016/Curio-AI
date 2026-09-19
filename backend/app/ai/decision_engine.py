@@ -73,8 +73,6 @@ def decide_next_action(
     # 2. Calculate Confidence using configurable weights
     # Concept coverage: derived from the completeness of the explanation
     concept_coverage = evaluation.completeness
-
-    # Recent answer quality: measured by correctness score
     recent_answer_quality = evaluation.correctness
 
     # Difficulty achievement: normalized against max difficulty (5)
