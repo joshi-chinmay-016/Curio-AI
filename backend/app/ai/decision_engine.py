@@ -70,12 +70,33 @@ def decide_next_action(
         strategy = LearningStrategy.GENERATE_REPORT
         reason = "Compiling report."
 
-    # Scale concept coverage with sustained strong answers
-    concept_coverage = min(1.0, 0.5 + 0.05 * consecutive_strong) if consecutive_strong > 0 else 0.5
+    # 2. Calculate Confidence using configurable weights
+    # Concept coverage: derived from the completeness of the explanation
+    concept_coverage = evaluation.completeness
     recent_answer_quality = evaluation.correctness
+
+    # Difficulty achievement: normalized against max difficulty (5)
     difficulty_achievement = difficulty / 5.0
-    consistency = 1.0 if consecutive_strong > consecutive_weak else 0.5
-    independent_correction = 0.0
+
+    # Consistency: scaled by streak ratio and depth of strong answers
+    if consecutive_strong + consecutive_weak > 0:
+        streak_ratio = consecutive_strong / (consecutive_strong + consecutive_weak)
+        streak_depth = min(1.0, consecutive_strong / 5.0) if consecutive_strong > 0 else 0.0
+        consistency = 0.5 * streak_ratio + 0.5 * streak_depth
+    else:
+        consistency = 0.5
+
+    # Independent correction: evaluates whether the user resolves gaps / explains independently without help
+    if current_mode == LearningMode.TEACHER and evaluation.correctness > 0.7:
+        independent_correction = 1.0
+    elif next_mode == LearningMode.STUDENT and len(evaluation.misconceptions) == 0 and evaluation.stuck_probability < 0.3:
+        if consecutive_strong > 0:
+            independent_correction = min(1.0, 1.0 - evaluation.stuck_probability)
+        else:
+            independent_correction = 0.0
+    else:
+        independent_correction = 0.0
+
     misconception_penalty = 0.15 * len(evaluation.misconceptions)
     help_dependency_penalty = 0.20 if next_mode == LearningMode.TEACHER else 0.0
 
