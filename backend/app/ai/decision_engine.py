@@ -70,9 +70,8 @@ def decide_next_action(
         strategy = LearningStrategy.GENERATE_REPORT
         reason = "Compiling report."
 
-    # 2. Calculate Confidence using configurable weights
-    # We will pass details to confidence calculation module
-    concept_coverage = 0.5  # Stub representation
+    # Scale concept coverage with sustained strong answers
+    concept_coverage = min(1.0, 0.5 + 0.05 * consecutive_strong) if consecutive_strong > 0 else 0.5
     recent_answer_quality = evaluation.correctness
     difficulty_achievement = difficulty / 5.0
     consistency = 1.0 if consecutive_strong > consecutive_weak else 0.5

@@ -1,10 +1,18 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Type
+from typing import Type, TypeVar
 from pydantic import BaseModel
 
-class BaseLLMProvider(ABC):
+T = TypeVar("T", bound=BaseModel)
+
+
+class BaseAIProvider(ABC):
+    """
+    Minimal AI provider abstraction.
+    Decouples Curio AI logic from specific LLM providers (Groq, Gemini, OpenAI, Mock).
+    """
+
     @abstractmethod
-    def generate_structured(self, prompt: str, response_model: Type[BaseModel]) -> BaseModel:
+    def generate_structured(self, prompt: str, response_model: Type[T]) -> T:
         """
         Generate structured output from LLM using Pydantic validation.
         """
@@ -16,3 +24,7 @@ class BaseLLMProvider(ABC):
         Generate basic text output from LLM.
         """
         pass
+
+
+# Backward compatibility alias for existing code
+BaseLLMProvider = BaseAIProvider
