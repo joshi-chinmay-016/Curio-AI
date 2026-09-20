@@ -35,7 +35,7 @@ class ReportService:
             ChatMessage(
                 sender=m.sender,
                 content=m.content,
-                input_type=InputType(m.input_type)
+                input_type=InputType(str(m.input_type).upper()) if m.input_type and str(m.input_type).upper() in InputType.__members__ else InputType.TEXT
             ) for m in history_msgs
         ]
 

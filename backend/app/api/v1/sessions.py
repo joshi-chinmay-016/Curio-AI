@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.db.session import get_db
 from backend.app.schemas.session import SessionCreate, SessionUpdate, SessionResponse, SessionSummaryResponse
 from backend.app.schemas.common import SessionStatus
+from backend.app.schemas.report import SessionReportResponse
 from backend.app.services.session_service import SessionService
 from backend.app.services.report_service import ReportService
 
@@ -55,7 +56,7 @@ def resume_session(session_id: UUID, db: SQLAlchemySession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
-@router.post("/sessions/{session_id}/end")
+@router.post("/sessions/{session_id}/end", response_model=SessionReportResponse)
 def end_session(session_id: UUID, db: SQLAlchemySession = Depends(get_db)):
     # Triggers compilation of the report and locks the session
     report = report_service.compile_report(db, session_id)
