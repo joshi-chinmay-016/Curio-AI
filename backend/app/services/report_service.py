@@ -1,78 +1,165 @@
+"""
+Service layer for learning session reports and evaluations (Phase 3G).
+"""
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session as SQLAlchemySession
-from backend.app.repositories.session_repository import SessionRepository
+
+from backend.app.ai.engine import CurioEngine
+from backend.app.ai.schemas import (
+    ChatMessage,
+    InputType,
+    LearningReport,
+    Role,
+    SessionEvaluation,
+    TurnEvaluation,
+)
+from backend.app.ai.session_evidence import SessionEvidenceBuilder
 from backend.app.models.report import SessionReport
+from backend.app.repositories.report_repository import ReportRepository
+from backend.app.repositories.session_repository import SessionRepository
 from backend.app.schemas.report import SessionReportResponse
-from backend.app.schemas.common import SessionStatus, MasteryLevel
-from backend.app.ai.evaluator_mode import EvaluatorModeHandler
-from backend.app.ai.providers.groq_provider import GroqLLMProvider
-from backend.app.ai.schemas import AIContext, ChatMessage
-from backend.app.schemas.common import InputType
+
 
 class ReportService:
-    def __init__(self):
-        self.session_repo = SessionRepository()
-        self.ai_provider = GroqLLMProvider()
-        self.evaluator_handler = EvaluatorModeHandler(self.ai_provider)
+    def __init__(
+        self,
+        ai_engine: Optional[CurioEngine] = None,
+        session_repo: Optional[SessionRepository] = None,
+        report_repo: Optional[ReportRepository] = None,
+    ):
+        self.session_repo = session_repo or SessionRepository()
+        self.report_repo = report_repo or ReportRepository()
+        self.ai_engine = ai_engine or CurioEngine()
+        self.evidence_builder = SessionEvidenceBuilder()
 
     def get_report(self, db: SQLAlchemySession, session_id: UUID) -> Optional[SessionReportResponse]:
-        db_report = db.query(SessionReport).filter(SessionReport.session_id == session_id).first()
+        """Retrieve existing report for a session."""
+        db_report = self.report_repo.get_by_session_id(db, session_id)
         if db_report:
             return SessionReportResponse.model_validate(db_report)
         return None
 
-    def compile_report(self, db: SQLAlchemySession, session_id: UUID) -> Optional[SessionReportResponse]:
-        # Fetch session
+    def compile_report(
+        self,
+        db: SQLAlchemySession,
+        session_id: UUID,
+        force_recompute: bool = False,
+    ) -> Optional[SessionReportResponse]:
+        """
+        Compiles the final learning report for a session:
+        - If already compiled and not force_recompute, returns existing report (idempotent).
+        - Otherwise, builds structured SessionEvidence from session messages & turn evaluations,
+          evaluates understanding via CurioEngine, persists the report, and marks the session COMPLETED.
+        """
+        # 1. Idempotent check
+        if not force_recompute:
+            existing = self.report_repo.get_by_session_id(db, session_id)
+            if existing:
+                return SessionReportResponse.model_validate(existing)
+
+        # 2. Fetch session
         db_session = self.session_repo.get(db, session_id)
         if not db_session:
             return None
 
-        # Build context
-        history_msgs = db_session.messages
-        ai_history = [
-            ChatMessage(
-                sender=m.sender,
-                content=m.content,
-                input_type=InputType(str(m.input_type).upper()) if m.input_type and str(m.input_type).upper() in InputType.__members__ else InputType.TEXT
-            ) for m in history_msgs
+        # 3. Extract messages and turn evaluations
+        history_msgs = db_session.messages or []
+        evaluations = []
+        for m in history_msgs:
+            if m.sender.upper() == "USER" and getattr(m, "evaluation", None):
+                db_ev = m.evaluation
+                evaluations.append(
+                    TurnEvaluation(
+                        correctness=db_ev.correctness,
+                        clarity=db_ev.clarity,
+                        completeness=db_ev.completeness,
+                        depth=db_ev.depth,
+                        relevance=db_ev.relevance,
+                        stuck_probability=db_ev.stuck_probability,
+                        misconceptions=db_ev.misconceptions or [],
+                        missing_concepts=db_ev.missing_concepts or [],
+                        undefined_terms=db_ev.undefined_terms or [],
+                        mastered_concepts=db_ev.mastered_concepts or [],
+                        knowledge_gap=db_ev.knowledge_gap,
+                        recommended_strategy=db_ev.recommended_strategy,
+                        recommended_difficulty=db_ev.recommended_difficulty,
+                    )
+                )
+
+        # 4. Build structured SessionEvidence
+        active_concept = db_session.state.active_concept if db_session.state else ""
+        diff_hist = [db_session.state.difficulty] if db_session.state else [1]
+        evidence = self.evidence_builder.build_from_history(
+            session_id=str(session_id),
+            topic=db_session.topic,
+            messages=history_msgs,
+            evaluations=evaluations,
+            difficulty_history=diff_hist,
+            active_concept=active_concept,
+        )
+
+        # 5. Evaluate session & generate report via CurioEngine
+        session_evaluation: SessionEvaluation = self.ai_engine.evaluate_session(evidence)
+        learning_report: LearningReport = self.ai_engine.generate_report(evidence)
+
+        # 6. Map to database model
+        roadmap_dump = [
+            item.model_dump() if hasattr(item, "model_dump") else item
+            for item in learning_report.recommended_next_steps
+        ]
+        concept_assessments_dump = [
+            ca.model_dump() if hasattr(ca, "model_dump") else ca
+            for ca in learning_report.concept_assessments
         ]
 
-        context = AIContext(
-            session_id=session_id,
-            topic=db_session.topic,
-            current_mode=db_session.state.current_mode,
-            difficulty=db_session.state.difficulty,
-            active_concept=db_session.state.active_concept,
-            history=ai_history
+        mastery_val = (
+            learning_report.mastery_level.value
+            if hasattr(learning_report.mastery_level, "value")
+            else str(learning_report.mastery_level)
         )
 
-        # Generate report
-        report_schema = self.evaluator_handler.generate_report(context)
+        gaps = learning_report.knowledge_gaps
+        high_gaps = gaps[:3]
+        med_gaps = gaps[3:6]
+        low_gaps = gaps[6:]
 
-        # Persist report
+        concepts_mastered = [
+            ca.concept
+            for ca in learning_report.concept_assessments
+            if ca.mastery_level in ["PROFICIENT", "MASTERY"]
+        ]
+        if not concepts_mastered and learning_report.understanding_score >= 70:
+            concepts_mastered = [db_session.topic]
+
         db_report = SessionReport(
             session_id=session_id,
-            understanding_score=report_schema.understanding_score,
-            mastery_level=report_schema.mastery_level.value if hasattr(report_schema.mastery_level, 'value') else str(report_schema.mastery_level),
-            strengths=report_schema.strengths,
-            high_priority_learning_gaps=report_schema.high_priority_learning_gaps,
-            medium_priority_learning_gaps=report_schema.medium_priority_learning_gaps,
-            low_priority_learning_gaps=report_schema.low_priority_learning_gaps,
-            misconceptions_detected=report_schema.misconceptions_detected,
-            concepts_mastered=report_schema.concepts_mastered,
-            teacher_interventions_required=db_session.state.consecutive_weak_answers, # approximate or use history
-            difficulty_achieved=db_session.state.difficulty,
-            personalized_roadmap=report_schema.personalized_roadmap,
-            recommended_exercises=report_schema.recommended_exercises
+            understanding_score=learning_report.understanding_score,
+            mastery_level=mastery_val,
+            strengths=learning_report.strengths,
+            high_priority_learning_gaps=high_gaps,
+            medium_priority_learning_gaps=med_gaps,
+            low_priority_learning_gaps=low_gaps,
+            misconceptions_detected=learning_report.misconceptions,
+            concepts_mastered=concepts_mastered,
+            teacher_interventions_required=learning_report.teacher_interventions_required,
+            difficulty_achieved=learning_report.difficulty_achieved,
+            personalized_roadmap=roadmap_dump,
+            recommended_exercises=[item.get("title", "") for item in roadmap_dump if isinstance(item, dict)],
+            evidence_confidence=learning_report.evidence_confidence,
+            concept_assessments=concept_assessments_dump,
+            resolved_gaps=learning_report.resolved_gaps,
+            unresolved_gaps=learning_report.unresolved_gaps,
+            resolved_misconceptions=learning_report.resolved_misconceptions,
+            unresolved_misconceptions=learning_report.unresolved_misconceptions,
+            session_evaluation=session_evaluation.model_dump() if hasattr(session_evaluation, "model_dump") else {},
         )
-        db_report = db.merge(db_report)
 
-        # Mark session as completed
+        # 7. Persist report and mark session COMPLETED
+        persisted_report = self.report_repo.create_or_update(db, db_report)
         db_session.status = "COMPLETED"
         db_session.ended_at = datetime.now(timezone.utc)
         db.commit()
-        db.refresh(db_report)
 
-        return SessionReportResponse.model_validate(db_report)
+        return SessionReportResponse.model_validate(persisted_report)

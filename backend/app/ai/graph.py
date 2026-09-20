@@ -3,7 +3,7 @@ Internal LangGraph state machine workflow for Curio AI (Phase 1).
 This module is strictly an internal implementation detail and must never be exposed
 to the backend service layer.
 """
-from typing import Optional, TypedDict
+from typing import Any, Optional, TypedDict
 from langgraph.graph import StateGraph, START, END
 
 from backend.app.ai.providers.base import BaseAIProvider
@@ -27,7 +27,10 @@ class CurioGraphState(TypedDict, total=False):
     """Internal LangGraph state schema for Curio AI execution."""
     context: AIContext
     provider: Optional[BaseAIProvider]
+    evidence: Optional[Any]
     evaluation: Optional[TurnEvaluation]
+    session_evaluation: Optional[Any]
+    learning_report: Optional[Any]
     decision: Optional[LearningDecision]
     response: Optional[AIResponse]
     state_updates: Optional[StateUpdates]

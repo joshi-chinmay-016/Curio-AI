@@ -20,6 +20,13 @@ class SessionReport(Base):
     difficulty_achieved = Column(Integer, default=1, nullable=False)
     personalized_roadmap = Column(JSON, default=list, nullable=False)  # list[str]
     recommended_exercises = Column(JSON, default=list, nullable=False)  # list[str]
+    evidence_confidence = Column(Float, default=0.0, nullable=False)
+    concept_assessments = Column(JSON, default=list, nullable=False)
+    resolved_gaps = Column(JSON, default=list, nullable=False)
+    unresolved_gaps = Column(JSON, default=list, nullable=False)
+    resolved_misconceptions = Column(JSON, default=list, nullable=False)
+    unresolved_misconceptions = Column(JSON, default=list, nullable=False)
+    session_evaluation = Column(JSON, default=dict, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     session = relationship("Session", back_populates="report")

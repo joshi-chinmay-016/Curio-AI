@@ -63,3 +63,12 @@ def end_session(session_id: UUID, db: SQLAlchemySession = Depends(get_db)):
     if not report:
         raise HTTPException(status_code=404, detail="Session not found or failed to compile report")
     return report
+
+
+@router.post("/sessions/{session_id}/evaluate", response_model=SessionReportResponse)
+def evaluate_session(session_id: UUID, db: SQLAlchemySession = Depends(get_db)):
+    """Explicitly triggers session evaluation and generates a structured learning report."""
+    report = report_service.compile_report(db, session_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Session not found or failed to compile report")
+    return report

@@ -23,16 +23,56 @@ from backend.app.ai.schemas import (
     TeacherIntervention,
     TurnEvaluation,
 )
+from backend.app.ai.session_evaluator import SessionEvaluator
+from backend.app.ai.session_evidence import SessionEvidenceBuilder
 from backend.app.ai.student import StudentModeHandler
 from backend.app.ai.teacher import TeacherModeHandler
 
 
 def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Evaluates the learner's response or produces an initial evaluation for new sessions.
+    Evaluates the learner's response, produces an initial evaluation for new sessions,
+    or runs session-level evaluation when in EVALUATOR mode.
     """
     context: AIContext = state["context"]
     provider = state.get("provider") or MockLLMProvider()
+
+    # Evaluator Mode branch
+    if context.current_mode == Mode.EVALUATOR:
+        builder = SessionEvidenceBuilder()
+        evidence = builder.build_from_history(
+            session_id=context.session_id,
+            topic=context.topic,
+            messages=context.conversation.recent_messages,
+            evaluations=context.learning_context.recent_evaluations,
+            active_concept=context.active_concept,
+        )
+        session_evaluator = SessionEvaluator(provider)
+        session_eval = session_evaluator.evaluate_session(evidence)
+        report = session_evaluator.generate_report(evidence)
+
+        # Synthetic turn evaluation for contract compatibility
+        turn_eval = TurnEvaluation(
+            correctness=session_eval.understanding_score / 100.0,
+            clarity=1.0,
+            completeness=1.0,
+            depth=1.0,
+            relevance=1.0,
+            stuck_probability=0.0,
+            misconceptions=session_eval.unresolved_misconceptions,
+            missing_concepts=session_eval.unresolved_gaps,
+            undefined_terms=[],
+            mastered_concepts=session_eval.strengths,
+            knowledge_gap=session_eval.unresolved_gaps[0] if session_eval.unresolved_gaps else None,
+            recommended_strategy=Strategy.GENERATE_REPORT,
+            recommended_difficulty=context.difficulty,
+        )
+        return {
+            "evaluation": turn_eval,
+            "session_evaluation": session_eval,
+            "learning_report": report,
+            "evidence": evidence,
+        }
 
     # Check if there are any user messages in recent conversation
     has_user_message = any(
@@ -71,6 +111,21 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     context: AIContext = state["context"]
     evaluation: TurnEvaluation = state["evaluation"]
 
+    # Evaluator Mode branch
+    if context.current_mode == Mode.EVALUATOR:
+        s_eval = state.get("session_evaluation")
+        decision = LearningDecision(
+            next_mode=Mode.EVALUATOR,
+            strategy=Strategy.GENERATE_REPORT,
+            difficulty=context.difficulty,
+            confidence=s_eval.evidence_confidence if s_eval else context.current_state.understanding_confidence,
+            reason="Session evaluation requested. Learning report generated.",
+            active_concept=context.active_concept or context.topic,
+            should_offer_termination=False,
+            should_restore_interrupted_question=False,
+        )
+        return {"decision": decision}
+
     # If this is an initial session turn
     has_user_message = any(
         msg.role == Role.USER or getattr(msg, "sender", "").upper() == "USER"
@@ -97,6 +152,7 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
 def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Generates response:
+    - Report completion response if next_mode == EVALUATOR.
     - Teacher response (explanation + 1 verification question) if next_mode == TEACHER.
     - Restored question if should_restore_interrupted_question is True.
     - Socratic question via StudentModeHandler otherwise.
@@ -106,7 +162,17 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
     decision: LearningDecision = state["decision"]
     provider = state.get("provider") or MockLLMProvider()
 
-    if decision.next_mode == Mode.TEACHER:
+    if decision.next_mode == Mode.EVALUATOR:
+        response = AIResponse(
+            content="Session evaluation complete. Your learning report has been generated.",
+            mode=Mode.EVALUATOR,
+            strategy=Strategy.GENERATE_REPORT,
+            difficulty=decision.difficulty,
+            confidence=decision.confidence,
+            requires_single_question=False,
+            metadata={"session_id": context.session_id},
+        )
+    elif decision.next_mode == Mode.TEACHER:
         # Teacher Mode response generation
         teacher_handler = TeacherModeHandler(provider)
         gap = decision.active_concept or evaluation.knowledge_gap or context.active_concept or "understanding gap"
@@ -185,6 +251,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Constructs the recommended StateUpdates for the backend persistence layer.
     Handles:
+    - Evaluator Mode read-only state updates.
     - Snapshotting current_question into interrupted_question when entering Teacher Mode.
     - Preserving interrupted_question during multi-turn Teacher Mode.
     - Restoring interrupted_question and clearing intervention state when returning to Student Mode.
@@ -214,7 +281,25 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     qid = f"q_{uuid.uuid4().hex[:8]}"
 
-    if decision.next_mode == Mode.TEACHER:
+    if decision.next_mode == Mode.EVALUATOR:
+        # Evaluator mode is READ-ONLY with respect to active learning state
+        state_updates = StateUpdates(
+            active_concept=context.active_concept,
+            current_mode=Mode.EVALUATOR,
+            difficulty=context.difficulty,
+            confidence=decision.confidence,
+            current_question=context.current_question,
+            interrupted_question=context.interrupted_question,
+            teacher_intervention=context.current_state.teacher_intervention,
+            teacher_attempt_count=context.current_state.teacher_attempt_count,
+            consecutive_successes=context.current_state.consecutive_successes,
+            consecutive_failures=context.current_state.consecutive_failures,
+            recent_strategy_history=history[-10:],
+            mastered_concepts=None,
+            unresolved_misconceptions=None,
+        )
+
+    elif decision.next_mode == Mode.TEACHER:
         # Entering or continuing Teacher Mode
         is_entering = context.current_mode != Mode.TEACHER and (not hasattr(context.current_mode, "value") or context.current_mode.value != "TEACHER")
         if is_entering:

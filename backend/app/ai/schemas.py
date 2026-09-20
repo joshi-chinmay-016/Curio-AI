@@ -199,6 +199,177 @@ class StateUpdates(BaseModel):
 
 
 # =====================================================================
+# PHASE 3: EVALUATION & REPORT ENUMS
+# =====================================================================
+
+class MasteryLevel(str, Enum):
+    BEGINNER = "BEGINNER"
+    DEVELOPING = "DEVELOPING"
+    PROFICIENT = "PROFICIENT"
+    MASTERY = "MASTERY"
+
+
+class GapStatus(str, Enum):
+    DETECTED = "DETECTED"
+    CHALLENGED = "CHALLENGED"
+    RESOLVED = "RESOLVED"
+    UNRESOLVED = "UNRESOLVED"
+
+
+class GapSeverity(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
+class MisconceptionStatus(str, Enum):
+    DETECTED = "DETECTED"
+    CHALLENGED = "CHALLENGED"
+    RESOLVED = "RESOLVED"
+    UNRESOLVED = "UNRESOLVED"
+
+
+# =====================================================================
+# PHASE 3: SESSION EVIDENCE CONTRACTS
+# =====================================================================
+
+class TurnEvidence(BaseModel):
+    turn_index: int = Field(ge=0)
+    question: str
+    learner_answer: str
+    concept: str
+    difficulty: int = Field(ge=1, le=5)
+    evaluation: TurnEvaluation
+
+
+class TeacherInterventionEvidence(BaseModel):
+    intervention_index: int = Field(ge=0)
+    gap: str
+    attempt_count: int = Field(ge=1)
+    teacher_explanation: str
+    verification_question: str
+    verification_answer: Optional[str] = None
+    verification_passed: bool = False
+    related_concept: str = ""
+
+
+class ConceptEvidenceItem(BaseModel):
+    concept: str
+    turns_evaluated: List[int] = Field(default_factory=list)
+    correctness_scores: List[float] = Field(default_factory=list)
+    misconceptions: List[str] = Field(default_factory=list)
+    gaps: List[str] = Field(default_factory=list)
+    teacher_assisted: bool = False
+    highest_difficulty_passed: int = 0
+
+
+class SessionEvidence(BaseModel):
+    session_id: str
+    topic: str
+    turns: List[TurnEvidence] = Field(default_factory=list)
+    teacher_interventions: List[TeacherInterventionEvidence] = Field(default_factory=list)
+    concepts_encountered: List[str] = Field(default_factory=list)
+    concept_evidence_map: Dict[str, ConceptEvidenceItem] = Field(default_factory=dict)
+    difficulty_progression: List[int] = Field(default_factory=list)
+    confidence_progression: List[float] = Field(default_factory=list)
+    total_learner_turns: int = 0
+    successful_turns: int = 0
+    failed_turns: int = 0
+
+    @field_validator("session_id", mode="before")
+    @classmethod
+    def serialize_session_id(cls, v: Any) -> str:
+        return str(v)
+
+
+# =====================================================================
+# PHASE 3: CONCEPT ASSESSMENT & EVALUATION CONTRACTS
+# =====================================================================
+
+class ConceptAssessment(BaseModel):
+    concept: str
+    understanding_score: float = Field(ge=0.0, le=100.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    mastery_level: MasteryLevel
+    strengths: List[str] = Field(default_factory=list)
+    gaps: List[str] = Field(default_factory=list)
+    misconceptions: List[str] = Field(default_factory=list)
+    evidence_references: List[str] = Field(default_factory=list)
+
+
+class GapAnalysisItem(BaseModel):
+    gap: str
+    concept: str = ""
+    severity: GapSeverity = GapSeverity.MEDIUM
+    status: GapStatus = GapStatus.UNRESOLVED
+    evidence_references: List[str] = Field(default_factory=list)
+
+
+class MisconceptionAnalysisItem(BaseModel):
+    misconception: str
+    concept: str = ""
+    status: MisconceptionStatus = MisconceptionStatus.UNRESOLVED
+    evidence_references: List[str] = Field(default_factory=list)
+
+
+class RoadmapItem(BaseModel):
+    priority: int = Field(ge=1)
+    title: str
+    description: str
+    target_concept: str
+    action_type: str = "PRACTICE"
+
+
+class SessionEvaluation(BaseModel):
+    session_id: str
+    topic: str
+    understanding_score: float = Field(ge=0.0, le=100.0)
+    mastery_level: MasteryLevel
+    evidence_confidence: float = Field(ge=0.0, le=1.0)
+    strengths: List[str] = Field(default_factory=list)
+    knowledge_gaps: List[GapAnalysisItem] = Field(default_factory=list)
+    misconceptions: List[MisconceptionAnalysisItem] = Field(default_factory=list)
+    resolved_gaps: List[str] = Field(default_factory=list)
+    unresolved_gaps: List[str] = Field(default_factory=list)
+    resolved_misconceptions: List[str] = Field(default_factory=list)
+    unresolved_misconceptions: List[str] = Field(default_factory=list)
+    concept_assessments: List[ConceptAssessment] = Field(default_factory=list)
+    difficulty_progression: List[int] = Field(default_factory=list)
+    teacher_intervention_summary: Dict[str, Any] = Field(default_factory=dict)
+    recommended_next_steps: List[RoadmapItem] = Field(default_factory=list)
+
+    @field_validator("session_id", mode="before")
+    @classmethod
+    def serialize_session_id(cls, v: Any) -> str:
+        return str(v)
+
+
+class LearningReport(BaseModel):
+    session_id: str
+    topic: str
+    understanding_score: float = Field(ge=0.0, le=100.0)
+    mastery_level: MasteryLevel
+    evidence_confidence: float = Field(ge=0.0, le=1.0)
+    strengths: List[str] = Field(default_factory=list)
+    knowledge_gaps: List[str] = Field(default_factory=list)
+    resolved_gaps: List[str] = Field(default_factory=list)
+    unresolved_gaps: List[str] = Field(default_factory=list)
+    misconceptions: List[str] = Field(default_factory=list)
+    resolved_misconceptions: List[str] = Field(default_factory=list)
+    unresolved_misconceptions: List[str] = Field(default_factory=list)
+    concept_assessments: List[ConceptAssessment] = Field(default_factory=list)
+    difficulty_achieved: int = Field(default=1, ge=1, le=5)
+    teacher_interventions_required: int = Field(default=0, ge=0)
+    recommended_next_steps: List[RoadmapItem] = Field(default_factory=list)
+    created_at: Optional[str] = None
+
+    @field_validator("session_id", mode="before")
+    @classmethod
+    def serialize_session_id(cls, v: Any) -> str:
+        return str(v)
+
+
+# =====================================================================
 # AI RESULT
 # =====================================================================
 
@@ -207,6 +378,8 @@ class AIResult(BaseModel):
     decision: LearningDecision
     response: AIResponse
     state_updates: StateUpdates
+    session_evaluation: Optional[SessionEvaluation] = None
+    learning_report: Optional[LearningReport] = None
 
 
 # =====================================================================
