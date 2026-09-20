@@ -56,17 +56,28 @@ def test_db_engine(test_db_url):
 def test_db_session(test_db_engine) -> Generator:
     """
     Function-scoped fixture providing an isolated database session.
-    Rolls back any changes on teardown to prevent database pollution.
+    Uses an outer transaction and savepoints so tests can commit without
+    persisting data to the physical database. Rolls back on teardown.
     """
     from sqlalchemy.orm import sessionmaker
+    import backend.app.db.base  # Ensure all models are registered in mapper registry
 
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_db_engine)
+    connection = test_db_engine.connect()
+    transaction = connection.begin()
+
+    TestingSessionLocal = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+    )
     session = TestingSessionLocal()
     try:
         yield session
     finally:
-        session.rollback()
         session.close()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture(scope="function")
