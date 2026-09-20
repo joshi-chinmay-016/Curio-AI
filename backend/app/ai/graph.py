@@ -34,17 +34,17 @@ class CurioGraphState(TypedDict, total=False):
 def build_curio_graph():
     """
     Constructs and compiles the minimal LangGraph workflow for Curio AI:
-    START -> evaluation -> decision -> response -> END
+    START -> run_evaluation -> run_decision -> run_response -> END
     """
     workflow = StateGraph(CurioGraphState)
 
-    workflow.add_node("evaluation", placeholder_evaluation_node)
-    workflow.add_node("decision", placeholder_decision_node)
-    workflow.add_node("response", placeholder_response_node)
+    workflow.add_node("run_evaluation", placeholder_evaluation_node)
+    workflow.add_node("run_decision", placeholder_decision_node)
+    workflow.add_node("run_response", placeholder_response_node)
 
-    workflow.add_edge(START, "evaluation")
-    workflow.add_edge("evaluation", "decision")
-    workflow.add_edge("decision", "response")
-    workflow.add_edge("response", END)
+    workflow.add_edge(START, "run_evaluation")
+    workflow.add_edge("run_evaluation", "run_decision")
+    workflow.add_edge("run_decision", "run_response")
+    workflow.add_edge("run_response", END)
 
     return workflow.compile()
