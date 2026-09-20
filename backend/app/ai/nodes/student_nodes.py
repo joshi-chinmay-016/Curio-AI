@@ -20,9 +20,11 @@ from backend.app.ai.schemas import (
     Role,
     StateUpdates,
     Strategy,
+    TeacherIntervention,
     TurnEvaluation,
 )
 from backend.app.ai.student import StudentModeHandler
+from backend.app.ai.teacher import TeacherModeHandler
 
 
 def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -70,7 +72,11 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     evaluation: TurnEvaluation = state["evaluation"]
 
     # If this is an initial session turn
-    if evaluation.recommended_strategy == Strategy.ASK_FOUNDATION:
+    has_user_message = any(
+        msg.role == Role.USER or getattr(msg, "sender", "").upper() == "USER"
+        for msg in context.conversation.recent_messages
+    )
+    if evaluation.recommended_strategy == Strategy.ASK_FOUNDATION and not has_user_message:
         decision = LearningDecision(
             next_mode=Mode.STUDENT,
             strategy=Strategy.ASK_FOUNDATION,
@@ -90,32 +96,87 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Generates the single Socratic question response via StudentModeHandler.
+    Generates response:
+    - Teacher response (explanation + 1 verification question) if next_mode == TEACHER.
+    - Restored question if should_restore_interrupted_question is True.
+    - Socratic question via StudentModeHandler otherwise.
     """
     context: AIContext = state["context"]
     evaluation: TurnEvaluation = state["evaluation"]
     decision: LearningDecision = state["decision"]
     provider = state.get("provider") or MockLLMProvider()
 
-    student_handler = StudentModeHandler(provider)
+    if decision.next_mode == Mode.TEACHER:
+        # Teacher Mode response generation
+        teacher_handler = TeacherModeHandler(provider)
+        gap = decision.active_concept or evaluation.knowledge_gap or context.active_concept or "understanding gap"
+        curr_attempts = context.current_state.teacher_attempt_count or 0
+        if context.current_state.teacher_intervention and context.current_state.teacher_intervention.attempt_count:
+            curr_attempts = max(curr_attempts, context.current_state.teacher_intervention.attempt_count)
+        attempt_count = curr_attempts + 1
 
-    if decision.strategy == Strategy.ASK_FOUNDATION:
-        content = student_handler.generate_initial_question(context)
+        interrupted_q = context.interrupted_question or context.current_question
+        content = teacher_handler.generate_teacher_response(
+            context=context,
+            gap=gap,
+            attempt_count=attempt_count,
+            interrupted_question=interrupted_q,
+            evaluation=evaluation,
+        )
+
+        response = AIResponse(
+            content=content,
+            mode=Mode.TEACHER,
+            strategy=decision.strategy,
+            difficulty=decision.difficulty,
+            confidence=decision.confidence,
+            requires_single_question=True,
+            metadata={
+                "active_concept": gap,
+                "attempt_count": attempt_count,
+                "intervention_gap": gap,
+            },
+        )
+    elif decision.should_restore_interrupted_question:
+        # Returning from Teacher Mode to Student Mode: restore interrupted question
+        restored_q = context.interrupted_question
+        if restored_q:
+            content = f"Great job! Now let's return to our original question:\n\n{restored_q.content}"
+        else:
+            student_handler = StudentModeHandler(provider)
+            content = student_handler.generate_followup_question(context, evaluation, decision)
+
+        response = AIResponse(
+            content=content,
+            mode=Mode.STUDENT,
+            strategy=decision.strategy,
+            difficulty=decision.difficulty,
+            confidence=decision.confidence,
+            requires_single_question=True,
+            metadata={
+                "active_concept": decision.active_concept,
+                "restored_question_id": restored_q.id if restored_q else None,
+            },
+        )
     else:
-        content = student_handler.generate_followup_question(context, evaluation, decision)
+        # Normal Student Mode question generation
+        student_handler = StudentModeHandler(provider)
+        if decision.strategy == Strategy.ASK_FOUNDATION:
+            content = student_handler.generate_initial_question(context)
+        else:
+            content = student_handler.generate_followup_question(context, evaluation, decision)
 
-    response = AIResponse(
-        content=content,
-        mode=Mode.STUDENT,
-        strategy=decision.strategy,
-        difficulty=decision.difficulty,
-        confidence=decision.confidence,
-        requires_single_question=True,
-        metadata={
-            "phase": "1",
-            "active_concept": decision.active_concept,
-        },
-    )
+        response = AIResponse(
+            content=content,
+            mode=Mode.STUDENT,
+            strategy=decision.strategy,
+            difficulty=decision.difficulty,
+            confidence=decision.confidence,
+            requires_single_question=True,
+            metadata={
+                "active_concept": decision.active_concept,
+            },
+        )
 
     return {"response": response}
 
@@ -123,6 +184,11 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
 def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Constructs the recommended StateUpdates for the backend persistence layer.
+    Handles:
+    - Snapshotting current_question into interrupted_question when entering Teacher Mode.
+    - Preserving interrupted_question during multi-turn Teacher Mode.
+    - Restoring interrupted_question and clearing intervention state when returning to Student Mode.
+    - Normal Student Mode updates.
     """
     context: AIContext = state["context"]
     evaluation: TurnEvaluation = state["evaluation"]
@@ -142,30 +208,111 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
         new_failures = prev_failures + 1
         new_successes = 0
 
-    # Question representation
-    qid = f"q_{uuid.uuid4().hex[:8]}"
-    current_q = CurrentQuestion(
-        id=qid,
-        content=response.content,
-        concept=decision.active_concept,
-        difficulty=decision.difficulty,
-    )
-
     # Strategy history
     history = list(context.current_state.recent_strategy_history or [])
     history.append(decision.strategy)
 
-    state_updates = StateUpdates(
-        active_concept=decision.active_concept,
-        current_mode=Mode.STUDENT,
-        difficulty=decision.difficulty,
-        confidence=decision.confidence,
-        mastered_concepts=evaluation.mastered_concepts if evaluation.mastered_concepts else None,
-        unresolved_misconceptions=evaluation.misconceptions if evaluation.misconceptions else None,
-        current_question=current_q,
-        consecutive_successes=new_successes,
-        consecutive_failures=new_failures,
-        recent_strategy_history=history[-10:],
-    )
+    qid = f"q_{uuid.uuid4().hex[:8]}"
+
+    if decision.next_mode == Mode.TEACHER:
+        # Entering or continuing Teacher Mode
+        is_entering = context.current_mode != Mode.TEACHER and (not hasattr(context.current_mode, "value") or context.current_mode.value != "TEACHER")
+        if is_entering:
+            # Snapshot current Student question
+            interrupted_q = context.current_question
+            attempt_count = 1
+        else:
+            # Preserve existing snapshot
+            interrupted_q = context.interrupted_question
+            curr_attempts = context.current_state.teacher_attempt_count or 0
+            if context.current_state.teacher_intervention and context.current_state.teacher_intervention.attempt_count:
+                curr_attempts = max(curr_attempts, context.current_state.teacher_intervention.attempt_count)
+            attempt_count = curr_attempts + 1
+
+        current_q = CurrentQuestion(
+            id=qid,
+            content=response.content,
+            concept=decision.active_concept,
+            difficulty=decision.difficulty,
+        )
+        intervention = TeacherIntervention(
+            active=True,
+            gap=decision.active_concept,
+            attempt_count=attempt_count,
+            verification_required=True,
+        )
+
+        state_updates = StateUpdates(
+            active_concept=decision.active_concept,
+            current_mode=Mode.TEACHER,
+            difficulty=decision.difficulty,
+            confidence=decision.confidence,
+            current_question=current_q,
+            interrupted_question=interrupted_q,
+            teacher_intervention=intervention,
+            teacher_attempt_count=attempt_count,
+            consecutive_successes=0,
+            consecutive_failures=prev_failures + 1,
+            recent_strategy_history=history[-10:],
+            mastered_concepts=evaluation.mastered_concepts if evaluation.mastered_concepts else None,
+            unresolved_misconceptions=evaluation.misconceptions if evaluation.misconceptions else None,
+        )
+
+    elif decision.should_restore_interrupted_question:
+        # Exiting Teacher Mode: restore interrupted question and clear intervention state
+        restored_q = context.interrupted_question
+        current_q = restored_q or CurrentQuestion(
+            id=qid,
+            content=response.content,
+            concept=decision.active_concept,
+            difficulty=decision.difficulty,
+        )
+        cleared_intervention = TeacherIntervention(
+            active=False,
+            gap="",
+            attempt_count=0,
+            verification_required=False,
+        )
+
+        state_updates = StateUpdates(
+            active_concept=current_q.concept if current_q else decision.active_concept,
+            current_mode=Mode.STUDENT,
+            difficulty=decision.difficulty,
+            confidence=decision.confidence,
+            current_question=current_q,
+            interrupted_question=None,
+            teacher_intervention=cleared_intervention,
+            teacher_attempt_count=0,
+            consecutive_successes=new_successes,
+            consecutive_failures=new_failures,
+            recent_strategy_history=history[-10:],
+            mastered_concepts=evaluation.mastered_concepts if evaluation.mastered_concepts else None,
+            unresolved_misconceptions=evaluation.misconceptions if evaluation.misconceptions else None,
+        )
+
+    else:
+        # Normal Student Mode
+        current_q = CurrentQuestion(
+            id=qid,
+            content=response.content,
+            concept=decision.active_concept,
+            difficulty=decision.difficulty,
+        )
+
+        state_updates = StateUpdates(
+            active_concept=decision.active_concept,
+            current_mode=Mode.STUDENT,
+            difficulty=decision.difficulty,
+            confidence=decision.confidence,
+            current_question=current_q,
+            interrupted_question=None,
+            teacher_intervention=None,
+            teacher_attempt_count=0,
+            consecutive_successes=new_successes,
+            consecutive_failures=new_failures,
+            recent_strategy_history=history[-10:],
+            mastered_concepts=evaluation.mastered_concepts if evaluation.mastered_concepts else None,
+            unresolved_misconceptions=evaluation.misconceptions if evaluation.misconceptions else None,
+        )
 
     return {"state_updates": state_updates}

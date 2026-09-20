@@ -21,20 +21,178 @@ from backend.app.schemas.common import LearningMode, LearningStrategy
 logger = logging.getLogger("curio.ai.decision_engine")
 
 
+MAX_TEACHER_ATTEMPTS = 3
+
+EXPLICIT_STUCK_PHRASES = [
+    "i don't know",
+    "i do not know",
+    "idk",
+    "i'm stuck",
+    "im stuck",
+    "i am stuck",
+    "i don't understand",
+    "i do not understand",
+    "i'm confused",
+    "im confused",
+    "i am confused",
+    "i have no idea",
+    "can you explain this",
+    "can you explain",
+    "explain to me",
+    "i don't get why",
+    "i don't get it",
+    "i do not get",
+    "help me",
+]
+
+
 class DecisionEngine:
     """
-    Deterministic Pedagogical Decision Engine for Student Mode.
+    Deterministic Pedagogical Decision Engine for Student and Teacher Modes.
     The LLM does NOT decide the state transitions; the DecisionEngine owns them.
     """
+
+    @staticmethod
+    def _has_explicit_stuck_signal(user_msg: str) -> bool:
+        if not user_msg:
+            return False
+        clean = user_msg.lower().strip()
+        return any(phrase in clean for phrase in EXPLICIT_STUCK_PHRASES)
 
     def decide(self, context: AIContext, evaluation: TurnEvaluation) -> LearningDecision:
         """
         Produce a deterministic LearningDecision from the TurnEvaluation and AIContext.
         """
+        current_mode = context.current_mode
         current_difficulty = context.difficulty
         current_confidence = context.current_state.understanding_confidence
+        user_msg = context.history[-1].content if context.history else ""
 
-        # Determine if answer is strong, partial, or major gap
+        # =================================================================
+        # 1. TEACHER MODE DECISION LOGIC (Phase 2D & 2E)
+        # =================================================================
+        if current_mode == Mode.TEACHER or (hasattr(current_mode, "value") and current_mode.value == "TEACHER"):
+            is_explicit_stuck = self._has_explicit_stuck_signal(user_msg)
+            is_pass = (
+                evaluation.correctness >= 0.7
+                and evaluation.stuck_probability < 0.4
+                and not is_explicit_stuck
+                and len(evaluation.misconceptions) == 0
+            )
+
+            if is_pass:
+                # Verification PASS: Restore interrupted question and return to Student Mode
+                restored_q = context.interrupted_question
+                restored_concept = restored_q.concept if restored_q else (context.active_concept or context.topic)
+                restored_diff = restored_q.difficulty if restored_q else current_difficulty
+
+                return LearningDecision(
+                    next_mode=Mode.STUDENT,
+                    strategy=Strategy.RESTORE_INTERRUPTED_QUESTION,
+                    difficulty=restored_diff,
+                    confidence=round(min(1.0, current_confidence + 0.08), 2),
+                    reason="Learner verified understanding of the gap. Returning to Student Mode and restoring interrupted question.",
+                    active_concept=restored_concept,
+                    should_offer_termination=False,
+                    should_restore_interrupted_question=True,
+                )
+            else:
+                # Verification FAIL: Check attempt limits
+                curr_attempts = context.current_state.teacher_attempt_count or 0
+                if context.current_state.teacher_intervention and context.current_state.teacher_intervention.attempt_count:
+                    curr_attempts = max(curr_attempts, context.current_state.teacher_intervention.attempt_count)
+                next_attempt = curr_attempts + 1
+
+                gap = (
+                    (context.current_state.teacher_intervention.gap if context.current_state.teacher_intervention else "")
+                    or evaluation.knowledge_gap
+                    or context.active_concept
+                    or "understanding gap"
+                )
+
+                if next_attempt >= MAX_TEACHER_ATTEMPTS:
+                    # Attempt limit reached: Fallback to Student Mode at simpler difficulty
+                    restored_q = context.interrupted_question
+                    fallback_diff = max(1, (restored_q.difficulty if restored_q else current_difficulty) - 1)
+                    restored_concept = restored_q.concept if restored_q else (context.active_concept or context.topic)
+
+                    return LearningDecision(
+                        next_mode=Mode.STUDENT,
+                        strategy=Strategy.RESTORE_INTERRUPTED_QUESTION,
+                        difficulty=fallback_diff,
+                        confidence=current_confidence,
+                        reason=f"Maximum Teacher attempts ({MAX_TEACHER_ATTEMPTS}) reached for gap '{gap}'. Exiting Teacher Mode to simpler difficulty.",
+                        active_concept=restored_concept,
+                        should_offer_termination=False,
+                        should_restore_interrupted_question=True,
+                    )
+                else:
+                    # Continue in Teacher Mode for another attempt with adapted explanation
+                    return LearningDecision(
+                        next_mode=Mode.TEACHER,
+                        strategy=Strategy.TEACH_GAP,
+                        difficulty=current_difficulty,
+                        confidence=round(max(0.0, current_confidence - 0.05), 2),
+                        reason=f"Verification failed (attempt {next_attempt}/{MAX_TEACHER_ATTEMPTS}). Adapting explanation for gap: {gap}.",
+                        active_concept=gap,
+                        should_offer_termination=False,
+                        should_restore_interrupted_question=False,
+                    )
+
+        # =================================================================
+        # 2. STUDENT MODE: STUCK DETECTION & TRANSITION POLICY (Phase 2A)
+        # =================================================================
+        trigger_a = self._has_explicit_stuck_signal(user_msg)
+        has_knowledge_gap = bool(evaluation.knowledge_gap and evaluation.knowledge_gap.strip())
+        trigger_b = evaluation.stuck_probability >= 0.75 and (
+            evaluation.correctness < 0.5 or has_knowledge_gap
+        )
+
+        # Trigger C: Repeated failure on the same knowledge gap
+        trigger_c = False
+        if has_knowledge_gap:
+            current_gap_lower = evaluation.knowledge_gap.strip().lower()
+            if context.current_state.teacher_intervention and context.current_state.teacher_intervention.gap:
+                prev_gap = context.current_state.teacher_intervention.gap.strip().lower()
+                if prev_gap in current_gap_lower or current_gap_lower in prev_gap:
+                    trigger_c = True
+            elif context.learning_context and context.learning_context.recent_evaluations:
+                for prev_eval in reversed(context.learning_context.recent_evaluations):
+                    if prev_eval.knowledge_gap:
+                        prev_gap = prev_eval.knowledge_gap.strip().lower()
+                        if prev_gap in current_gap_lower or current_gap_lower in prev_gap:
+                            trigger_c = True
+                            break
+            elif context.current_state.consecutive_failures >= 1 and evaluation.correctness < 0.5:
+                trigger_c = True
+
+        if trigger_a or trigger_b or trigger_c:
+            gap = evaluation.knowledge_gap or context.active_concept or "understanding gap"
+            reason_trigger = (
+                "explicit stuck signal" if trigger_a
+                else "high stuck probability with evidence" if trigger_b
+                else "repeated failure on the same knowledge gap"
+            )
+            is_major_gap = (
+                evaluation.correctness < 0.4
+                or evaluation.stuck_probability >= 0.7
+                or (evaluation.knowledge_gap is not None and evaluation.correctness < 0.5)
+            )
+            next_diff = max(1, current_difficulty - 1) if is_major_gap else current_difficulty
+            return LearningDecision(
+                next_mode=Mode.TEACHER,
+                strategy=Strategy.TEACH_GAP,
+                difficulty=next_diff,
+                confidence=round(max(0.0, current_confidence - 0.08), 2),
+                reason=f"Learner is genuinely stuck ({reason_trigger}). Transitioning to Teacher Mode to explain gap: {gap}.",
+                active_concept=gap,
+                should_offer_termination=False,
+                should_restore_interrupted_question=False,
+            )
+
+        # =================================================================
+        # 3. NORMAL STUDENT MODE POLICY (Phase 1)
+        # =================================================================
         is_strong = (
             evaluation.correctness >= 0.8
             and evaluation.completeness >= 0.7
@@ -52,16 +210,7 @@ class DecisionEngine:
         has_undefined_term = len(evaluation.undefined_terms) > 0
         has_missing_concept = len(evaluation.missing_concepts) > 0
 
-        # -----------------------------------------------------------------
-        # 1. Strategy Priority (Section 7.1)
-        # -----------------------------------------------------------------
-        # 1. undefined_terms present -> CLARIFY_TERM
-        # 2. else if misconceptions present -> CHALLENGE_MISCONCEPTION
-        # 3. else if important missing_concepts present -> PROBE_MISSING_CONCEPT
-        # 4. else if learner needs mechanism -> PROBE_HOW
-        # 5. else if learner needs reasoning -> PROBE_WHY
-        # 6. else if strong understanding -> INCREASE_DIFFICULTY or deeper strategy
-        # 7. else -> appropriate normal Student Mode follow-up
+        # Strategy Priority
         if has_undefined_term:
             strategy = Strategy.CLARIFY_TERM
             active_concept = evaluation.undefined_terms[0]
@@ -107,14 +256,7 @@ class DecisionEngine:
             active_concept = context.active_concept or context.topic
             reason = "Partial answer. Verifying understanding with concrete application."
 
-        # -----------------------------------------------------------------
-        # 2. Difficulty Transitions (Section 8)
-        # -----------------------------------------------------------------
-        # Strong: current + 1
-        # Partial: remain at current
-        # Major gap: remain or decrease by 1
-        # Misconception: remain at current (challenge misconception)
-        # Never change by more than 1. Clamped to [1, 5].
+        # Difficulty Transitions
         if has_misconception:
             next_difficulty = current_difficulty
         elif evaluation.correctness >= 0.8:
@@ -122,23 +264,14 @@ class DecisionEngine:
         elif is_major_gap:
             next_difficulty = max(1, current_difficulty - 1)
         else:
-            # Partial understanding
             next_difficulty = current_difficulty
 
-        # Ensure single-turn delta <= 1 and clamped [1, 5]
         delta = next_difficulty - current_difficulty
         if abs(delta) > 1:
             next_difficulty = current_difficulty + (1 if delta > 0 else -1)
         next_difficulty = max(1, min(5, next_difficulty))
 
-        # -----------------------------------------------------------------
-        # 3. Basic Bounded Confidence Update (Section 9)
-        # -----------------------------------------------------------------
-        # Strong: increases
-        # Partial: remains approximately stable
-        # Major gap: decreases
-        # Misconception: decreases
-        # Clamped to [0.0, 1.0]. No 75% termination in Phase 1.
+        # Basic Bounded Confidence Update
         if is_strong:
             confidence_delta = 0.08
         elif has_misconception:
@@ -146,19 +279,12 @@ class DecisionEngine:
         elif is_major_gap:
             confidence_delta = -0.08
         else:
-            # Partial understanding
             confidence_delta = 0.00
 
         new_confidence = round(max(0.0, min(1.0, current_confidence + confidence_delta)), 2)
 
-        # -----------------------------------------------------------------
-        # 4. Mode Invariant (Section 10)
-        # -----------------------------------------------------------------
-        # For Phase 1: next_mode MUST remain STUDENT.
-        next_mode = Mode.STUDENT
-
         return LearningDecision(
-            next_mode=next_mode,
+            next_mode=Mode.STUDENT,
             strategy=strategy,
             difficulty=next_difficulty,
             confidence=new_confidence,
