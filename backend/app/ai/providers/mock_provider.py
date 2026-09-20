@@ -126,7 +126,7 @@ class MockLLMProvider(BaseLLMProvider):
                 knowledge_gap = "Answer was completely unrelated to the topic."
                 strategy = Strategy.ASK_FOUNDATION
 
-            # Case 8: Weak/uncertain answer
+            # Case 8: Weak/uncertain answer (Stuck)
             elif any(k in user_input for k in ["idk", "i don't know", "can you explain", "stuck", "don't understand", "weak", "uncertain", "not sure"]):
                 correctness = 0.0
                 clarity = 0.20
@@ -136,7 +136,37 @@ class MockLLMProvider(BaseLLMProvider):
                 stuck_probability = 0.95
                 mastered_concepts = []
                 knowledge_gap = "User does not understand the current concept."
-                strategy = Strategy.ASK_FOUNDATION
+                strategy = Strategy.TEACH_GAP
+
+            # Case: Verification Pass (Teacher Mode)
+            elif any(k in user_input for k in ["ignore everything after 10", "greater than 10", "cannot be after", "because 7 is smaller", "stops the loop", "verification pass", "verified"]):
+                correctness = 0.90
+                clarity = 0.90
+                completeness = 0.85
+                depth = 0.80
+                relevance = 1.0
+                stuck_probability = 0.05
+                misconceptions = []
+                missing_concepts = []
+                undefined_terms = []
+                mastered_concepts = ["Order-based elimination"]
+                knowledge_gap = None
+                strategy = Strategy.RESTORE_INTERRUPTED_QUESTION
+
+            # Case: Verification Fail (Teacher Mode)
+            elif any(k in user_input for k in ["still don't understand", "still stuck", "failed verification", "still confused"]):
+                correctness = 0.20
+                clarity = 0.40
+                completeness = 0.20
+                depth = 0.10
+                relevance = 0.70
+                stuck_probability = 0.85
+                misconceptions = []
+                missing_concepts = []
+                undefined_terms = []
+                mastered_concepts = []
+                knowledge_gap = "Still does not understand why ordering eliminates half the search space."
+                strategy = Strategy.TEACH_GAP
 
             # Case 3: Incorrect answer
             elif any(k in user_input for k in ["incorrect", "wrong", "iterative for loop"]):
@@ -225,6 +255,16 @@ class MockLLMProvider(BaseLLMProvider):
     def generate_text(self, prompt: str) -> str:
         prompt_lower = prompt.lower()
 
+        # Teacher Mode responses with attempt-aware adaptation
+        if "mode: teacher" in prompt_lower or "expert, empathetic, and concise teacher" in prompt_lower:
+            if "intervention attempt: 2" in prompt_lower:
+                return "Think of a dictionary: because words are in alphabetical order, if you open to 'M' looking for 'Apple', you know 'Apple' must be in the first half.\n\nWhy does this alphabetical order guarantee 'Apple' isn't in the second half?"
+            elif "intervention attempt: 3" in prompt_lower:
+                return "Consider [2, 5, 8, 12, 16]. The middle is 8. If our target is 5, since 5 < 8 and the list is sorted, 5 cannot possibly be in [12, 16].\n\nWhy does knowing the list is sorted allow us to discard [12, 16] without checking them?"
+            elif any(k in prompt_lower for k in ["binary search", "sorted", "sorting", "ordering"]):
+                return "Sorting gives us an ordering we can rely on. If the middle value is larger than the target, every value after the middle is also larger, so that entire half can be eliminated.\n\nNow suppose the middle value is 10 and the target is 7. Why can we ignore everything after 10?"
+            return "A base case is simply a stopping condition that prevents infinite execution. Can you explain what would happen if a recursive function ran without a base case?"
+
         # Phase 0 baseline test preservation
         if "base case" in prompt_lower and ("recursion" in prompt_lower or "student" in prompt_lower):
             return "What would happen if the recursive function did not contain a base case?"
@@ -250,8 +290,6 @@ class MockLLMProvider(BaseLLMProvider):
             return "How would you optimize this using memoization to avoid redundant calculations?"
         elif "verify_understanding" in prompt_lower:
             return "Could you give a concrete example showing how this works?"
-        elif "teacher" in prompt_lower:
-            return "A base case is simply a stopping condition. Can you explain what happens without it?"
         elif "evaluator" in prompt_lower:
             return "Session complete! Here is the evaluation report."
 
