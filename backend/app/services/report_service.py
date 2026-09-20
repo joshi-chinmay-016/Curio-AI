@@ -67,11 +67,12 @@ class ReportService:
             personalized_roadmap=report_schema.personalized_roadmap,
             recommended_exercises=report_schema.recommended_exercises
         )
-        db.merge(db_report)
+        db_report = db.merge(db_report)
 
         # Mark session as completed
         db_session.status = "COMPLETED"
         db_session.ended_at = datetime.now(timezone.utc)
         db.commit()
+        db.refresh(db_report)
 
         return SessionReportResponse.model_validate(db_report)
