@@ -21,6 +21,7 @@ from backend.app.ai.schemas import (
     AIResult,
     AIResponse,
     CurrentQuestion,
+    InputType,
     LearningDecision,
     Mode,
     StateUpdates,
@@ -370,3 +371,181 @@ def test_get_messages_mapping():
     assert responses[0].sender == "USER"
     assert responses[1].message_id == m2.id
     assert responses[1].sender == "AI"
+
+
+def test_question_hydration_uuid_vs_string_id_comparison():
+    """Verify safe str(message.id) == str(target_id) comparison when types are mismatched (UUID vs str)."""
+    session_id = uuid4()
+    q_uuid = uuid4()
+    int_uuid = uuid4()
+    mock_db = MagicMock()
+
+    mock_engine = MagicMock()
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+
+    # Session state has string representations of the UUIDs
+    db_session = create_dummy_db_session(session_id)
+    db_session.state.current_question_id = str(q_uuid)  # Target is string
+    db_session.state.interrupted_question_id = str(int_uuid)  # Target is string
+
+    service.session_repo.get = MagicMock(return_value=db_session)
+    service.session_repo.update_state = MagicMock()
+
+    # Message objects in history have native UUID objects
+    q_msg = create_dummy_message(q_uuid, session_id, "AI", "What is chlorophyll?")  # Message has UUID
+    int_msg = create_dummy_message(int_uuid, session_id, "AI", "What is a chloroplast?")  # Message has UUID
+    service.message_repo.list_by_session = MagicMock(return_value=[int_msg, q_msg])
+
+    user_msg = create_dummy_message(uuid4(), session_id, "USER", "Answer")
+    ai_msg = create_dummy_message(uuid4(), session_id, "AI", "Follow up")
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.message_repo.create_evaluation = MagicMock()
+
+    message_in = MessageCreate(content="Answer", input_type=CommonInputType.TEXT)
+    service.send_message(mock_db, session_id, message_in)
+
+    context: AIContext = mock_engine.process.call_args[0][0]
+    assert context.current_state.current_question is not None
+    assert context.current_state.current_question.id == str(q_uuid)
+    assert context.current_state.current_question.content == "What is chlorophyll?"
+
+    assert context.current_state.interrupted_question is not None
+    assert context.current_state.interrupted_question.id == str(int_uuid)
+    assert context.current_state.interrupted_question.content == "What is a chloroplast?"
+
+
+def test_input_type_normalization_lowercase():
+    """Verify lowercase 'text' and 'voice' strings are safely normalized to uppercase enums."""
+    session_id = uuid4()
+    mock_db = MagicMock()
+
+    mock_engine = MagicMock()
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+
+    db_session = create_dummy_db_session(session_id)
+    service.session_repo.get = MagicMock(return_value=db_session)
+    service.session_repo.update_state = MagicMock()
+
+    # History contains lowercase input_type strings
+    m1 = create_dummy_message(uuid4(), session_id, "USER", "Hello lowercase text")
+    m1.input_type = "text"
+    m2 = create_dummy_message(uuid4(), session_id, "AI", "Audio response")
+    m2.input_type = "voice"
+    service.message_repo.list_by_session = MagicMock(return_value=[m1, m2])
+
+    user_msg = create_dummy_message(uuid4(), session_id, "USER", "Hi")
+    user_msg.input_type = "text"
+    ai_msg = create_dummy_message(uuid4(), session_id, "AI", "Bye")
+    ai_msg.input_type = "text"
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.message_repo.create_evaluation = MagicMock()
+
+    message_in = MessageCreate(content="Hi", input_type=CommonInputType.TEXT)
+    turn_response = service.send_message(mock_db, session_id, message_in)
+
+    # 1. AIContext ChatMessage normalization
+    context: AIContext = mock_engine.process.call_args[0][0]
+    assert context.conversation.recent_messages[0].input_type == InputType.TEXT
+    assert context.conversation.recent_messages[1].input_type == InputType.VOICE
+
+    # 2. API Response normalization
+    assert turn_response.user_message.input_type == CommonInputType.TEXT
+    assert turn_response.ai_message.input_type == CommonInputType.TEXT
+
+    # 3. get_messages normalization
+    retrieved = service.get_messages(mock_db, session_id)
+    assert retrieved[0].input_type == CommonInputType.TEXT
+    assert retrieved[1].input_type == CommonInputType.VOICE
+
+
+def test_input_type_normalization_missing():
+    """Verify None or missing input_type safely defaults to TEXT without raising exceptions."""
+    session_id = uuid4()
+    mock_db = MagicMock()
+
+    mock_engine = MagicMock()
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+
+    db_session = create_dummy_db_session(session_id)
+    service.session_repo.get = MagicMock(return_value=db_session)
+    service.session_repo.update_state = MagicMock()
+
+    # Message with None and message without input_type attribute
+    m1 = create_dummy_message(uuid4(), session_id, "USER", "None input type")
+    m1.input_type = None
+
+    m2 = MagicMock(spec=["id", "session_id", "sender", "content", "created_at"])
+    m2.id = uuid4()
+    m2.session_id = session_id
+    m2.sender = "AI"
+    m2.content = "Missing attribute"
+    m2.created_at = datetime.now(timezone.utc)
+    service.message_repo.list_by_session = MagicMock(return_value=[m1, m2])
+
+    user_msg = create_dummy_message(uuid4(), session_id, "USER", "Hi")
+    ai_msg = create_dummy_message(uuid4(), session_id, "AI", "Bye")
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.message_repo.create_evaluation = MagicMock()
+
+    message_in = MessageCreate(content="Hi", input_type=CommonInputType.TEXT)
+    turn_response = service.send_message(mock_db, session_id, message_in)
+
+    context: AIContext = mock_engine.process.call_args[0][0]
+    assert context.conversation.recent_messages[0].input_type == InputType.TEXT
+    assert context.conversation.recent_messages[1].input_type == InputType.TEXT
+
+    retrieved = service.get_messages(mock_db, session_id)
+    assert retrieved[0].input_type == CommonInputType.TEXT
+    assert retrieved[1].input_type == CommonInputType.TEXT
+
+
+def test_question_hydration_missing_question_ids():
+    """Verify that when question IDs are None, empty, or unfound, hydration safely yields None."""
+    session_id = uuid4()
+    mock_db = MagicMock()
+
+    mock_engine = MagicMock()
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+
+    # 1. Both IDs are explicitly None
+    db_session = create_dummy_db_session(session_id)
+    db_session.state.current_question_id = None
+    db_session.state.interrupted_question_id = None
+
+    service.session_repo.get = MagicMock(return_value=db_session)
+    service.session_repo.update_state = MagicMock()
+
+    m1 = create_dummy_message(uuid4(), session_id, "USER", "Msg")
+    service.message_repo.list_by_session = MagicMock(return_value=[m1])
+
+    user_msg = create_dummy_message(uuid4(), session_id, "USER", "Hi")
+    ai_msg = create_dummy_message(uuid4(), session_id, "AI", "Bye")
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.message_repo.create_evaluation = MagicMock()
+
+    message_in = MessageCreate(content="Hi", input_type=CommonInputType.TEXT)
+    service.send_message(mock_db, session_id, message_in)
+
+    context: AIContext = mock_engine.process.call_args[0][0]
+    assert context.current_state.current_question is None
+    assert context.current_state.interrupted_question is None
+
+    # 2. Both IDs point to messages not in history
+    db_session.state.current_question_id = uuid4()
+    db_session.state.interrupted_question_id = uuid4()
+
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.send_message(mock_db, session_id, message_in)
+
+    context2: AIContext = mock_engine.process.call_args[0][0]
+    assert context2.current_state.current_question is None
+    assert context2.current_state.interrupted_question is None
+

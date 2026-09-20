@@ -46,19 +46,63 @@ class ChatService:
         # Canonical AI Engine
         self.ai_engine = ai_engine or CurioEngine()
 
+    @staticmethod
+    def _normalize_input_type(raw_val: Any) -> InputType:
+        """
+        Safely normalize raw input type to AI InputType enum:
+        - Preserve valid InputType enum values.
+        - Convert string values to uppercase.
+        - Fallback to InputType.TEXT only when missing or invalid.
+        """
+        if raw_val is None:
+            return InputType.TEXT
+        if isinstance(raw_val, InputType):
+            return raw_val
+        if hasattr(raw_val, "value"):
+            raw_val = raw_val.value
+
+        if isinstance(raw_val, str):
+            norm_str = raw_val.strip().upper()
+            if not norm_str:
+                return InputType.TEXT
+            try:
+                return InputType(norm_str)
+            except ValueError:
+                return InputType.TEXT
+
+        return InputType.TEXT
+
+    @staticmethod
+    def _normalize_common_input_type(raw_val: Any) -> CommonInputType:
+        """
+        Safely normalize raw input type to CommonInputType enum:
+        - Preserve valid CommonInputType enum values.
+        - Convert string values to uppercase.
+        - Fallback to CommonInputType.TEXT only when missing or invalid.
+        """
+        if raw_val is None:
+            return CommonInputType.TEXT
+        if isinstance(raw_val, CommonInputType):
+            return raw_val
+        if hasattr(raw_val, "value"):
+            raw_val = raw_val.value
+
+        if isinstance(raw_val, str):
+            norm_str = raw_val.strip().upper()
+            if not norm_str:
+                return CommonInputType.TEXT
+            try:
+                return CommonInputType(norm_str)
+            except ValueError:
+                return CommonInputType.TEXT
+
+        return CommonInputType.TEXT
+
     def _to_message_response(self, msg: Any) -> MessageResponse:
         """Helper to convert database message model or dict to MessageResponse."""
         msg_id = getattr(msg, "id", None) or getattr(msg, "message_id", None)
-        input_type_val = getattr(msg, "input_type", "TEXT")
-        if hasattr(input_type_val, "value"):
-            input_type_enum = CommonInputType(input_type_val.value)
-        elif isinstance(input_type_val, str):
-            try:
-                input_type_enum = CommonInputType(input_type_val)
-            except ValueError:
-                input_type_enum = CommonInputType.TEXT
-        else:
-            input_type_enum = CommonInputType.TEXT
+        raw_input_type = getattr(msg, "input_type", None)
+        input_type_enum = self._normalize_common_input_type(raw_input_type)
 
         created_at_val = getattr(msg, "created_at", None) or datetime.now(timezone.utc)
 
@@ -88,9 +132,9 @@ class ChatService:
         db_history = self.message_repo.list_by_session(db, session_id)
         ai_history = [
             ChatMessage(
-                role=Role.ASSISTANT if m.sender == "AI" else Role.USER,
+                role=Role.ASSISTANT if getattr(m, "sender", "USER") == "AI" else Role.USER,
                 content=m.content,
-                input_type=InputType(m.input_type if hasattr(m, "input_type") and m.input_type else "TEXT")
+                input_type=self._normalize_input_type(getattr(m, "input_type", None))
             ) for m in db_history
         ]
 
@@ -117,8 +161,13 @@ class ChatService:
 
         # Question hydration: safely look up message if current_question_id is set
         current_question_obj: Optional[CurrentQuestion] = None
-        if db_session.state.current_question_id:
-            matching_q = next((m for m in db_history if m.id == db_session.state.current_question_id), None)
+        target_qid = db_session.state.current_question_id
+        if target_qid is not None:
+            target_qid_str = str(target_qid)
+            matching_q = next(
+                (m for m in db_history if getattr(m, "id", None) is not None and str(m.id) == target_qid_str),
+                None
+            )
             if matching_q:
                 current_question_obj = CurrentQuestion(
                     id=str(matching_q.id),
@@ -129,8 +178,13 @@ class ChatService:
 
         # Interrupted question hydration: safely look up message if interrupted_question_id is set
         interrupted_question_obj: Optional[CurrentQuestion] = None
-        if db_session.state.interrupted_question_id:
-            matching_int = next((m for m in db_history if m.id == db_session.state.interrupted_question_id), None)
+        target_int_id = db_session.state.interrupted_question_id
+        if target_int_id is not None:
+            target_int_id_str = str(target_int_id)
+            matching_int = next(
+                (m for m in db_history if getattr(m, "id", None) is not None and str(m.id) == target_int_id_str),
+                None
+            )
             if matching_int:
                 interrupted_question_obj = CurrentQuestion(
                     id=str(matching_int.id),
