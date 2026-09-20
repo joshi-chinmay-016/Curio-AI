@@ -47,9 +47,15 @@ if config.config_file_name is not None:
 # Dynamic Database URL Configuration
 # -----------------------------------------------------------------------------
 # Override sqlalchemy.url with dynamic database URL from settings.
-# This ensures credentials from environment variables or .env are respected
-# without hardcoding secrets in alembic.ini.
-config.set_main_option("sqlalchemy.url", settings.get_database_url())
+# Supports targeting the isolated test database via '-x db=test' or ALEMBIC_TARGET_DB='test'.
+# By default, targets the development database (DATABASE_URL).
+x_args = context.get_x_argument(as_dictionary=True)
+if x_args.get("db") == "test" or os.getenv("ALEMBIC_TARGET_DB") == "test":
+    target_url = settings.get_test_database_url()
+else:
+    target_url = settings.get_database_url()
+
+config.set_main_option("sqlalchemy.url", target_url)
 
 # Set target_metadata for Alembic autogenerate support
 target_metadata = Base.metadata
