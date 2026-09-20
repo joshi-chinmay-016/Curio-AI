@@ -1,11 +1,12 @@
 """
-Internal LangGraph state machine workflow for Curio AI.
+Internal LangGraph state machine workflow for Curio AI (Phase 1).
 This module is strictly an internal implementation detail and must never be exposed
 to the backend service layer.
 """
 from typing import Optional, TypedDict
 from langgraph.graph import StateGraph, START, END
 
+from backend.app.ai.providers.base import BaseAIProvider
 from backend.app.ai.schemas import (
     AIContext,
     AIResponse,
@@ -14,16 +15,18 @@ from backend.app.ai.schemas import (
     StateUpdates,
     TurnEvaluation,
 )
-from backend.app.ai.nodes.placeholder import (
-    placeholder_evaluation_node,
-    placeholder_decision_node,
-    placeholder_response_node,
+from backend.app.ai.nodes.student_nodes import (
+    evaluation_node,
+    decision_node,
+    response_node,
+    state_updates_node,
 )
 
 
 class CurioGraphState(TypedDict, total=False):
     """Internal LangGraph state schema for Curio AI execution."""
     context: AIContext
+    provider: Optional[BaseAIProvider]
     evaluation: Optional[TurnEvaluation]
     decision: Optional[LearningDecision]
     response: Optional[AIResponse]
@@ -31,20 +34,22 @@ class CurioGraphState(TypedDict, total=False):
     result: Optional[AIResult]
 
 
-def build_curio_graph():
+def build_curio_graph(provider: Optional[BaseAIProvider] = None):
     """
-    Constructs and compiles the minimal LangGraph workflow for Curio AI:
-    START -> run_evaluation -> run_decision -> run_response -> END
+    Constructs and compiles the LangGraph workflow for Curio AI Student Mode:
+    START -> run_evaluation -> run_decision -> run_response -> run_state_updates -> END
     """
     workflow = StateGraph(CurioGraphState)
 
-    workflow.add_node("run_evaluation", placeholder_evaluation_node)
-    workflow.add_node("run_decision", placeholder_decision_node)
-    workflow.add_node("run_response", placeholder_response_node)
+    workflow.add_node("run_evaluation", evaluation_node)
+    workflow.add_node("run_decision", decision_node)
+    workflow.add_node("run_response", response_node)
+    workflow.add_node("run_state_updates", state_updates_node)
 
     workflow.add_edge(START, "run_evaluation")
     workflow.add_edge("run_evaluation", "run_decision")
     workflow.add_edge("run_decision", "run_response")
-    workflow.add_edge("run_response", END)
+    workflow.add_edge("run_response", "run_state_updates")
+    workflow.add_edge("run_state_updates", END)
 
     return workflow.compile()

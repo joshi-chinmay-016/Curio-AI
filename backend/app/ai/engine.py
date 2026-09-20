@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from backend.app.ai.graph import build_curio_graph
 from backend.app.ai.providers.base import BaseAIProvider
+from backend.app.ai.providers.mock_provider import MockLLMProvider
 from backend.app.ai.schemas import (
     AIContext,
     AIResponse,
@@ -31,8 +32,8 @@ class CurioEngine:
     """
 
     def __init__(self, provider: Optional[BaseAIProvider] = None, graph: Any = None):
-        self.provider = provider
-        self._graph = graph or build_curio_graph()
+        self.provider = provider or MockLLMProvider()
+        self._graph = graph or build_curio_graph(self.provider)
 
     def process(self, context: AIContext) -> AIResult:
         """
@@ -54,6 +55,7 @@ class CurioEngine:
         # 1. Prepare initial graph state
         initial_state = {
             "context": context,
+            "provider": self.provider,
         }
 
         # 2. Invoke internal LangGraph workflow
@@ -65,13 +67,13 @@ class CurioEngine:
         response: AIResponse = final_state.get("response")
         state_updates: Optional[StateUpdates] = final_state.get("state_updates")
 
-        # 4. Fallback / default resolution if a node did not emit state_updates
+        # 4. Fallback resolution if a node did not emit state_updates
         if state_updates is None:
             state_updates = StateUpdates(
-                current_mode=decision.next_mode if decision else None,
-                difficulty=decision.difficulty if decision else None,
-                confidence=decision.confidence if decision else None,
-                active_concept=decision.active_concept if decision else None,
+                current_mode=decision.next_mode if decision else Mode.STUDENT,
+                difficulty=decision.difficulty if decision else context.difficulty,
+                confidence=decision.confidence if decision else context.current_state.understanding_confidence,
+                active_concept=decision.active_concept if decision else context.active_concept,
                 mastered_concepts=evaluation.mastered_concepts if evaluation else None,
                 unresolved_misconceptions=evaluation.misconceptions if evaluation else None,
             )
