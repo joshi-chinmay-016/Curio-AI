@@ -84,6 +84,24 @@ class CurioEngine:
             decision=decision,
             response=response,
             state_updates=state_updates,
+            session_evaluation=final_state.get("session_evaluation"),
+            learning_report=final_state.get("learning_report"),
         )
 
         return result
+
+    def evaluate_session(self, evidence: Any) -> Any:
+        """
+        Evaluate a complete learning session from structured SessionEvidence.
+        """
+        from backend.app.ai.session_evaluator import SessionEvaluator
+        evaluator = SessionEvaluator(self.provider)
+        return evaluator.evaluate_session(evidence)
+
+    def generate_report(self, evidence: Any) -> Any:
+        """
+        Generate a complete UI-agnostic LearningReport from structured SessionEvidence.
+        """
+        from backend.app.ai.session_evaluator import SessionEvaluator
+        evaluator = SessionEvaluator(self.provider)
+        return evaluator.generate_report(evidence)

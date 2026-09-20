@@ -6,6 +6,14 @@ from backend.app.core.exceptions import register_exception_handlers
 from backend.app.core.logging import setup_logging
 from backend.app.api.router import api_router
 
+# Ensure all SQLAlchemy models are registered in the registry
+from backend.app.models.user import User  # noqa: F401
+from backend.app.models.document import Document  # noqa: F401
+from backend.app.models.session import Session, SessionState  # noqa: F401
+from backend.app.models.message import Message  # noqa: F401
+from backend.app.models.evaluation import TurnEvaluation  # noqa: F401
+from backend.app.models.report import SessionReport  # noqa: F401
+
 setup_logging()
 logger = logging.getLogger("curio_main")
 

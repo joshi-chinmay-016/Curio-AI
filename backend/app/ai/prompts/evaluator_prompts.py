@@ -45,3 +45,50 @@ Provide a JSON object matching TurnEvaluation:
   CLARIFY_TERM, CHALLENGE_MISCONCEPTION, PROBE_MISSING_CONCEPT, PROBE_HOW, PROBE_WHY, INCREASE_DIFFICULTY, or VERIFY_UNDERSTANDING.
 - recommended_difficulty (int, 1 to 5): Recommended difficulty level for the next question.
 """
+
+
+def build_session_evaluation_prompt(evidence: "SessionEvidence") -> str:
+    """
+    Constructs the prompt for qualitative session evaluation synthesis.
+    Instructs the LLM to synthesize strengths, gap nuances, and roadmap recommendations
+    STRICTLY grounded in the provided structured evidence.
+    """
+    turns_summary = []
+    for t in evidence.turns:
+        turns_summary.append(
+            f"Turn {t.turn_index} [Concept: {t.concept}, Diff: {t.difficulty}]:\n"
+            f"  Question: {t.question}\n"
+            f"  Learner Answer: {t.learner_answer}\n"
+            f"  Evaluation: correctness={t.evaluation.correctness}, stuck={t.evaluation.stuck_probability}, "
+            f"gaps={t.evaluation.knowledge_gap}, misc={t.evaluation.misconceptions}"
+        )
+
+    teacher_summary = []
+    for ti in evidence.teacher_interventions:
+        teacher_summary.append(
+            f"Intervention {ti.intervention_index} [Attempt {ti.attempt_count}, Concept: {ti.related_concept}]:\n"
+            f"  Gap: {ti.gap}\n"
+            f"  Verification Passed: {ti.verification_passed}\n"
+            f"  Verification Answer: {ti.verification_answer}"
+        )
+
+    return f"""You are an expert pedagogical session evaluator assessing a complete learning session.
+Topic: {evidence.topic}
+Total Learner Turns: {evidence.total_learner_turns}
+Successful Turns: {evidence.successful_turns}
+Failed Turns: {evidence.failed_turns}
+Concepts Encountered: {', '.join(evidence.concepts_encountered) if evidence.concepts_encountered else 'None'}
+
+Session Turns:
+{chr(10).join(turns_summary) if turns_summary else 'No evaluated turns.'}
+
+Teacher Interventions:
+{chr(10).join(teacher_summary) if teacher_summary else 'None.'}
+
+Instructions:
+1. Evaluate ONLY the supplied evidence. Do NOT hallucinate concepts, gaps, or answers.
+2. Distinguish resolved vs unresolved gaps and misconceptions.
+3. If evidence is minimal or insufficient, acknowledge it clearly.
+4. Produce structured recommendations and roadmap items that are highly specific to the actual gaps observed.
+"""
+
