@@ -9,3 +9,4 @@ groq==0.4.2
 pytest==8.0.0
 httpx==0.26.0
 python-multipart==0.0.9
+langgraph==0.2.76

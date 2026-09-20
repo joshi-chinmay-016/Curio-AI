@@ -1,26 +1,123 @@
-from typing import List
+from datetime import datetime, timezone
+from typing import Any, List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.repositories.session_repository import SessionRepository
 from backend.app.repositories.message_repository import MessageRepository
-from backend.app.schemas.message import MessageCreate, ChatTurnResponse, MessageResponse, TurnEvaluationResponse, LearningDecisionResponse
+from backend.app.schemas.message import (
+    MessageCreate,
+    ChatTurnResponse,
+    MessageResponse,
+    TurnEvaluationResponse,
+    LearningDecisionResponse,
+)
 from backend.app.schemas.session import SessionStateBase
-from backend.app.schemas.common import LearningMode, InputType, LearningStrategy
+from backend.app.schemas.common import (
+    LearningMode,
+    InputType as CommonInputType,
+    LearningStrategy,
+)
 from backend.app.ai.orchestrator import AIOrchestrator
 from backend.app.ai.providers.groq_provider import GroqLLMProvider
-from backend.app.ai.schemas import AIContext, ChatMessage
+from backend.app.ai.engine import CurioEngine
+from backend.app.ai.schemas import (
+    AIContext,
+    AIResult,
+    ChatMessage,
+    ConversationContext,
+    CurrentQuestion,
+    InputType,
+    LearningContext,
+    Mode,
+    Role,
+    SessionInfo,
+    SessionState,
+    SourceMode,
+)
+
 
 class ChatService:
-    def __init__(self):
+    def __init__(self, ai_engine: Optional[CurioEngine] = None):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
-        # Initialize Groq LLM provider (will fall back to Mock if no API key)
+        # Retain legacy provider and orchestrator for backward compatibility until migration is verified
         self.ai_provider = GroqLLMProvider()
         self.orchestrator = AIOrchestrator(self.ai_provider)
+        # Canonical AI Engine
+        self.ai_engine = ai_engine or CurioEngine()
+
+    @staticmethod
+    def _normalize_input_type(raw_val: Any) -> InputType:
+        """
+        Safely normalize raw input type to AI InputType enum:
+        - Preserve valid InputType enum values.
+        - Convert string values to uppercase.
+        - Fallback to InputType.TEXT only when missing or invalid.
+        """
+        if raw_val is None:
+            return InputType.TEXT
+        if isinstance(raw_val, InputType):
+            return raw_val
+        if hasattr(raw_val, "value"):
+            raw_val = raw_val.value
+
+        if isinstance(raw_val, str):
+            norm_str = raw_val.strip().upper()
+            if not norm_str:
+                return InputType.TEXT
+            try:
+                return InputType(norm_str)
+            except ValueError:
+                return InputType.TEXT
+
+        return InputType.TEXT
+
+    @staticmethod
+    def _normalize_common_input_type(raw_val: Any) -> CommonInputType:
+        """
+        Safely normalize raw input type to CommonInputType enum:
+        - Preserve valid CommonInputType enum values.
+        - Convert string values to uppercase.
+        - Fallback to CommonInputType.TEXT only when missing or invalid.
+        """
+        if raw_val is None:
+            return CommonInputType.TEXT
+        if isinstance(raw_val, CommonInputType):
+            return raw_val
+        if hasattr(raw_val, "value"):
+            raw_val = raw_val.value
+
+        if isinstance(raw_val, str):
+            norm_str = raw_val.strip().upper()
+            if not norm_str:
+                return CommonInputType.TEXT
+            try:
+                return CommonInputType(norm_str)
+            except ValueError:
+                return CommonInputType.TEXT
+
+        return CommonInputType.TEXT
+
+    def _to_message_response(self, msg: Any) -> MessageResponse:
+        """Helper to convert database message model or dict to MessageResponse."""
+        msg_id = getattr(msg, "id", None) or getattr(msg, "message_id", None)
+        raw_input_type = getattr(msg, "input_type", None)
+        input_type_enum = self._normalize_common_input_type(raw_input_type)
+
+        created_at_val = getattr(msg, "created_at", None) or datetime.now(timezone.utc)
+
+        return MessageResponse(
+            message_id=msg_id,
+            session_id=msg.session_id,
+            sender=msg.sender,
+            content=msg.content,
+            input_type=input_type_enum,
+            created_at=created_at_val,
+        )
 
     def get_messages(self, db: SQLAlchemySession, session_id: UUID) -> List[MessageResponse]:
         db_messages = self.message_repo.list_by_session(db, session_id)
-        return [MessageResponse.model_validate(m) for m in db_messages]
+        return [self._to_message_response(m) for m in db_messages]
 
     def send_message(self, db: SQLAlchemySession, session_id: UUID, message_in: MessageCreate) -> ChatTurnResponse:
         # 1. Load Session State
@@ -35,121 +132,227 @@ class ChatService:
         db_history = self.message_repo.list_by_session(db, session_id)
         ai_history = [
             ChatMessage(
-                sender=m.sender,
+                role=Role.ASSISTANT if getattr(m, "sender", "USER") == "AI" else Role.USER,
                 content=m.content,
-                input_type=InputType(m.input_type)
+                input_type=self._normalize_input_type(getattr(m, "input_type", None))
             ) for m in db_history
         ]
 
-        active_question = ""
-        if len(db_history) > 1:
-            # Finding last question asked by AI
-            ai_messages = [m for m in db_history if m.sender == "AI"]
-            if ai_messages:
-                active_question = ai_messages[-1].content
+        # Resolve SourceMode from session source_type
+        source_mode = SourceMode.GENERAL
+        if hasattr(db_session, "source_type") and db_session.source_type:
+            try:
+                source_mode = SourceMode(db_session.source_type)
+            except ValueError:
+                source_mode = SourceMode.GENERAL
+
+        session_info = SessionInfo(
+            session_id=str(session_id),
+            topic=db_session.topic,
+            source_mode=source_mode
+        )
+
+        # Convert LearningMode to AI Mode explicitly
+        mode_val = db_session.state.current_mode
+        try:
+            current_mode = Mode(mode_val.value if hasattr(mode_val, "value") else str(mode_val))
+        except ValueError:
+            current_mode = Mode.STUDENT
+
+        # Question hydration: safely look up message if current_question_id is set
+        current_question_obj: Optional[CurrentQuestion] = None
+        target_qid = db_session.state.current_question_id
+        if target_qid is not None:
+            target_qid_str = str(target_qid)
+            matching_q = next(
+                (m for m in db_history if getattr(m, "id", None) is not None and str(m.id) == target_qid_str),
+                None
+            )
+            if matching_q:
+                current_question_obj = CurrentQuestion(
+                    id=str(matching_q.id),
+                    content=matching_q.content,
+                    concept=db_session.state.active_concept,
+                    difficulty=db_session.state.difficulty
+                )
+
+        # Interrupted question hydration: safely look up message if interrupted_question_id is set
+        interrupted_question_obj: Optional[CurrentQuestion] = None
+        target_int_id = db_session.state.interrupted_question_id
+        if target_int_id is not None:
+            target_int_id_str = str(target_int_id)
+            matching_int = next(
+                (m for m in db_history if getattr(m, "id", None) is not None and str(m.id) == target_int_id_str),
+                None
+            )
+            if matching_int:
+                interrupted_question_obj = CurrentQuestion(
+                    id=str(matching_int.id),
+                    content=matching_int.content,
+                    concept=db_session.state.active_concept,
+                    difficulty=db_session.state.difficulty
+                )
+
+        current_state = SessionState(
+            session_id=str(session_id),
+            current_mode=current_mode,
+            current_difficulty=db_session.state.difficulty,
+            understanding_confidence=db_session.state.confidence,
+            active_concept=db_session.state.active_concept,
+            current_question=current_question_obj,
+            interrupted_question=interrupted_question_obj,
+            consecutive_successes=db_session.state.consecutive_strong_answers,
+            consecutive_failures=db_session.state.consecutive_weak_answers,
+            unresolved_misconceptions=db_session.state.unresolved_misconceptions or []
+        )
+
+        conversation = ConversationContext(
+            recent_messages=ai_history,
+            message_count=len(ai_history)
+        )
+
+        learning_context = LearningContext(
+            mastered_concepts=db_session.state.mastered_concepts or [],
+            unresolved_misconceptions=db_session.state.unresolved_misconceptions or []
+        )
 
         context = AIContext(
-            session_id=session_id,
-            topic=db_session.topic,
-            current_mode=LearningMode(db_session.state.current_mode),
-            difficulty=db_session.state.difficulty,
-            active_concept=db_session.state.active_concept,
-            current_question=active_question,
-            interrupted_question=None,  # Handled in decision if restored
-            document_context=None,
-            history=ai_history
+            session=session_info,
+            current_state=current_state,
+            conversation=conversation,
+            learning_context=learning_context
         )
 
         # 4. Invoke AI Engine
-        ai_response = self.orchestrator.process_turn(
-            context,
-            consecutive_strong=db_session.state.consecutive_strong_answers,
-            consecutive_weak=db_session.state.consecutive_weak_answers
-        )
-
-        # Extract structured outputs
-        evaluation_data = ai_response.metadata["evaluation"]
-        decision_data = ai_response.metadata["decision"]
+        ai_result: AIResult = self.ai_engine.process(context)
+        evaluation = ai_result.evaluation
+        decision = ai_result.decision
+        response = ai_result.response
+        updates = ai_result.state_updates
 
         # 5. Persist AI Response Message
         ai_msg = self.message_repo.create_message(
             db,
             session_id,
             "AI",
-            MessageCreate(content=ai_response.content, input_type=InputType.TEXT)
+            MessageCreate(content=response.content, input_type=CommonInputType.TEXT)
         )
 
         # 6. Save Turn Evaluation
-        turn_eval = self.message_repo.create_evaluation(
-            db,
-            user_msg.id,
-            TurnEvaluationResponse(
-                correctness=evaluation_data["correctness"],
-                clarity=evaluation_data["clarity"],
-                completeness=evaluation_data["completeness"],
-                depth=evaluation_data["depth"],
-                relevance=evaluation_data["relevance"],
-                stuck_probability=evaluation_data["stuck_probability"],
-                misconceptions=evaluation_data["misconceptions"],
-                missing_concepts=evaluation_data["missing_concepts"],
-                undefined_terms=evaluation_data["undefined_terms"],
-                mastered_concepts=evaluation_data["mastered_concepts"],
-                knowledge_gap=evaluation_data["knowledge_gap"],
-                recommended_strategy=LearningStrategy(evaluation_data["recommended_strategy"]),
-                recommended_difficulty=evaluation_data["recommended_difficulty"]
-            )
+        turn_eval_in = TurnEvaluationResponse(
+            correctness=evaluation.correctness,
+            clarity=evaluation.clarity,
+            completeness=evaluation.completeness,
+            depth=evaluation.depth,
+            relevance=evaluation.relevance,
+            stuck_probability=evaluation.stuck_probability,
+            misconceptions=evaluation.misconceptions,
+            missing_concepts=evaluation.missing_concepts,
+            undefined_terms=evaluation.undefined_terms,
+            mastered_concepts=evaluation.mastered_concepts,
+            knowledge_gap=evaluation.knowledge_gap,
+            recommended_strategy=LearningStrategy(evaluation.recommended_strategy.value if hasattr(evaluation.recommended_strategy, "value") else str(evaluation.recommended_strategy)),
+            recommended_difficulty=evaluation.recommended_difficulty
         )
+        self.message_repo.create_evaluation(db, user_msg.id, turn_eval_in)
 
-        # 7. Update Session State in DB
-        consecutive_strong = db_session.state.consecutive_strong_answers
-        consecutive_weak = db_session.state.consecutive_weak_answers
-        if evaluation_data["correctness"] > 0.7:
-            consecutive_strong += 1
-            consecutive_weak = 0
+        # 7. Update Session State in DB (Merging StateUpdates with existing DB state)
+        if updates.current_mode is not None:
+            new_mode = LearningMode(updates.current_mode.value if hasattr(updates.current_mode, "value") else str(updates.current_mode))
         else:
-            consecutive_weak += 1
-            consecutive_strong = 0
+            curr_m = db_session.state.current_mode
+            new_mode = LearningMode(curr_m.value if hasattr(curr_m, "value") else str(curr_m))
 
-        # Maintain list of mastered concepts
-        new_mastered = list(set(db_session.state.mastered_concepts + evaluation_data["mastered_concepts"]))
+        if updates.difficulty is not None:
+            new_difficulty = updates.difficulty
+        else:
+            new_difficulty = db_session.state.difficulty
 
-        # Build state updates
+        if updates.confidence is not None:
+            new_confidence = updates.confidence
+        else:
+            new_confidence = db_session.state.confidence
+
+        if updates.active_concept is not None:
+            new_active_concept = updates.active_concept
+        else:
+            new_active_concept = db_session.state.active_concept
+
+        # Consecutive answer streaks
+        if updates.consecutive_successes is not None:
+            consecutive_strong = updates.consecutive_successes
+        else:
+            consecutive_strong = db_session.state.consecutive_strong_answers
+
+        if updates.consecutive_failures is not None:
+            consecutive_weak = updates.consecutive_failures
+        else:
+            consecutive_weak = db_session.state.consecutive_weak_answers
+
+        # Mastered concepts: merge if updates provided, else preserve existing
+        existing_mastered = db_session.state.mastered_concepts or []
+        if updates.mastered_concepts is not None:
+            new_mastered = list(dict.fromkeys(existing_mastered + updates.mastered_concepts))
+        else:
+            new_mastered = list(existing_mastered)
+
+        # Unresolved misconceptions: merge if updates provided, else preserve existing
+        existing_misconceptions = db_session.state.unresolved_misconceptions or []
+        if updates.unresolved_misconceptions is not None:
+            new_misconceptions = list(dict.fromkeys(existing_misconceptions + updates.unresolved_misconceptions))
+        else:
+            new_misconceptions = list(existing_misconceptions)
+
+        # Question ID tracking
+        current_qid = ai_msg.id
+        if updates.current_question and updates.current_question.id:
+            try:
+                current_qid = UUID(str(updates.current_question.id))
+            except (ValueError, AttributeError):
+                current_qid = ai_msg.id
+
+        # Interrupted question tracking
+        if decision and decision.should_restore_interrupted_question:
+            new_interrupted_qid = None
+        elif updates.interrupted_question is not None:
+            try:
+                new_interrupted_qid = UUID(str(updates.interrupted_question.id)) if updates.interrupted_question.id else None
+            except (ValueError, AttributeError):
+                new_interrupted_qid = db_session.state.interrupted_question_id
+        elif (db_session.state.current_mode.value if hasattr(db_session.state.current_mode, "value") else str(db_session.state.current_mode)) == "STUDENT" and new_mode == LearningMode.TEACHER:
+            new_interrupted_qid = db_session.state.current_question_id
+        else:
+            new_interrupted_qid = db_session.state.interrupted_question_id
+
         state_update = SessionStateBase(
-            current_mode=LearningMode(decision_data["next_mode"]),
-            difficulty=decision_data["difficulty"],
-            confidence=decision_data["confidence"],
-            active_concept=decision_data["active_concept"],
-            current_question_id=ai_msg.id,
-            interrupted_question_id=db_session.state.interrupted_question_id,
+            current_mode=new_mode,
+            difficulty=new_difficulty,
+            confidence=new_confidence,
+            active_concept=new_active_concept,
+            current_question_id=current_qid,
+            interrupted_question_id=new_interrupted_qid,
             consecutive_strong_answers=consecutive_strong,
             consecutive_weak_answers=consecutive_weak,
-            unresolved_misconceptions=list(set(db_session.state.unresolved_misconceptions + evaluation_data["misconceptions"])),
+            unresolved_misconceptions=new_misconceptions,
             mastered_concepts=new_mastered
         )
-
-        # If switching from student to teacher, record the interrupted question ID
-        if db_session.state.current_mode == "STUDENT" and decision_data["next_mode"] == "TEACHER":
-            # Store user_msg or previous AI question as interrupted
-            state_update.interrupted_question_id = db_session.state.current_question_id
-
-        # If switching back to student, clear interrupted question
-        if decision_data["should_restore_interrupted_question"]:
-            state_update.interrupted_question_id = None
 
         self.session_repo.update_state(db, session_id, state_update)
 
         return ChatTurnResponse(
-            user_message=MessageResponse.model_validate(user_msg),
-            ai_message=MessageResponse.model_validate(ai_msg),
-            evaluation=TurnEvaluationResponse.model_validate(turn_eval),
+            user_message=self._to_message_response(user_msg),
+            ai_message=self._to_message_response(ai_msg),
+            evaluation=turn_eval_in,
             decision=LearningDecisionResponse(
-                next_mode=LearningMode(decision_data["next_mode"]),
-                strategy=LearningStrategy(decision_data["strategy"]),
-                difficulty=decision_data["difficulty"],
-                confidence=decision_data["confidence"],
-                reason=decision_data["reason"],
-                active_concept=decision_data["active_concept"],
-                should_offer_termination=decision_data["should_offer_termination"],
-                should_restore_interrupted_question=decision_data["should_restore_interrupted_question"]
+                next_mode=LearningMode(decision.next_mode.value if hasattr(decision.next_mode, "value") else str(decision.next_mode)),
+                strategy=LearningStrategy(decision.strategy.value if hasattr(decision.strategy, "value") else str(decision.strategy)),
+                difficulty=decision.difficulty,
+                confidence=decision.confidence,
+                reason=decision.reason,
+                active_concept=decision.active_concept,
+                should_offer_termination=decision.should_offer_termination,
+                should_restore_interrupted_question=decision.should_restore_interrupted_question
             )
         )
+
+

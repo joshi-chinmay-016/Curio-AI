@@ -582,6 +582,12 @@ def test_engine_process_sample_context():
     assert result.response.requires_single_question is True
 
 
+def test_curio_graph_construction():
+    """Verify that build_curio_graph constructs and compiles without node/state-key collisions."""
+    graph = build_curio_graph()
+    assert graph is not None
+
+
 def test_langgraph_skeleton_direct_execution():
     """Verify the internal compiled LangGraph executes directly and returns graph state."""
     graph = build_curio_graph()
