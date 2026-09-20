@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import List, Union
 from pydantic import AnyHttpUrl, validator
 from pydantic_settings import BaseSettings
@@ -30,7 +31,14 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = True
-        env_file = ".env"
+        extra = "ignore"
+        env_file = (
+            str(Path(__file__).resolve().parent.parent.parent.parent / ".env"),
+            str(Path(__file__).resolve().parent.parent.parent / ".env"),
+            ".env",
+            "backend/.env",
+        )
+
 
     def get_database_url(self) -> str:
         if self.DATABASE_URL:
