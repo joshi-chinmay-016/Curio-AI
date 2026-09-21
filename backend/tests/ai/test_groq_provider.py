@@ -111,9 +111,9 @@ def test_groq_provider_client_initialization(mock_groq_cls):
 
     provider = GroqLLMProvider(api_key="gsk_mock_secret_key_12345")
     assert provider.client == mock_instance
-    assert provider.model == "llama-3.3-70b-versatile"
-    assert provider.timeout == 30.0
-    assert provider.max_retries == 2
+    assert provider.model == settings.GROQ_MODEL
+    assert provider.timeout == settings.GROQ_TIMEOUT_SECONDS
+    assert provider.max_retries == settings.GROQ_MAX_RETRIES
 
     mock_groq_cls.assert_called_once_with(
         api_key="gsk_mock_secret_key_12345",
