@@ -83,6 +83,14 @@ class TeacherIntervention(BaseModel):
     verification_required: bool = True
 
 
+class ModeTransition(BaseModel):
+    from_mode: Mode
+    to_mode: Mode
+    reason: str
+    timestamp: str
+    active_concept: Optional[str] = None
+
+
 # =====================================================================
 # SESSION STATE
 # =====================================================================
@@ -103,6 +111,7 @@ class SessionState(BaseModel):
     concept_mastery: Dict[str, float] = Field(default_factory=dict)
     unresolved_misconceptions: List[str] = Field(default_factory=list)
     teacher_intervention: Optional[TeacherIntervention] = None
+    mode_switch_history: List[ModeTransition] = Field(default_factory=list)
 
     @field_validator("session_id", mode="before")
     @classmethod
@@ -187,6 +196,7 @@ class StateUpdates(BaseModel):
     teacher_attempt_count: Optional[int] = Field(default=None, ge=0)
     recent_strategy_history: Optional[List[Strategy]] = None
     misconception_counts: Optional[Dict[str, int]] = None
+    mode_switch_history: Optional[List[ModeTransition]] = None
 
     @field_validator("concept_mastery")
     @classmethod

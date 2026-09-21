@@ -25,6 +25,9 @@ export interface ConceptCell {
   confidence: number; // 0-100
   relatedConceptIds: string[];
   description?: string;
+  // Isometric position
+  gridX?: number; // column in layer grid
+  gridY?: number; // row in layer grid
 }
 
 // Alias for backward compatibility

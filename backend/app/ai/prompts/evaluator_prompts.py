@@ -30,19 +30,19 @@ Learner's latest response:
 
 Evaluate the learner's latest response for this CURRENT TURN ONLY. Do not assume permanent mastery.
 Provide a JSON object matching TurnEvaluation:
-- correctness (float, 0.0 to 1.0): How accurate is the explanation?
+- correctness (float, 0.0 to 1.0): How accurate is the explanation? NOTE: If the learner asks a question, asks for help, says "teach me", "can you teach me", "teach me again", "explain this", "can you explain", "not sure", "what is...", "how does...", or gives a non-answer / acknowledgment / ready statement like "ok", "yes", "sure", "i understand now", "let me explain" without actually explaining the concept, correctness MUST be 0.0 to 0.2.
 - clarity (float, 0.0 to 1.0): How clear and well-expressed is it?
 - completeness (float, 0.0 to 1.0): Did it cover the required components?
 - depth (float, 0.0 to 1.0): Does it explain underlying reasons or mechanisms?
 - relevance (float, 0.0 to 1.0): Is it relevant to the question and topic?
-- stuck_probability (float, 0.0 to 1.0): High (>= 0.7) if the learner expresses confusion, says "I don't know", or asks for help.
+- stuck_probability (float, 0.0 to 1.0): High (>= 0.75) if the learner expresses confusion, says "I don't know", "not sure", "no idea", "stuck", asks for help, asks to be taught ("teach me", "can you teach me", "walk me through"), asks how it works, or asks a question instead of answering.
 - misconceptions (list of str): Specific erroneous beliefs or false assumptions expressed in the answer.
 - missing_concepts (list of str): Essential concepts or components omitted from the answer.
 - undefined_terms (list of str): Technical jargon or terms used by the learner that were not explained or defined.
-- mastered_concepts (list of str): Specific concepts the learner demonstrated clear understanding of in this turn.
+- mastered_concepts (list of str): Specific concepts the learner demonstrated clear understanding of in this turn. NOTE: Never include concepts if the learner did not provide a substantive, correct explanation (never for "ok", "yes", "teach me", "i understand", questions, or struggle).
 - knowledge_gap (str or null): Brief description of the learner's primary understanding gap, if any.
 - recommended_strategy (str): Pedagogical strategy recommendation:
-  CLARIFY_TERM, CHALLENGE_MISCONCEPTION, PROBE_MISSING_CONCEPT, PROBE_HOW, PROBE_WHY, INCREASE_DIFFICULTY, or VERIFY_UNDERSTANDING.
+  CLARIFY_TERM, CHALLENGE_MISCONCEPTION, PROBE_MISSING_CONCEPT, PROBE_HOW, PROBE_WHY, INCREASE_DIFFICULTY, VERIFY_UNDERSTANDING, or TEACH_GAP.
 - recommended_difficulty (int, 1 to 5): Recommended difficulty level for the next question.
 """
 

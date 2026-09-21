@@ -29,10 +29,12 @@ from backend.app.ai.schemas import (
     InputType,
     LearningContext,
     Mode,
+    ModeTransition,
     Role,
     SessionInfo,
     SessionState,
     SourceMode,
+    TeacherIntervention,
     Strategy,
     TeacherIntervention,
     TurnEvaluation as AITurnEvaluation,
@@ -47,6 +49,11 @@ class ChatService:
     ):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
+        # Retain legacy provider and orchestrator for backward compatibility until migration is verified
+        self.ai_provider = GroqLLMProvider()
+        self.orchestrator = AIOrchestrator(self.ai_provider)
+        # Canonical AI Engine with real provider
+        self.ai_engine = ai_engine or CurioEngine(self.ai_provider)
         self.ai_provider = ai_provider or GroqLLMProvider()
         # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
         self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
@@ -274,6 +281,29 @@ class ChatService:
                     difficulty=db_session.state.difficulty
                 )
 
+        # Teacher intervention hydration
+        teacher_intervention_obj: Optional[TeacherIntervention] = None
+        ti_data = getattr(db_session.state, "teacher_intervention_data", None)
+        if ti_data and isinstance(ti_data, dict) and ti_data.get("active"):
+            teacher_intervention_obj = TeacherIntervention(
+                active=ti_data.get("active", False),
+                gap=ti_data.get("gap", ""),
+                attempt_count=ti_data.get("attempt_count", 0),
+                verification_required=ti_data.get("verification_required", True),
+            )
+
+        # Mode switch history hydration
+        mode_transitions = []
+        raw_msh = getattr(db_session.state, "mode_switch_history", None) or []
+        for tr in raw_msh:
+            if isinstance(tr, dict):
+                mode_transitions.append(ModeTransition(**tr))
+            elif isinstance(tr, ModeTransition):
+                mode_transitions.append(tr)
+
+        teacher_attempts = (
+            teacher_intervention_obj.attempt_count if teacher_intervention_obj else 0
+        )
         # Teacher Mode state hydration
         raw_attempts = getattr(db_session.state, "teacher_attempt_count", 0)
         teacher_attempt_count_val = raw_attempts if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool) else 0
@@ -299,6 +329,9 @@ class ChatService:
             consecutive_successes=db_session.state.consecutive_strong_answers,
             consecutive_failures=db_session.state.consecutive_weak_answers,
             unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
+            teacher_intervention=teacher_intervention_obj,
+            teacher_attempt_count=teacher_attempts,
+            mode_switch_history=mode_transitions,
             teacher_attempt_count=teacher_attempt_count_val,
             teacher_intervention=teacher_intervention_obj,
         )
@@ -434,6 +467,22 @@ class ChatService:
         else:
             new_interrupted_qid = db_session.state.interrupted_question_id
 
+        # Teacher intervention persistence
+        new_ti_data = None
+        if updates.teacher_intervention is not None and hasattr(updates.teacher_intervention, "model_dump"):
+            new_ti_data = updates.teacher_intervention.model_dump()
+        elif isinstance(ti_data, dict):
+            new_ti_data = ti_data
+
+        # Mode switch history persistence
+        new_msh = []
+        raw_msh_source = updates.mode_switch_history if updates.mode_switch_history is not None else mode_transitions
+        if isinstance(raw_msh_source, (list, tuple)):
+            for t in raw_msh_source:
+                if hasattr(t, "model_dump"):
+                    new_msh.append(t.model_dump())
+                elif isinstance(t, dict):
+                    new_msh.append(t)
         # Teacher Mode attempt count and intervention tracking
         if (decision and decision.should_restore_interrupted_question) or new_mode == LearningMode.STUDENT:
             new_teacher_attempts = 0
@@ -479,6 +528,8 @@ class ChatService:
             consecutive_weak_answers=consecutive_weak,
             unresolved_misconceptions=new_misconceptions,
             mastered_concepts=new_mastered,
+            teacher_intervention_data=new_ti_data,
+            mode_switch_history=new_msh,
             teacher_attempt_count=new_teacher_attempts,
             teacher_intervention=new_teacher_intervention,
         )
