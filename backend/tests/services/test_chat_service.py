@@ -977,5 +977,243 @@ def test_session_repository_persists_and_updates_teacher_mode_fields():
     assert updated_state.teacher_intervention == intervention_dict
 
 
+def test_send_message_hydrates_recent_evaluations_into_aicontext():
+    """Verify that recent turn evaluations from the database are hydrated into AIContext.learning_context.recent_evaluations."""
+    mock_engine = MagicMock(spec=CurioEngine)
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+    mock_db = MagicMock()
+    session_id = uuid4()
+    msg_id = uuid4()
+
+    db_session = create_dummy_db_session(session_id)
+    service.session_repo.get = MagicMock(return_value=db_session)
+    service.session_repo.update_state = MagicMock()
+
+    user_msg = create_dummy_message(msg_id, session_id, "USER", "Photosynthesis converts light into chemical energy.")
+    ai_msg = create_dummy_message(uuid4(), session_id, "AI", "What happens in the Calvin cycle?")
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.message_repo.create_evaluation = MagicMock()
+    service.message_repo.list_by_session = MagicMock(return_value=[user_msg])
+
+    from backend.app.models.evaluation import TurnEvaluation as DBTurnEvaluation
+    prev_eval = DBTurnEvaluation(
+        message_id=uuid4(),
+        correctness=0.85,
+        clarity=0.9,
+        completeness=0.8,
+        depth=0.75,
+        relevance=1.0,
+        stuck_probability=0.1,
+        misconceptions=["chlorophyll_is_red"],
+        missing_concepts=["stroma"],
+        undefined_terms=[],
+        mastered_concepts=["light_harvesting"],
+        knowledge_gap="Calvin cycle dark reaction details",
+        recommended_strategy="teach_gap",
+        recommended_difficulty=3,
+    )
+    service.message_repo.get_recent_evaluations_by_session = MagicMock(return_value=[prev_eval])
+
+    service.send_message(mock_db, session_id, MessageCreate(content="Tell me about Calvin cycle.", input_type=CommonInputType.TEXT))
+
+    service.message_repo.get_recent_evaluations_by_session.assert_called_once_with(mock_db, session_id, limit=10)
+
+    assert mock_engine.process.called
+    context: AIContext = mock_engine.process.call_args[0][0]
+    assert len(context.learning_context.recent_evaluations) == 1
+    hydrated_eval = context.learning_context.recent_evaluations[0]
+    assert isinstance(hydrated_eval, TurnEvaluation)
+    assert hydrated_eval.correctness == 0.85
+    assert hydrated_eval.clarity == 0.9
+    assert hydrated_eval.completeness == 0.8
+    assert hydrated_eval.depth == 0.75
+    assert hydrated_eval.relevance == 1.0
+    assert hydrated_eval.stuck_probability == 0.1
+    assert hydrated_eval.misconceptions == ["chlorophyll_is_red"]
+    assert hydrated_eval.missing_concepts == ["stroma"]
+    assert hydrated_eval.undefined_terms == []
+    assert hydrated_eval.mastered_concepts == ["light_harvesting"]
+    assert hydrated_eval.knowledge_gap == "Calvin cycle dark reaction details"
+    assert hydrated_eval.recommended_strategy == Strategy.TEACH_GAP
+    assert hydrated_eval.recommended_difficulty == 3
+
+
+def test_send_message_recent_evaluations_chronological_order():
+    """Verify that multiple evaluations are passed to AIContext in strict chronological order (oldest to newest)."""
+    mock_engine = MagicMock(spec=CurioEngine)
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+    mock_db = MagicMock()
+    session_id = uuid4()
+
+    db_session = create_dummy_db_session(session_id)
+    service.session_repo.get = MagicMock(return_value=db_session)
+    service.session_repo.update_state = MagicMock()
+
+    user_msg = create_dummy_message(uuid4(), session_id, "USER", "Answer turn 3")
+    ai_msg = create_dummy_message(uuid4(), session_id, "AI", "Question turn 3")
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.message_repo.create_evaluation = MagicMock()
+    service.message_repo.list_by_session = MagicMock(return_value=[user_msg])
+
+    from backend.app.models.evaluation import TurnEvaluation as DBTurnEvaluation
+    eval_turn_1 = DBTurnEvaluation(
+        message_id=uuid4(),
+        correctness=0.5,
+        clarity=0.5,
+        completeness=0.5,
+        depth=0.5,
+        relevance=1.0,
+        stuck_probability=0.4,
+        misconceptions=["turn_1_misc"],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=[],
+        knowledge_gap="turn_1_gap",
+        recommended_strategy="clarify_term",
+        recommended_difficulty=1,
+    )
+    eval_turn_2 = DBTurnEvaluation(
+        message_id=uuid4(),
+        correctness=0.9,
+        clarity=0.95,
+        completeness=0.9,
+        depth=0.85,
+        relevance=1.0,
+        stuck_probability=0.0,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=["turn_2_concept"],
+        knowledge_gap=None,
+        recommended_strategy="increase_difficulty",
+        recommended_difficulty=2,
+    )
+
+    service.message_repo.get_recent_evaluations_by_session = MagicMock(return_value=[eval_turn_1, eval_turn_2])
+
+    service.send_message(mock_db, session_id, MessageCreate(content="New message", input_type=CommonInputType.TEXT))
+
+    context: AIContext = mock_engine.process.call_args[0][0]
+    assert len(context.learning_context.recent_evaluations) == 2
+    assert context.learning_context.recent_evaluations[0].knowledge_gap == "turn_1_gap"
+    assert context.learning_context.recent_evaluations[0].recommended_strategy == Strategy.CLARIFY_TERM
+    assert context.learning_context.recent_evaluations[1].mastered_concepts == ["turn_2_concept"]
+    assert context.learning_context.recent_evaluations[1].recommended_strategy == Strategy.INCREASE_DIFFICULTY
+
+
+def test_send_message_recent_evaluations_ten_limit():
+    """Verify that ChatService requests up to a limit of 10 recent evaluations."""
+    mock_engine = MagicMock(spec=CurioEngine)
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+    mock_db = MagicMock()
+    session_id = uuid4()
+
+    db_session = create_dummy_db_session(session_id)
+    service.session_repo.get = MagicMock(return_value=db_session)
+    service.session_repo.update_state = MagicMock()
+
+    user_msg = create_dummy_message(uuid4(), session_id, "USER", "User turn 11")
+    ai_msg = create_dummy_message(uuid4(), session_id, "AI", "AI turn 11")
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.message_repo.create_evaluation = MagicMock()
+    service.message_repo.list_by_session = MagicMock(return_value=[user_msg])
+
+    from backend.app.models.evaluation import TurnEvaluation as DBTurnEvaluation
+    evals = [
+        DBTurnEvaluation(
+            message_id=uuid4(),
+            correctness=0.7,
+            clarity=0.7,
+            completeness=0.7,
+            depth=0.7,
+            relevance=1.0,
+            stuck_probability=0.1,
+            misconceptions=[],
+            missing_concepts=[],
+            undefined_terms=[],
+            mastered_concepts=[],
+            knowledge_gap=f"gap_{i}",
+            recommended_strategy="probe_why",
+            recommended_difficulty=2,
+        )
+        for i in range(10)
+    ]
+    service.message_repo.get_recent_evaluations_by_session = MagicMock(return_value=evals)
+
+    service.send_message(mock_db, session_id, MessageCreate(content="Turn 11 content", input_type=CommonInputType.TEXT))
+
+    service.message_repo.get_recent_evaluations_by_session.assert_called_once_with(mock_db, session_id, limit=10)
+    context: AIContext = mock_engine.process.call_args[0][0]
+    assert len(context.learning_context.recent_evaluations) == 10
+
+
+def test_send_message_handles_malformed_evaluation_data_gracefully():
+    """Verify that malformed or out-of-bounds evaluation data is defensively sanitized without raising errors."""
+    mock_engine = MagicMock(spec=CurioEngine)
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+    mock_db = MagicMock()
+    session_id = uuid4()
+
+    db_session = create_dummy_db_session(session_id)
+    service.session_repo.get = MagicMock(return_value=db_session)
+    service.session_repo.update_state = MagicMock()
+
+    user_msg = create_dummy_message(uuid4(), session_id, "USER", "User turn")
+    ai_msg = create_dummy_message(uuid4(), session_id, "AI", "AI turn")
+    service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+    service.message_repo.create_evaluation = MagicMock()
+    service.message_repo.list_by_session = MagicMock(return_value=[user_msg])
+
+    malformed_dict = {
+        "correctness": 2.5,
+        "clarity": -0.8,
+        "completeness": None,
+        "depth": "invalid_float",
+        "relevance": None,
+        "stuck_probability": 1.2,
+        "misconceptions": "not_a_list",
+        "missing_concepts": None,
+        "undefined_terms": ["term_ok"],
+        "mastered_concepts": ["concept_ok"],
+        "knowledge_gap": None,
+        "recommended_strategy": "TOTALLY_UNKNOWN_STRATEGY",
+        "recommended_difficulty": 10,
+    }
+
+    completely_corrupt = "not an evaluation object at all"
+    none_entry = None
+
+    service.message_repo.get_recent_evaluations_by_session = MagicMock(
+        return_value=[malformed_dict, completely_corrupt, none_entry]
+    )
+
+    service.send_message(mock_db, session_id, MessageCreate(content="Testing defensive parsing", input_type=CommonInputType.TEXT))
+
+    context: AIContext = mock_engine.process.call_args[0][0]
+    assert len(context.learning_context.recent_evaluations) == 1
+    sanitized = context.learning_context.recent_evaluations[0]
+    assert sanitized.correctness == 1.0
+    assert sanitized.clarity == 0.0
+    assert sanitized.completeness == 0.0
+    assert sanitized.depth == 0.0
+    assert sanitized.relevance == 1.0
+    assert sanitized.stuck_probability == 1.0
+    assert sanitized.misconceptions == []
+    assert sanitized.missing_concepts == []
+    assert sanitized.undefined_terms == ["term_ok"]
+    assert sanitized.mastered_concepts == ["concept_ok"]
+    assert sanitized.recommended_strategy == Strategy.PROBE_WHY
+    assert sanitized.recommended_difficulty == 5
+
+
+
 
 

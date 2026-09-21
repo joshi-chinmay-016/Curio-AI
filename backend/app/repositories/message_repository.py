@@ -1,5 +1,6 @@
 from typing import List
 from uuid import UUID
+from sqlalchemy import func
 from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.models.message import Message
 from backend.app.models.evaluation import TurnEvaluation
@@ -42,3 +43,23 @@ class MessageRepository:
 
     def list_by_session(self, db: SQLAlchemySession, session_id: UUID) -> List[Message]:
         return db.query(Message).filter(Message.session_id == session_id).order_by(Message.created_at.asc()).all()
+
+    def get_recent_evaluations_by_session(
+        self, db: SQLAlchemySession, session_id: UUID, limit: int = 10
+    ) -> List[TurnEvaluation]:
+        """
+        Retrieve recent turn evaluations for a given session.
+        Joins messages to turn_evaluations, filters by session_id and USER sender,
+        fetches up to `limit` latest records, and returns them in chronological order (oldest to newest).
+        """
+        subquery = (
+            db.query(TurnEvaluation)
+            .join(Message, TurnEvaluation.message_id == Message.id)
+            .filter(Message.session_id == session_id, func.upper(Message.sender) == "USER")
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(subquery))
+
+

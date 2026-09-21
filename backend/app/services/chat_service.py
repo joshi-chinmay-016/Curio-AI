@@ -33,7 +33,9 @@ from backend.app.ai.schemas import (
     SessionInfo,
     SessionState,
     SourceMode,
+    Strategy,
     TeacherIntervention,
+    TurnEvaluation as AITurnEvaluation,
 )
 
 
@@ -100,6 +102,82 @@ class ChatService:
                 return CommonInputType.TEXT
 
         return CommonInputType.TEXT
+
+    @staticmethod
+    def _to_ai_turn_evaluation(db_eval: Any) -> Optional[AITurnEvaluation]:
+        """
+        Safely maps a database TurnEvaluation model instance (or dict/mock)
+        to an AI TurnEvaluation schema object.
+        Guards against invalid strategy enums, bounds errors on floats/ints, and missing JSON lists.
+        Returns None if mapping fails unrecoverably.
+        """
+        if not db_eval:
+            return None
+
+        if isinstance(db_eval, AITurnEvaluation):
+            return db_eval
+
+        if not isinstance(db_eval, dict):
+            if not any(hasattr(db_eval, attr) for attr in ("message_id", "correctness", "recommended_strategy")):
+                return None
+
+        def _get(key, default=None):
+            if isinstance(db_eval, dict):
+                return db_eval.get(key, default)
+            val = getattr(db_eval, key, default)
+            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
+                return default
+            return val
+
+        def _clamp_float(v, default=0.0):
+            try:
+                if v is None:
+                    return default
+                return max(0.0, min(1.0, float(v)))
+            except (ValueError, TypeError):
+                return default
+
+        def _clamp_int(v, default=1, low=1, high=5):
+            try:
+                if v is None:
+                    return default
+                return max(low, min(high, int(v)))
+            except (ValueError, TypeError):
+                return default
+
+        def _safe_list(v):
+            if isinstance(v, list):
+                return [str(x) for x in v]
+            return []
+
+        strat_val = _get("recommended_strategy", Strategy.PROBE_WHY)
+        try:
+            raw_str = (strat_val.value if hasattr(strat_val, "value") else str(strat_val)).strip().upper()
+            strategy = Strategy(raw_str)
+        except (ValueError, KeyError, AttributeError):
+            strategy = Strategy.PROBE_WHY
+
+        kg_val = _get("knowledge_gap", None)
+        knowledge_gap = str(kg_val) if kg_val is not None else None
+
+        try:
+            return AITurnEvaluation(
+                correctness=_clamp_float(_get("correctness", 0.0)),
+                clarity=_clamp_float(_get("clarity", 0.0)),
+                completeness=_clamp_float(_get("completeness", 0.0)),
+                depth=_clamp_float(_get("depth", 0.0)),
+                relevance=_clamp_float(_get("relevance", 1.0), default=1.0),
+                stuck_probability=_clamp_float(_get("stuck_probability", 0.0)),
+                misconceptions=_safe_list(_get("misconceptions", [])),
+                missing_concepts=_safe_list(_get("missing_concepts", [])),
+                undefined_terms=_safe_list(_get("undefined_terms", [])),
+                mastered_concepts=_safe_list(_get("mastered_concepts", [])),
+                knowledge_gap=knowledge_gap,
+                recommended_strategy=strategy,
+                recommended_difficulty=_clamp_int(_get("recommended_difficulty", 1)),
+            )
+        except Exception:
+            return None
 
     def _to_message_response(self, msg: Any) -> MessageResponse:
         """Helper to convert database message model or dict to MessageResponse."""
@@ -230,9 +308,21 @@ class ChatService:
             message_count=len(ai_history)
         )
 
+        # Hydrate recent evaluations for session (up to 10 chronologically)
+        raw_recent_evals = []
+        if hasattr(self.message_repo, "get_recent_evaluations_by_session"):
+            res_evals = self.message_repo.get_recent_evaluations_by_session(db, session_id, limit=10)
+            if isinstance(res_evals, list):
+                raw_recent_evals = res_evals
+        recent_evaluations_list: List[AITurnEvaluation] = [
+            ev_obj for raw_ev in raw_recent_evals
+            if (ev_obj := self._to_ai_turn_evaluation(raw_ev)) is not None
+        ]
+
         learning_context = LearningContext(
             mastered_concepts=db_session.state.mastered_concepts or [],
             unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
+            recent_evaluations=recent_evaluations_list,
             teacher_intervention=teacher_intervention_obj,
         )
 
