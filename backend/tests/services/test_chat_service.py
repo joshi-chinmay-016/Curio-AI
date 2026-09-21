@@ -1,8 +1,11 @@
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 import pytest
 
+from backend.app.ai.engine import CurioEngine
+from backend.app.ai.providers.groq_provider import GroqLLMProvider
+from backend.app.ai.providers.mock_provider import MockLLMProvider
 from backend.app.services.chat_service import ChatService
 from backend.app.schemas.message import (
     MessageCreate,
@@ -548,4 +551,58 @@ def test_question_hydration_missing_question_ids():
     context2: AIContext = mock_engine.process.call_args[0][0]
     assert context2.current_state.current_question is None
     assert context2.current_state.interrupted_question is None
+
+
+def test_chat_service_default_initialization_injects_groq_provider():
+    """Verify ChatService() without arguments initializes CurioEngine with GroqLLMProvider."""
+    service = ChatService()
+    assert isinstance(service.ai_provider, GroqLLMProvider)
+    assert isinstance(service.ai_engine, CurioEngine)
+    assert service.ai_engine.provider is service.ai_provider
+    assert isinstance(service.ai_engine.provider, GroqLLMProvider)
+
+
+def test_chat_service_explicit_engine_preserved():
+    """Verify an explicitly injected CurioEngine is preserved and not overwritten."""
+    mock_engine = MagicMock(spec=CurioEngine)
+    service = ChatService(ai_engine=mock_engine)
+    assert service.ai_engine is mock_engine
+
+
+def test_chat_service_custom_provider_injection():
+    """Verify that a custom BaseAIProvider injected into ChatService is passed to CurioEngine."""
+    mock_provider = MockLLMProvider()
+    service = ChatService(ai_provider=mock_provider)
+    assert service.ai_provider is mock_provider
+    assert service.ai_engine.provider is mock_provider
+
+
+def test_legacy_orchestrator_not_present_or_invoked():
+    """Verify that legacy AIOrchestrator attribute is removed and not invoked during execution."""
+    session_id = uuid4()
+    mock_db = MagicMock()
+    mock_engine = MagicMock()
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+    # Ensure legacy orchestrator attribute is removed from ChatService
+    assert not hasattr(service, "orchestrator")
+
+    # Ensure AIOrchestrator is not called anywhere during send_message
+    with patch("backend.app.ai.orchestrator.AIOrchestrator") as mock_orchestrator:
+        db_session = create_dummy_db_session(session_id)
+        service.session_repo.get = MagicMock(return_value=db_session)
+        service.session_repo.update_state = MagicMock()
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+
+        user_msg = create_dummy_message(uuid4(), session_id, "USER", "Hello")
+        ai_msg = create_dummy_message(uuid4(), session_id, "AI", "Welcome!")
+        service.message_repo.create_message = MagicMock(side_effect=[user_msg, ai_msg])
+        service.message_repo.create_evaluation = MagicMock()
+
+        message_in = MessageCreate(content="Hello", input_type=CommonInputType.TEXT)
+        service.send_message(mock_db, session_id, message_in)
+
+        mock_orchestrator.assert_not_called()
+
 

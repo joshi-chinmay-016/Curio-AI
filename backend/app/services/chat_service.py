@@ -17,7 +17,7 @@ from backend.app.schemas.common import (
     InputType as CommonInputType,
     LearningStrategy,
 )
-from backend.app.ai.orchestrator import AIOrchestrator
+from backend.app.ai.providers.base import BaseAIProvider
 from backend.app.ai.providers.groq_provider import GroqLLMProvider
 from backend.app.ai.engine import CurioEngine
 from backend.app.ai.schemas import (
@@ -37,14 +37,16 @@ from backend.app.ai.schemas import (
 
 
 class ChatService:
-    def __init__(self, ai_engine: Optional[CurioEngine] = None):
+    def __init__(
+        self,
+        ai_engine: Optional[CurioEngine] = None,
+        ai_provider: Optional[BaseAIProvider] = None,
+    ):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
-        # Retain legacy provider and orchestrator for backward compatibility until migration is verified
-        self.ai_provider = GroqLLMProvider()
-        self.orchestrator = AIOrchestrator(self.ai_provider)
-        # Canonical AI Engine
-        self.ai_engine = ai_engine or CurioEngine()
+        self.ai_provider = ai_provider or GroqLLMProvider()
+        # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
+        self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
 
     @staticmethod
     def _normalize_input_type(raw_val: Any) -> InputType:
