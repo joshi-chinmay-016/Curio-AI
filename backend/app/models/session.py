@@ -37,5 +37,7 @@ class SessionState(Base):
     consecutive_weak_answers = Column(Integer, default=0, nullable=False)
     unresolved_misconceptions = Column(JSON, default=list, nullable=False)  # list[str]
     mastered_concepts = Column(JSON, default=list, nullable=False)  # list[str]
+    teacher_attempt_count = Column(Integer, default=0, server_default="0", nullable=False)
+    teacher_intervention = Column(JSON, nullable=True)
 
     session = relationship("Session", back_populates="state")

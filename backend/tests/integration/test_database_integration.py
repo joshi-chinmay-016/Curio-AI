@@ -12,6 +12,8 @@ Safety & Isolation Guarantees:
 """
 
 import uuid
+from datetime import datetime, timezone, timedelta
+from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import text
 from backend.app.models.user import User
@@ -20,6 +22,12 @@ from backend.app.models.message import Message
 from backend.app.models.evaluation import TurnEvaluation
 from backend.app.models.document import Document
 from backend.app.models.report import SessionReport
+from backend.app.repositories.message_repository import MessageRepository
+from backend.app.services.chat_service import ChatService
+from backend.app.ai.engine import CurioEngine
+from backend.app.schemas.message import MessageCreate
+from backend.app.schemas.common import InputType as CommonInputType
+from backend.tests.services.test_chat_service import create_mock_ai_result
 
 
 pytestmark = pytest.mark.db_integration
@@ -143,7 +151,48 @@ def test_create_session_state(test_db_session):
     assert retrieved.confidence == 0.75
     assert retrieved.unresolved_misconceptions == ["Photon mass confusion"]
     assert retrieved.mastered_concepts == ["Superposition"]
+    assert retrieved.teacher_attempt_count == 0
+    assert retrieved.teacher_intervention is None
     assert session.state.confidence == 0.75
+
+
+def test_create_session_state_with_teacher_mode_fields(test_db_session):
+    """Verify persisting and retrieving teacher_attempt_count and teacher_intervention in PostgreSQL."""
+    user = User(email=f"teacher_user_{uuid.uuid4().hex[:8]}@curio.ai")
+    test_db_session.add(user)
+    test_db_session.commit()
+
+    session = Session(
+        user_id=user.id,
+        topic="Linear Algebra",
+        source_type="prompt",
+        status="active"
+    )
+    test_db_session.add(session)
+    test_db_session.commit()
+
+    state = SessionState(
+        session_id=session.id,
+        current_mode="TEACHER",
+        difficulty=2,
+        confidence=0.5,
+        active_concept="Eigenvalues",
+        consecutive_strong_answers=1,
+        consecutive_weak_answers=1,
+        unresolved_misconceptions=[],
+        mastered_concepts=[],
+        teacher_attempt_count=2,
+        teacher_intervention={"active": True, "gap": "Characteristic equation", "attempt_count": 2, "verification_required": True}
+    )
+    test_db_session.add(state)
+    test_db_session.commit()
+
+    retrieved = test_db_session.query(SessionState).filter_by(session_id=session.id).first()
+    assert retrieved is not None
+    assert retrieved.teacher_attempt_count == 2
+    assert isinstance(retrieved.teacher_intervention, dict)
+    assert retrieved.teacher_intervention["gap"] == "Characteristic equation"
+    assert retrieved.teacher_intervention["attempt_count"] == 2
 
 
 def test_create_turn_evaluation_linked_to_message(test_db_session):
@@ -322,6 +371,213 @@ def test_create_session_report(test_db_session):
     assert retrieved.mastery_level == "proficient"
     assert "Linear algebra fundamentals" in retrieved.concepts_mastered
     assert retrieved.recommended_exercises == [{"id": 1, "topic": "Eigenvalues"}]
+
+
+def test_get_recent_evaluations_by_session_isolation_and_filtering(test_db_session):
+    """Verify that get_recent_evaluations_by_session strictly isolates sessions and filters by USER sender."""
+    repo = MessageRepository()
+    user = User(email=f"eval_iso_user_{uuid.uuid4().hex[:8]}@curio.ai")
+    test_db_session.add(user)
+    test_db_session.commit()
+
+    session_1 = Session(user_id=user.id, topic="Session 1", source_type="prompt", status="active")
+    session_2 = Session(user_id=user.id, topic="Session 2", source_type="prompt", status="active")
+    test_db_session.add_all([session_1, session_2])
+    test_db_session.commit()
+
+    msg1_s1 = Message(session_id=session_1.id, sender="USER", content="User in S1", input_type="text")
+    msg2_s1_ai = Message(session_id=session_1.id, sender="AI", content="AI in S1", input_type="text")
+    test_db_session.add_all([msg1_s1, msg2_s1_ai])
+    test_db_session.commit()
+
+    eval1_s1 = TurnEvaluation(
+        message_id=msg1_s1.id,
+        correctness=0.9,
+        clarity=0.9,
+        completeness=0.9,
+        depth=0.9,
+        relevance=1.0,
+        stuck_probability=0.0,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=["s1_concept"],
+        recommended_strategy="PROBE_WHY",
+        recommended_difficulty=2
+    )
+    eval2_s1_ai = TurnEvaluation(
+        message_id=msg2_s1_ai.id,
+        correctness=1.0,
+        clarity=1.0,
+        completeness=1.0,
+        depth=1.0,
+        relevance=1.0,
+        stuck_probability=0.0,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=[],
+        recommended_strategy="PROBE_WHY",
+        recommended_difficulty=1
+    )
+    test_db_session.add_all([eval1_s1, eval2_s1_ai])
+
+    msg1_s2 = Message(session_id=session_2.id, sender="USER", content="User in S2", input_type="text")
+    test_db_session.add(msg1_s2)
+    test_db_session.commit()
+
+    eval1_s2 = TurnEvaluation(
+        message_id=msg1_s2.id,
+        correctness=0.6,
+        clarity=0.6,
+        completeness=0.6,
+        depth=0.6,
+        relevance=1.0,
+        stuck_probability=0.2,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=["s2_concept"],
+        recommended_strategy="TEACH_GAP",
+        recommended_difficulty=1
+    )
+    test_db_session.add(eval1_s2)
+    test_db_session.commit()
+
+    s1_evals = repo.get_recent_evaluations_by_session(test_db_session, session_1.id)
+    assert len(s1_evals) == 1
+    assert s1_evals[0].message_id == msg1_s1.id
+    assert s1_evals[0].mastered_concepts == ["s1_concept"]
+
+    s2_evals = repo.get_recent_evaluations_by_session(test_db_session, session_2.id)
+    assert len(s2_evals) == 1
+    assert s2_evals[0].message_id == msg1_s2.id
+    assert s2_evals[0].mastered_concepts == ["s2_concept"]
+
+
+def test_get_recent_evaluations_limit_and_chronological_ordering(test_db_session):
+    """Verify that get_recent_evaluations_by_session fetches the latest 10 evaluations and returns them chronologically."""
+    repo = MessageRepository()
+    user = User(email=f"eval_order_user_{uuid.uuid4().hex[:8]}@curio.ai")
+    test_db_session.add(user)
+    test_db_session.commit()
+
+    session = Session(user_id=user.id, topic="Chronological Ordering", source_type="prompt", status="active")
+    test_db_session.add(session)
+    test_db_session.commit()
+
+    base_time = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+    messages = []
+    evaluations = []
+
+    for i in range(12):
+        msg = Message(
+            session_id=session.id,
+            sender="USER",
+            content=f"User Turn {i + 1}",
+            input_type="text",
+            created_at=base_time + timedelta(minutes=i)
+        )
+        test_db_session.add(msg)
+        test_db_session.flush()
+
+        ev = TurnEvaluation(
+            message_id=msg.id,
+            correctness=0.5,
+            clarity=0.5,
+            completeness=0.5,
+            depth=0.5,
+            relevance=1.0,
+            stuck_probability=0.0,
+            misconceptions=[],
+            missing_concepts=[],
+            undefined_terms=[],
+            mastered_concepts=[f"concept_{i + 1}"],
+            knowledge_gap=f"gap_turn_{i + 1}",
+            recommended_strategy="PROBE_WHY",
+            recommended_difficulty=2
+        )
+        test_db_session.add(ev)
+        messages.append(msg)
+        evaluations.append(ev)
+
+    test_db_session.commit()
+
+    recent_evals = repo.get_recent_evaluations_by_session(test_db_session, session.id, limit=10)
+
+    assert len(recent_evals) == 10
+
+    for idx, expected_turn_num in enumerate(range(3, 13)):
+        assert recent_evals[idx].knowledge_gap == f"gap_turn_{expected_turn_num}"
+        assert recent_evals[idx].mastered_concepts == [f"concept_{expected_turn_num}"]
+        assert recent_evals[idx].message_id == messages[expected_turn_num - 1].id
+
+
+def test_chat_service_hydrates_real_database_evaluations(test_db_session):
+    """Verify that ChatService against real PostgreSQL hydrates previous evaluations into AIContext."""
+    user = User(email=f"chat_hydrate_user_{uuid.uuid4().hex[:8]}@curio.ai")
+    test_db_session.add(user)
+    test_db_session.commit()
+
+    session = Session(user_id=user.id, topic="Photosynthesis Real DB", source_type="prompt", status="active")
+    test_db_session.add(session)
+    test_db_session.commit()
+
+    state = SessionState(
+        session_id=session.id,
+        current_mode="STUDENT",
+        difficulty=2,
+        confidence=0.5,
+        active_concept="Light Reactions",
+        consecutive_strong_answers=1,
+        consecutive_weak_answers=0,
+    )
+    test_db_session.add(state)
+    test_db_session.commit()
+
+    prev_msg = Message(
+        session_id=session.id,
+        sender="USER",
+        content="Chlorophyll absorbs light energy.",
+        input_type="text"
+    )
+    test_db_session.add(prev_msg)
+    test_db_session.commit()
+
+    prev_eval = TurnEvaluation(
+        message_id=prev_msg.id,
+        correctness=0.9,
+        clarity=0.85,
+        completeness=0.8,
+        depth=0.75,
+        relevance=1.0,
+        stuck_probability=0.05,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=["chlorophyll_pigments"],
+        knowledge_gap="Thylakoid membrane role",
+        recommended_strategy="PROBE_WHY",
+        recommended_difficulty=2
+    )
+    test_db_session.add(prev_eval)
+    test_db_session.commit()
+
+    mock_engine = MagicMock(spec=CurioEngine)
+    mock_engine.process.return_value = create_mock_ai_result()
+
+    service = ChatService(ai_engine=mock_engine)
+    new_msg_in = MessageCreate(content="Where does the Calvin cycle take place?", input_type=CommonInputType.TEXT)
+
+    service.send_message(test_db_session, session.id, new_msg_in)
+
+    assert mock_engine.process.called
+    context = mock_engine.process.call_args[0][0]
+    assert len(context.learning_context.recent_evaluations) == 1
+    eval_hydrated = context.learning_context.recent_evaluations[0]
+    assert eval_hydrated.correctness == 0.9
+    assert eval_hydrated.mastered_concepts == ["chlorophyll_pigments"]
+    assert eval_hydrated.knowledge_gap == "Thylakoid membrane role"
 
 
 def test_isolation_step_1_write_marker(test_db_session):

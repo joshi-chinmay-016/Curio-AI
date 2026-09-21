@@ -17,7 +17,7 @@ from backend.app.schemas.common import (
     InputType as CommonInputType,
     LearningStrategy,
 )
-from backend.app.ai.orchestrator import AIOrchestrator
+from backend.app.ai.providers.base import BaseAIProvider
 from backend.app.ai.providers.groq_provider import GroqLLMProvider
 from backend.app.ai.engine import CurioEngine
 from backend.app.ai.schemas import (
@@ -33,18 +33,23 @@ from backend.app.ai.schemas import (
     SessionInfo,
     SessionState,
     SourceMode,
+    Strategy,
+    TeacherIntervention,
+    TurnEvaluation as AITurnEvaluation,
 )
 
 
 class ChatService:
-    def __init__(self, ai_engine: Optional[CurioEngine] = None):
+    def __init__(
+        self,
+        ai_engine: Optional[CurioEngine] = None,
+        ai_provider: Optional[BaseAIProvider] = None,
+    ):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
-        # Retain legacy provider and orchestrator for backward compatibility until migration is verified
-        self.ai_provider = GroqLLMProvider()
-        self.orchestrator = AIOrchestrator(self.ai_provider)
-        # Canonical AI Engine
-        self.ai_engine = ai_engine or CurioEngine()
+        self.ai_provider = ai_provider or GroqLLMProvider()
+        # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
+        self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
 
     @staticmethod
     def _normalize_input_type(raw_val: Any) -> InputType:
@@ -97,6 +102,82 @@ class ChatService:
                 return CommonInputType.TEXT
 
         return CommonInputType.TEXT
+
+    @staticmethod
+    def _to_ai_turn_evaluation(db_eval: Any) -> Optional[AITurnEvaluation]:
+        """
+        Safely maps a database TurnEvaluation model instance (or dict/mock)
+        to an AI TurnEvaluation schema object.
+        Guards against invalid strategy enums, bounds errors on floats/ints, and missing JSON lists.
+        Returns None if mapping fails unrecoverably.
+        """
+        if not db_eval:
+            return None
+
+        if isinstance(db_eval, AITurnEvaluation):
+            return db_eval
+
+        if not isinstance(db_eval, dict):
+            if not any(hasattr(db_eval, attr) for attr in ("message_id", "correctness", "recommended_strategy")):
+                return None
+
+        def _get(key, default=None):
+            if isinstance(db_eval, dict):
+                return db_eval.get(key, default)
+            val = getattr(db_eval, key, default)
+            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
+                return default
+            return val
+
+        def _clamp_float(v, default=0.0):
+            try:
+                if v is None:
+                    return default
+                return max(0.0, min(1.0, float(v)))
+            except (ValueError, TypeError):
+                return default
+
+        def _clamp_int(v, default=1, low=1, high=5):
+            try:
+                if v is None:
+                    return default
+                return max(low, min(high, int(v)))
+            except (ValueError, TypeError):
+                return default
+
+        def _safe_list(v):
+            if isinstance(v, list):
+                return [str(x) for x in v]
+            return []
+
+        strat_val = _get("recommended_strategy", Strategy.PROBE_WHY)
+        try:
+            raw_str = (strat_val.value if hasattr(strat_val, "value") else str(strat_val)).strip().upper()
+            strategy = Strategy(raw_str)
+        except (ValueError, KeyError, AttributeError):
+            strategy = Strategy.PROBE_WHY
+
+        kg_val = _get("knowledge_gap", None)
+        knowledge_gap = str(kg_val) if kg_val is not None else None
+
+        try:
+            return AITurnEvaluation(
+                correctness=_clamp_float(_get("correctness", 0.0)),
+                clarity=_clamp_float(_get("clarity", 0.0)),
+                completeness=_clamp_float(_get("completeness", 0.0)),
+                depth=_clamp_float(_get("depth", 0.0)),
+                relevance=_clamp_float(_get("relevance", 1.0), default=1.0),
+                stuck_probability=_clamp_float(_get("stuck_probability", 0.0)),
+                misconceptions=_safe_list(_get("misconceptions", [])),
+                missing_concepts=_safe_list(_get("missing_concepts", [])),
+                undefined_terms=_safe_list(_get("undefined_terms", [])),
+                mastered_concepts=_safe_list(_get("mastered_concepts", [])),
+                knowledge_gap=knowledge_gap,
+                recommended_strategy=strategy,
+                recommended_difficulty=_clamp_int(_get("recommended_difficulty", 1)),
+            )
+        except Exception:
+            return None
 
     def _to_message_response(self, msg: Any) -> MessageResponse:
         """Helper to convert database message model or dict to MessageResponse."""
@@ -193,6 +274,20 @@ class ChatService:
                     difficulty=db_session.state.difficulty
                 )
 
+        # Teacher Mode state hydration
+        raw_attempts = getattr(db_session.state, "teacher_attempt_count", 0)
+        teacher_attempt_count_val = raw_attempts if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool) else 0
+
+        teacher_intervention_obj: Optional[TeacherIntervention] = None
+        raw_intervention = getattr(db_session.state, "teacher_intervention", None)
+        if isinstance(raw_intervention, TeacherIntervention):
+            teacher_intervention_obj = raw_intervention
+        elif isinstance(raw_intervention, dict):
+            try:
+                teacher_intervention_obj = TeacherIntervention(**raw_intervention)
+            except Exception:
+                teacher_intervention_obj = None
+
         current_state = SessionState(
             session_id=str(session_id),
             current_mode=current_mode,
@@ -203,7 +298,9 @@ class ChatService:
             interrupted_question=interrupted_question_obj,
             consecutive_successes=db_session.state.consecutive_strong_answers,
             consecutive_failures=db_session.state.consecutive_weak_answers,
-            unresolved_misconceptions=db_session.state.unresolved_misconceptions or []
+            unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
+            teacher_attempt_count=teacher_attempt_count_val,
+            teacher_intervention=teacher_intervention_obj,
         )
 
         conversation = ConversationContext(
@@ -211,9 +308,22 @@ class ChatService:
             message_count=len(ai_history)
         )
 
+        # Hydrate recent evaluations for session (up to 10 chronologically)
+        raw_recent_evals = []
+        if hasattr(self.message_repo, "get_recent_evaluations_by_session"):
+            res_evals = self.message_repo.get_recent_evaluations_by_session(db, session_id, limit=10)
+            if isinstance(res_evals, list):
+                raw_recent_evals = res_evals
+        recent_evaluations_list: List[AITurnEvaluation] = [
+            ev_obj for raw_ev in raw_recent_evals
+            if (ev_obj := self._to_ai_turn_evaluation(raw_ev)) is not None
+        ]
+
         learning_context = LearningContext(
             mastered_concepts=db_session.state.mastered_concepts or [],
-            unresolved_misconceptions=db_session.state.unresolved_misconceptions or []
+            unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
+            recent_evaluations=recent_evaluations_list,
+            teacher_intervention=teacher_intervention_obj,
         )
 
         context = AIContext(
@@ -324,6 +434,40 @@ class ChatService:
         else:
             new_interrupted_qid = db_session.state.interrupted_question_id
 
+        # Teacher Mode attempt count and intervention tracking
+        if (decision and decision.should_restore_interrupted_question) or new_mode == LearningMode.STUDENT:
+            new_teacher_attempts = 0
+            new_teacher_intervention = None
+        else:
+            # Teacher Mode active
+            if updates.teacher_attempt_count is not None and isinstance(updates.teacher_attempt_count, int) and not isinstance(updates.teacher_attempt_count, bool):
+                new_teacher_attempts = updates.teacher_attempt_count
+            else:
+                raw_attempts = getattr(db_session.state, "teacher_attempt_count", 0)
+                new_teacher_attempts = raw_attempts if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool) else 0
+
+            if updates.teacher_intervention is not None:
+                if isinstance(updates.teacher_intervention, dict):
+                    new_teacher_intervention = updates.teacher_intervention
+                elif isinstance(updates.teacher_intervention, TeacherIntervention):
+                    new_teacher_intervention = updates.teacher_intervention.model_dump()
+                elif hasattr(updates.teacher_intervention, "model_dump"):
+                    dumped = updates.teacher_intervention.model_dump()
+                    new_teacher_intervention = dumped if isinstance(dumped, dict) else None
+                else:
+                    new_teacher_intervention = None
+            else:
+                raw_ti = getattr(db_session.state, "teacher_intervention", None)
+                if isinstance(raw_ti, dict):
+                    new_teacher_intervention = raw_ti
+                elif isinstance(raw_ti, TeacherIntervention):
+                    new_teacher_intervention = raw_ti.model_dump()
+                elif hasattr(raw_ti, "model_dump"):
+                    dumped = raw_ti.model_dump()
+                    new_teacher_intervention = dumped if isinstance(dumped, dict) else None
+                else:
+                    new_teacher_intervention = None
+
         state_update = SessionStateBase(
             current_mode=new_mode,
             difficulty=new_difficulty,
@@ -334,7 +478,9 @@ class ChatService:
             consecutive_strong_answers=consecutive_strong,
             consecutive_weak_answers=consecutive_weak,
             unresolved_misconceptions=new_misconceptions,
-            mastered_concepts=new_mastered
+            mastered_concepts=new_mastered,
+            teacher_attempt_count=new_teacher_attempts,
+            teacher_intervention=new_teacher_intervention,
         )
 
         self.session_repo.update_state(db, session_id, state_update)
