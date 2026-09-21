@@ -24,7 +24,9 @@ class SessionRepository:
             confidence=0.0,
             active_concept="Core Definition",
             unresolved_misconceptions=[],
-            mastered_concepts=[]
+            mastered_concepts=[],
+            teacher_attempt_count=0,
+            teacher_intervention=None,
         )
         db.add(db_state)
         db.commit()
@@ -70,6 +72,8 @@ class SessionRepository:
             db_state.teacher_intervention_data = state_in.teacher_intervention_data
         if hasattr(state_in, 'mode_switch_history') and state_in.mode_switch_history is not None:
             db_state.mode_switch_history = state_in.mode_switch_history
+        db_state.teacher_attempt_count = state_in.teacher_attempt_count
+        db_state.teacher_intervention = state_in.teacher_intervention
 
         db.add(db_state)
         db.commit()

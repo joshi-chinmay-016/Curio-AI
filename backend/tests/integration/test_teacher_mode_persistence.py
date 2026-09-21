@@ -33,6 +33,7 @@ from backend.app.ai.schemas import (
     Mode,
     StateUpdates,
     Strategy,
+    TeacherIntervention,
     TurnEvaluation,
 )
 
@@ -124,6 +125,8 @@ def _setup_test_session_in_db(db, topic="Calculus"):
         consecutive_weak_answers=0,
         unresolved_misconceptions=[],
         mastered_concepts=[],
+        teacher_attempt_count=0,
+        teacher_intervention=None,
     )
     db.add(state)
     db.commit()
@@ -456,6 +459,13 @@ def test_api_endpoint_teacher_mode_flow(override_get_db):
         interrupted_id = uuid4()
         db_state.current_mode = "TEACHER"
         db_state.interrupted_question_id = interrupted_id
+        db_state.teacher_attempt_count = 2
+        db_state.teacher_intervention = {
+            "active": True,
+            "gap": "Matrix inverse",
+            "attempt_count": 2,
+            "verification_required": True,
+        }
         db.commit()
 
         # Query GET /api/v1/sessions/{session_id}
@@ -465,6 +475,8 @@ def test_api_endpoint_teacher_mode_flow(override_get_db):
 
         assert data["state"]["current_mode"] == "TEACHER"
         assert data["state"]["interrupted_question_id"] == str(interrupted_id)
+        assert data["state"]["teacher_attempt_count"] == 2
+        assert data["state"]["teacher_intervention"]["gap"] == "Matrix inverse"
 
         # Query GET /api/v1/sessions (summary list)
         list_res = client.get("/api/v1/sessions")
@@ -472,6 +484,171 @@ def test_api_endpoint_teacher_mode_flow(override_get_db):
         matching = next((s for s in list_res.json() if s["session_id"] == session_id), None)
         assert matching is not None
         assert matching["current_mode"] == "TEACHER"
+
+
+# =====================================================================
+# 7. TEACHER MODE ATTEMPT COUNT & INTERVENTION DATABASE PERSISTENCE
+# =====================================================================
+
+def test_teacher_mode_persists_attempt_count_and_intervention(test_db_session):
+    """
+    Verify that when transitioning to TEACHER mode:
+    1. teacher_attempt_count is persisted in PostgreSQL.
+    2. teacher_intervention is persisted as JSON in PostgreSQL.
+    """
+    session, state = _setup_test_session_in_db(test_db_session)
+
+    intervention = TeacherIntervention(
+        active=True,
+        gap="Chain rule nested functions",
+        attempt_count=1,
+        verification_required=True,
+    )
+    mock_engine = MagicMock()
+    mock_engine.process.return_value = _create_mock_ai_result(
+        next_mode=Mode.TEACHER,
+        strategy=Strategy.TEACH_GAP,
+        state_updates=StateUpdates(
+            current_mode=Mode.TEACHER,
+            teacher_attempt_count=1,
+            teacher_intervention=intervention,
+        ),
+        content="Let's identify the outer and inner functions first.",
+    )
+
+    service = ChatService(ai_engine=mock_engine)
+    user_msg = MessageCreate(content="I'm stuck on composite functions.", input_type=CommonInputType.TEXT)
+    service.send_message(test_db_session, session.id, user_msg)
+
+    test_db_session.expire_all()
+    reloaded = test_db_session.query(SessionState).filter_by(session_id=session.id).one()
+
+    assert reloaded.current_mode == "TEACHER"
+    assert reloaded.teacher_attempt_count == 1
+    assert isinstance(reloaded.teacher_intervention, dict)
+    assert reloaded.teacher_intervention["active"] is True
+    assert reloaded.teacher_intervention["gap"] == "Chain rule nested functions"
+    assert reloaded.teacher_intervention["attempt_count"] == 1
+
+
+def test_multi_turn_teacher_mode_attempt_progression_in_db(test_db_session):
+    """
+    Verify multi-turn progression and exit in PostgreSQL:
+    Turn 1: attempt 1 persisted.
+    Turn 2: attempt 2 persisted.
+    Turn 3: exit restores question, resets attempt count to 0 and intervention to None in DB.
+    """
+    session, state = _setup_test_session_in_db(test_db_session)
+    mock_engine = MagicMock()
+    service = ChatService(ai_engine=mock_engine)
+
+    # Turn 1: Enter TEACHER mode
+    mock_engine.process.return_value = _create_mock_ai_result(
+        next_mode=Mode.TEACHER,
+        strategy=Strategy.TEACH_GAP,
+        state_updates=StateUpdates(
+            current_mode=Mode.TEACHER,
+            teacher_attempt_count=1,
+            teacher_intervention=TeacherIntervention(active=True, gap="Limits", attempt_count=1),
+        ),
+    )
+    service.send_message(test_db_session, session.id, MessageCreate(content="I don't know.", input_type=CommonInputType.TEXT))
+
+    test_db_session.expire_all()
+    s1 = test_db_session.query(SessionState).filter_by(session_id=session.id).one()
+    assert s1.teacher_attempt_count == 1
+    assert s1.teacher_intervention["attempt_count"] == 1
+
+    # Turn 2: Second attempt in TEACHER mode
+    mock_engine.process.return_value = _create_mock_ai_result(
+        next_mode=Mode.TEACHER,
+        strategy=Strategy.TEACH_GAP,
+        state_updates=StateUpdates(
+            current_mode=Mode.TEACHER,
+            teacher_attempt_count=2,
+            teacher_intervention=TeacherIntervention(active=True, gap="Limits", attempt_count=2),
+        ),
+    )
+    service.send_message(test_db_session, session.id, MessageCreate(content="Still confused.", input_type=CommonInputType.TEXT))
+
+    test_db_session.expire_all()
+    s2 = test_db_session.query(SessionState).filter_by(session_id=session.id).one()
+    assert s2.teacher_attempt_count == 2
+    assert s2.teacher_intervention["attempt_count"] == 2
+
+    # Turn 3: Exit TEACHER mode back to STUDENT
+    mock_engine.process.return_value = _create_mock_ai_result(
+        next_mode=Mode.STUDENT,
+        strategy=Strategy.RESTORE_INTERRUPTED_QUESTION,
+        should_restore_interrupted_question=True,
+        state_updates=StateUpdates(current_mode=Mode.STUDENT),
+    )
+    service.send_message(test_db_session, session.id, MessageCreate(content="Got it now!", input_type=CommonInputType.TEXT))
+
+    test_db_session.expire_all()
+    s3 = test_db_session.query(SessionState).filter_by(session_id=session.id).one()
+    assert s3.current_mode == "STUDENT"
+    assert s3.teacher_attempt_count == 0
+    assert s3.teacher_intervention is None
+
+
+def test_database_hydration_of_teacher_mode_state(test_db_session):
+    """
+    Verify ChatService hydrates teacher_attempt_count and teacher_intervention from PostgreSQL
+    into AIContext before invoking CurioEngine.
+    """
+    session, state = _setup_test_session_in_db(test_db_session)
+    state.current_mode = "TEACHER"
+    state.teacher_attempt_count = 2
+    state.teacher_intervention = {
+        "active": True,
+        "gap": "Product rule factor differentiation",
+        "attempt_count": 2,
+        "verification_required": True,
+    }
+    test_db_session.commit()
+
+    mock_engine = MagicMock()
+    mock_engine.process.return_value = _create_mock_ai_result(next_mode=Mode.TEACHER)
+
+    service = ChatService(ai_engine=mock_engine)
+    user_msg = MessageCreate(content="Testing DB hydration.", input_type=CommonInputType.TEXT)
+    service.send_message(test_db_session, session.id, user_msg)
+
+    assert mock_engine.process.call_count == 1
+    passed_context = mock_engine.process.call_args[0][0]
+
+    assert passed_context.current_state.teacher_attempt_count == 2
+    assert isinstance(passed_context.current_state.teacher_intervention, TeacherIntervention)
+    assert passed_context.current_state.teacher_intervention.gap == "Product rule factor differentiation"
+    assert passed_context.current_state.teacher_intervention.attempt_count == 2
+
+    assert isinstance(passed_context.learning_context.teacher_intervention, TeacherIntervention)
+    assert passed_context.learning_context.teacher_intervention.gap == "Product rule factor differentiation"
+
+
+def test_safe_handling_of_malformed_intervention_in_database(test_db_session):
+    """
+    Verify ChatService safely handles corrupted or non-conforming intervention JSON
+    in PostgreSQL by setting teacher_intervention to None without crashing.
+    """
+    session, state = _setup_test_session_in_db(test_db_session)
+    state.current_mode = "TEACHER"
+    state.teacher_attempt_count = 1
+    state.teacher_intervention = {"invalid_negative_count": -50, "attempt_count": -10}
+    test_db_session.commit()
+
+    mock_engine = MagicMock()
+    mock_engine.process.return_value = _create_mock_ai_result(next_mode=Mode.TEACHER)
+
+    service = ChatService(ai_engine=mock_engine)
+    user_msg = MessageCreate(content="Testing corrupted JSON in DB.", input_type=CommonInputType.TEXT)
+    service.send_message(test_db_session, session.id, user_msg)
+
+    passed_context = mock_engine.process.call_args[0][0]
+    assert passed_context.current_state.teacher_attempt_count == 1
+    assert passed_context.current_state.teacher_intervention is None
+    assert passed_context.learning_context.teacher_intervention is None
 
 
 # =====================================================================

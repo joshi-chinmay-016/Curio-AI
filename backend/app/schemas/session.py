@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 from pydantic import BaseModel
 from backend.app.schemas.common import LearningMode, SessionStatus, SourceType
@@ -17,6 +17,8 @@ class SessionStateBase(BaseModel):
     mastered_concepts: List[str] = []
     teacher_intervention_data: Optional[dict] = None
     mode_switch_history: List[dict] = []
+    teacher_attempt_count: int = 0
+    teacher_intervention: Optional[Dict[str, Any]] = None
 
 class SessionStateResponse(SessionStateBase):
     session_id: UUID
