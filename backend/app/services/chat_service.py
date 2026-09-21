@@ -33,6 +33,7 @@ from backend.app.ai.schemas import (
     SessionInfo,
     SessionState,
     SourceMode,
+    TeacherIntervention,
 )
 
 
@@ -195,6 +196,20 @@ class ChatService:
                     difficulty=db_session.state.difficulty
                 )
 
+        # Teacher Mode state hydration
+        raw_attempts = getattr(db_session.state, "teacher_attempt_count", 0)
+        teacher_attempt_count_val = raw_attempts if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool) else 0
+
+        teacher_intervention_obj: Optional[TeacherIntervention] = None
+        raw_intervention = getattr(db_session.state, "teacher_intervention", None)
+        if isinstance(raw_intervention, TeacherIntervention):
+            teacher_intervention_obj = raw_intervention
+        elif isinstance(raw_intervention, dict):
+            try:
+                teacher_intervention_obj = TeacherIntervention(**raw_intervention)
+            except Exception:
+                teacher_intervention_obj = None
+
         current_state = SessionState(
             session_id=str(session_id),
             current_mode=current_mode,
@@ -205,7 +220,9 @@ class ChatService:
             interrupted_question=interrupted_question_obj,
             consecutive_successes=db_session.state.consecutive_strong_answers,
             consecutive_failures=db_session.state.consecutive_weak_answers,
-            unresolved_misconceptions=db_session.state.unresolved_misconceptions or []
+            unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
+            teacher_attempt_count=teacher_attempt_count_val,
+            teacher_intervention=teacher_intervention_obj,
         )
 
         conversation = ConversationContext(
@@ -215,7 +232,8 @@ class ChatService:
 
         learning_context = LearningContext(
             mastered_concepts=db_session.state.mastered_concepts or [],
-            unresolved_misconceptions=db_session.state.unresolved_misconceptions or []
+            unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
+            teacher_intervention=teacher_intervention_obj,
         )
 
         context = AIContext(
@@ -326,6 +344,40 @@ class ChatService:
         else:
             new_interrupted_qid = db_session.state.interrupted_question_id
 
+        # Teacher Mode attempt count and intervention tracking
+        if (decision and decision.should_restore_interrupted_question) or new_mode == LearningMode.STUDENT:
+            new_teacher_attempts = 0
+            new_teacher_intervention = None
+        else:
+            # Teacher Mode active
+            if updates.teacher_attempt_count is not None and isinstance(updates.teacher_attempt_count, int) and not isinstance(updates.teacher_attempt_count, bool):
+                new_teacher_attempts = updates.teacher_attempt_count
+            else:
+                raw_attempts = getattr(db_session.state, "teacher_attempt_count", 0)
+                new_teacher_attempts = raw_attempts if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool) else 0
+
+            if updates.teacher_intervention is not None:
+                if isinstance(updates.teacher_intervention, dict):
+                    new_teacher_intervention = updates.teacher_intervention
+                elif isinstance(updates.teacher_intervention, TeacherIntervention):
+                    new_teacher_intervention = updates.teacher_intervention.model_dump()
+                elif hasattr(updates.teacher_intervention, "model_dump"):
+                    dumped = updates.teacher_intervention.model_dump()
+                    new_teacher_intervention = dumped if isinstance(dumped, dict) else None
+                else:
+                    new_teacher_intervention = None
+            else:
+                raw_ti = getattr(db_session.state, "teacher_intervention", None)
+                if isinstance(raw_ti, dict):
+                    new_teacher_intervention = raw_ti
+                elif isinstance(raw_ti, TeacherIntervention):
+                    new_teacher_intervention = raw_ti.model_dump()
+                elif hasattr(raw_ti, "model_dump"):
+                    dumped = raw_ti.model_dump()
+                    new_teacher_intervention = dumped if isinstance(dumped, dict) else None
+                else:
+                    new_teacher_intervention = None
+
         state_update = SessionStateBase(
             current_mode=new_mode,
             difficulty=new_difficulty,
@@ -336,7 +388,9 @@ class ChatService:
             consecutive_strong_answers=consecutive_strong,
             consecutive_weak_answers=consecutive_weak,
             unresolved_misconceptions=new_misconceptions,
-            mastered_concepts=new_mastered
+            mastered_concepts=new_mastered,
+            teacher_attempt_count=new_teacher_attempts,
+            teacher_intervention=new_teacher_intervention,
         )
 
         self.session_repo.update_state(db, session_id, state_update)

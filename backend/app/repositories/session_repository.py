@@ -24,7 +24,9 @@ class SessionRepository:
             confidence=0.0,
             active_concept="Core Definition",
             unresolved_misconceptions=[],
-            mastered_concepts=[]
+            mastered_concepts=[],
+            teacher_attempt_count=0,
+            teacher_intervention=None,
         )
         db.add(db_state)
         db.commit()
@@ -66,6 +68,8 @@ class SessionRepository:
         db_state.consecutive_weak_answers = state_in.consecutive_weak_answers
         db_state.unresolved_misconceptions = state_in.unresolved_misconceptions
         db_state.mastered_concepts = state_in.mastered_concepts
+        db_state.teacher_attempt_count = state_in.teacher_attempt_count
+        db_state.teacher_intervention = state_in.teacher_intervention
 
         db.add(db_state)
         db.commit()

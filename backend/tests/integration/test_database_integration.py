@@ -143,7 +143,48 @@ def test_create_session_state(test_db_session):
     assert retrieved.confidence == 0.75
     assert retrieved.unresolved_misconceptions == ["Photon mass confusion"]
     assert retrieved.mastered_concepts == ["Superposition"]
+    assert retrieved.teacher_attempt_count == 0
+    assert retrieved.teacher_intervention is None
     assert session.state.confidence == 0.75
+
+
+def test_create_session_state_with_teacher_mode_fields(test_db_session):
+    """Verify persisting and retrieving teacher_attempt_count and teacher_intervention in PostgreSQL."""
+    user = User(email=f"teacher_user_{uuid.uuid4().hex[:8]}@curio.ai")
+    test_db_session.add(user)
+    test_db_session.commit()
+
+    session = Session(
+        user_id=user.id,
+        topic="Linear Algebra",
+        source_type="prompt",
+        status="active"
+    )
+    test_db_session.add(session)
+    test_db_session.commit()
+
+    state = SessionState(
+        session_id=session.id,
+        current_mode="TEACHER",
+        difficulty=2,
+        confidence=0.5,
+        active_concept="Eigenvalues",
+        consecutive_strong_answers=1,
+        consecutive_weak_answers=1,
+        unresolved_misconceptions=[],
+        mastered_concepts=[],
+        teacher_attempt_count=2,
+        teacher_intervention={"active": True, "gap": "Characteristic equation", "attempt_count": 2, "verification_required": True}
+    )
+    test_db_session.add(state)
+    test_db_session.commit()
+
+    retrieved = test_db_session.query(SessionState).filter_by(session_id=session.id).first()
+    assert retrieved is not None
+    assert retrieved.teacher_attempt_count == 2
+    assert isinstance(retrieved.teacher_intervention, dict)
+    assert retrieved.teacher_intervention["gap"] == "Characteristic equation"
+    assert retrieved.teacher_intervention["attempt_count"] == 2
 
 
 def test_create_turn_evaluation_linked_to_message(test_db_session):
