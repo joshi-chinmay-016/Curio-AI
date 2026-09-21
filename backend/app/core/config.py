@@ -28,8 +28,11 @@ class Settings(BaseSettings):
     # Test Database Configuration (Required only for live database integration tests)
     TEST_DATABASE_URL: str = ""
 
-    # AI Keys
+    # AI Keys and Model Settings
     GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_TIMEOUT_SECONDS: float = 30.0
+    GROQ_MAX_RETRIES: int = 2
 
     class Config:
         case_sensitive = True
