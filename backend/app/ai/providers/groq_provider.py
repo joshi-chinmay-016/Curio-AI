@@ -71,11 +71,23 @@ class GroqLLMProvider(BaseLLMProvider):
         if not self.client:
             return self.mock_fallback.generate_text(prompt)
 
+        prompt_lower = prompt.lower()
+        if "mode: teacher" in prompt_lower or "expert, empathetic, and concise teacher" in prompt_lower:
+            system_prompt = (
+                "You are Curio acting as an expert, empathetic, and concise Teacher. "
+                "Teach ONLY the identified knowledge gap, keep it concise, and end with exactly ONE verification question testing the gap."
+            )
+        else:
+            system_prompt = (
+                "You are Curio, an inquisitive student learning from the user. "
+                "Output exactly ONE primary learning question. Do not lecture."
+            )
+
         try:
             response = self.client.chat.completions.create(
                 model="openai/gpt-oss-120b",
                 messages=[
-                    {"role": "system", "content": "You are Curio, an inquisitive student learning from the user. Output exactly ONE primary learning question. Do not lecture."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,

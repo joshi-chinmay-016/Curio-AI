@@ -66,6 +66,10 @@ class SessionRepository:
         db_state.consecutive_weak_answers = state_in.consecutive_weak_answers
         db_state.unresolved_misconceptions = state_in.unresolved_misconceptions
         db_state.mastered_concepts = state_in.mastered_concepts
+        if hasattr(state_in, 'teacher_intervention_data') and state_in.teacher_intervention_data is not None:
+            db_state.teacher_intervention_data = state_in.teacher_intervention_data
+        if hasattr(state_in, 'mode_switch_history') and state_in.mode_switch_history is not None:
+            db_state.mode_switch_history = state_in.mode_switch_history
 
         db.add(db_state)
         db.commit()

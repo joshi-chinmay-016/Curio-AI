@@ -15,6 +15,8 @@ class SessionStateBase(BaseModel):
     consecutive_weak_answers: int = 0
     unresolved_misconceptions: List[str] = []
     mastered_concepts: List[str] = []
+    teacher_intervention_data: Optional[dict] = None
+    mode_switch_history: List[dict] = []
 
 class SessionStateResponse(SessionStateBase):
     session_id: UUID

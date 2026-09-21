@@ -1,3 +1,13 @@
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path so `backend.app...` imports resolve
+# whether uvicorn is launched from project root or from backend/
+_backend_dir = Path(__file__).resolve().parent.parent
+_project_root = _backend_dir.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

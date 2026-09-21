@@ -179,7 +179,15 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
         curr_attempts = context.current_state.teacher_attempt_count or 0
         if context.current_state.teacher_intervention and context.current_state.teacher_intervention.attempt_count:
             curr_attempts = max(curr_attempts, context.current_state.teacher_intervention.attempt_count)
-        attempt_count = curr_attempts + 1
+
+        is_entering = context.current_mode != Mode.TEACHER and (not hasattr(context.current_mode, "value") or context.current_mode.value != "TEACHER")
+        is_clarification = "Learner asked for explanation" in (decision.reason or "") or "Learner indicated readiness" in (decision.reason or "")
+        if is_entering:
+            attempt_count = 1
+        elif is_clarification:
+            attempt_count = max(1, curr_attempts)
+        else:
+            attempt_count = curr_attempts + 1
 
         interrupted_q = context.interrupted_question or context.current_question
         content = teacher_handler.generate_teacher_response(
@@ -206,8 +214,14 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
     elif decision.should_restore_interrupted_question:
         # Returning from Teacher Mode to Student Mode: restore interrupted question
         restored_q = context.interrupted_question
+        curr_attempts = context.current_state.teacher_attempt_count or 0
+        is_limit_fallback = curr_attempts >= 3 or "Maximum Teacher attempts" in (decision.reason or "")
+
         if restored_q:
-            content = f"Great job! Now let's return to our original question:\n\n{restored_q.content}"
+            if is_limit_fallback:
+                content = f"Let's pause on that specific detail for now and return to our original question at a simpler level:\n\n{restored_q.content}"
+            else:
+                content = f"Great job! Now let's return to our original question:\n\n{restored_q.content}"
         else:
             student_handler = StudentModeHandler(provider)
             content = student_handler.generate_followup_question(context, evaluation, decision)
@@ -255,8 +269,12 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
     - Snapshotting current_question into interrupted_question when entering Teacher Mode.
     - Preserving interrupted_question during multi-turn Teacher Mode.
     - Restoring interrupted_question and clearing intervention state when returning to Student Mode.
+    - Mode switch history recording on transitions.
     - Normal Student Mode updates.
     """
+    from datetime import datetime, timezone
+    from backend.app.ai.schemas import ModeTransition
+
     context: AIContext = state["context"]
     evaluation: TurnEvaluation = state["evaluation"]
     decision: LearningDecision = state["decision"]
@@ -279,6 +297,18 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
     history = list(context.current_state.recent_strategy_history or [])
     history.append(decision.strategy)
 
+    # Mode switch history tracking
+    history_transitions = list(context.current_state.mode_switch_history or [])
+    if context.current_mode != decision.next_mode:
+        transition = ModeTransition(
+            from_mode=context.current_mode,
+            to_mode=decision.next_mode,
+            reason=decision.reason,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            active_concept=decision.active_concept or context.active_concept,
+        )
+        history_transitions.append(transition)
+
     qid = f"q_{uuid.uuid4().hex[:8]}"
 
     if decision.next_mode == Mode.EVALUATOR:
@@ -297,11 +327,14 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             recent_strategy_history=history[-10:],
             mastered_concepts=None,
             unresolved_misconceptions=None,
+            mode_switch_history=history_transitions,
         )
 
     elif decision.next_mode == Mode.TEACHER:
         # Entering or continuing Teacher Mode
         is_entering = context.current_mode != Mode.TEACHER and (not hasattr(context.current_mode, "value") or context.current_mode.value != "TEACHER")
+        is_clarification = "Learner asked for explanation" in (decision.reason or "") or "Learner indicated readiness" in (decision.reason or "")
+
         if is_entering:
             # Snapshot current Student question
             interrupted_q = context.current_question
@@ -312,7 +345,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             curr_attempts = context.current_state.teacher_attempt_count or 0
             if context.current_state.teacher_intervention and context.current_state.teacher_intervention.attempt_count:
                 curr_attempts = max(curr_attempts, context.current_state.teacher_intervention.attempt_count)
-            attempt_count = curr_attempts + 1
+            attempt_count = max(1, curr_attempts) if is_clarification else curr_attempts + 1
 
         current_q = CurrentQuestion(
             id=qid,
@@ -341,6 +374,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             recent_strategy_history=history[-10:],
             mastered_concepts=evaluation.mastered_concepts if evaluation.mastered_concepts else None,
             unresolved_misconceptions=evaluation.misconceptions if evaluation.misconceptions else None,
+            mode_switch_history=history_transitions,
         )
 
     elif decision.should_restore_interrupted_question:
@@ -359,6 +393,16 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             verification_required=False,
         )
 
+        is_limit_fallback = "Maximum Teacher attempts" in (decision.reason or "")
+        if is_limit_fallback:
+            mastered = None
+            unresolved = list(context.current_state.unresolved_misconceptions or [])
+            if decision.active_concept and decision.active_concept not in unresolved:
+                unresolved.append(decision.active_concept)
+        else:
+            mastered = evaluation.mastered_concepts if evaluation.mastered_concepts else ([decision.active_concept] if decision.active_concept else None)
+            unresolved = evaluation.misconceptions if evaluation.misconceptions else None
+
         state_updates = StateUpdates(
             active_concept=current_q.concept if current_q else decision.active_concept,
             current_mode=Mode.STUDENT,
@@ -371,8 +415,9 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             consecutive_successes=new_successes,
             consecutive_failures=new_failures,
             recent_strategy_history=history[-10:],
-            mastered_concepts=evaluation.mastered_concepts if evaluation.mastered_concepts else None,
-            unresolved_misconceptions=evaluation.misconceptions if evaluation.misconceptions else None,
+            mastered_concepts=mastered,
+            unresolved_misconceptions=unresolved,
+            mode_switch_history=history_transitions,
         )
 
     else:
@@ -398,6 +443,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             recent_strategy_history=history[-10:],
             mastered_concepts=evaluation.mastered_concepts if evaluation.mastered_concepts else None,
             unresolved_misconceptions=evaluation.misconceptions if evaluation.misconceptions else None,
+            mode_switch_history=history_transitions,
         )
 
     return {"state_updates": state_updates}
