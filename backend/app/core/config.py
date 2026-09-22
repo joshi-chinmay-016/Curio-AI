@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     GROQ_TIMEOUT_SECONDS: float = 30.0
     GROQ_MAX_RETRIES: int = 2
 
+    # Authentication & Security
+    SECRET_KEY: str = "curio-dev-secret-key-change-in-production"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+
     class Config:
         case_sensitive = True
         extra = "ignore"
