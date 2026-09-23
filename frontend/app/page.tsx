@@ -8,14 +8,15 @@ import { CurioNav } from "@/components/curio/CurioNav";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { Hero3DScene } from "@/components/curio/landing/Hero3DScene";
 import { HowCurioThinks } from "@/components/curio/landing/HowCurioThinks";
+import { LearningParadox3D } from "@/components/curio/landing/LearningParadox3D";
+import { TypewriterHeadline } from "@/components/curio/landing/TypewriterHeadline";
 import { AdaptiveNetworkSection } from "@/components/curio/landing/AdaptiveNetworkSection";
 import { TeacherModeDemo } from "@/components/curio/landing/TeacherModeDemo";
 import { ReportPreviewSection } from "@/components/curio/landing/ReportPreviewSection";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
+import { CurioFooter } from "@/components/curio/CurioFooter";
 
 export default function LandingPage() {
-  const headlineWords = ["Don't", "memorize.", "Explain."];
-
   const scrollToHowItWorks = () => {
     document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
   };
@@ -40,20 +41,8 @@ export default function LandingPage() {
               THE FEYNMAN TECHNIQUE, AUTOMATED
             </motion.div>
 
-            {/* Headline */}
-            <h1 className="font-heading text-4xl sm:text-5xl lg:text-6xl font-extrabold text-navy tracking-tight leading-[1.08] mb-6">
-              {headlineWords.map((word, i) => (
-                <motion.span
-                  key={i}
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: i * 0.08 }}
-                  className="inline-block mr-3"
-                >
-                  {word}
-                </motion.span>
-              ))}
-            </h1>
+            {/* Headline with Typewriter Animation */}
+            <TypewriterHeadline />
 
             {/* Subtext */}
             <motion.p
@@ -62,8 +51,7 @@ export default function LandingPage() {
               transition={{ duration: 0.4, delay: 0.35 }}
               className="font-sans text-lg md:text-xl text-navy/80 leading-relaxed max-w-xl mb-8"
             >
-              Curio asks you to explain concepts in your own words. Then maps your
-              thinking in 3D to uncover exactly where your understanding breaks.
+              Explain what you know. Curio challenges your thinking, uncovers your knowledge gaps, and helps you truly understand.
             </motion.p>
 
             {/* CTAs */}
@@ -89,78 +77,14 @@ export default function LandingPage() {
           </div>
 
           {/* Right Column: 3D Knowledge Network Scene */}
-          <div className="lg:col-span-6 w-full flex justify-center">
+          <div className="lg:col-span-6 w-full flex justify-center overflow-visible">
             <Hero3DScene />
           </div>
         </div>
       </section>
 
       {/* 2. THE PROBLEM VS CURIO */}
-      <section id="how-it-works" className="py-20 border-t border-fog bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center max-w-xl mx-auto mb-16">
-            <span className="font-mono text-xs font-bold uppercase tracking-widest text-navy/50 block mb-2">
-              THE LEARNING PARADOX
-            </span>
-            <h2 className="font-heading text-3xl md:text-4xl font-extrabold text-navy tracking-tight mb-4">
-              Passive Learning Is An Illusion
-            </h2>
-            <p className="font-sans text-base text-navy/70">
-              When you re-read notes or watch lectures, your brain confuses familiarity with true mastery.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* Traditional Learning Card */}
-            <div className="bg-ice/50 border border-fog rounded-[8px] p-8">
-              <span className="font-mono text-xs font-bold uppercase tracking-widest text-navy/40 block mb-3">
-                TRADITIONAL APPROACH
-              </span>
-              <h3 className="font-heading text-xl font-bold text-navy mb-4">
-                Read → Memorize → Forget
-              </h3>
-              <ul className="space-y-3 font-sans text-sm text-navy/75">
-                <li className="flex items-start gap-2.5">
-                  <span className="text-navy/40 font-bold">✗</span>
-                  <span>Passive consumption creates false confidence.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-navy/40 font-bold">✗</span>
-                  <span>Boundary conditions and edge cases remain hidden until exams or production incidents.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-navy/40 font-bold">✗</span>
-                  <span>Generic AI chat gives you answers without challenging your assumptions.</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Curio Feynman Card */}
-            <div className="bg-white border-2 border-navy rounded-[8px] p-8 shadow-[6px_6px_0_0_#0F2B4A]">
-              <span className="font-mono text-xs font-bold uppercase tracking-widest text-cobalt block mb-3">
-                CURIO FEYNMAN SYSTEM
-              </span>
-              <h3 className="font-heading text-xl font-bold text-navy mb-4">
-                Explain → Question → Discover Gaps → Master
-              </h3>
-              <ul className="space-y-3 font-sans text-sm text-navy/85">
-                <li className="flex items-start gap-2.5">
-                  <span className="text-cobalt font-bold">✓</span>
-                  <span>Teaching forces your brain to structure and articulate mental models.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-gap-orange font-bold">✓</span>
-                  <span>Curio actively probes your explanations for exact logical gaps and misconceptions.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-cobalt font-bold">✓</span>
-                  <span>Generates a 3D isometric Gap Report mapping exactly what needs deliberate practice.</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <LearningParadox3D />
 
       {/* 3. HOW CURIO THINKS (5-Stage Loop) */}
       <HowCurioThinks />
@@ -195,9 +119,7 @@ export default function LandingPage() {
       </section>
 
       {/* FOOTER */}
-      <footer className="w-full border-t border-fog bg-ice px-6 py-8 text-center font-mono text-xs text-navy/50">
-        CURIO AI © {new Date().getFullYear()} — AN ADAPTIVE LEARNING LABORATORY BASED ON THE FEYNMAN TECHNIQUE
-      </footer>
+      <CurioFooter />
     </div>
   );
 }

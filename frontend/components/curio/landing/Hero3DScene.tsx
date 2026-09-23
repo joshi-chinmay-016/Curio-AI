@@ -28,53 +28,53 @@ function KnowledgeNetwork() {
         position: [0, 0, 0],
         color: "#0F2B4A",
         glowColor: "#3A63FF",
-        size: 1.5,
+        size: 1.35,
         statusText: "ROOT",
       },
       {
         id: "def",
         name: "DEFINITION",
-        position: [-3.2, 1.8, 1.2],
+        position: [-2.6, 1.3, 0.9],
         color: "#0F2B4A",
         glowColor: "#0F2B4A",
-        size: 1.1,
+        size: 1.0,
         statusText: "MASTERED",
       },
       {
         id: "mech",
         name: "MECHANISM",
-        position: [3.4, 1.2, -1.0],
+        position: [2.6, 1.0, -0.8],
         color: "#3A63FF",
         glowColor: "#3A63FF",
-        size: 1.2,
+        size: 1.05,
         statusText: "DEVELOPING",
       },
       {
         id: "gap",
         name: "EDGE CASES",
-        position: [1.8, -2.4, 2.0],
+        position: [1.5, -1.8, 1.4],
         color: "#FF6B1A",
         glowColor: "#FF6B1A",
-        size: 1.3,
+        size: 1.1,
         isGap: true,
         statusText: "GAP DETECTED",
       },
       {
         id: "app",
         name: "APPLICATION",
-        position: [-2.8, -1.8, -1.5],
+        position: [-2.2, -1.5, -1.1],
         color: "#3A63FF",
         glowColor: "#3A63FF",
-        size: 1.1,
+        size: 0.95,
         statusText: "DEVELOPING",
       },
       {
         id: "inv",
         name: "INVARIANTS",
-        position: [0.5, 3.2, -1.2],
+        position: [0.3, 2.3, -0.9],
         color: "#3A63FF",
         glowColor: "#3A63FF",
-        size: 1.0,
+        size: 0.9,
         statusText: "RESOLVED ✓",
       },
     ],
@@ -283,10 +283,10 @@ export function Hero3DScene() {
   }
 
   return (
-    <div className="relative w-full h-[420px] md:h-[520px] rounded-[8px] overflow-hidden select-none">
+    <div className="relative w-full h-[520px] md:h-[620px] lg:h-[660px] overflow-visible select-none">
       <Canvas
-        camera={{ position: [0, 1.5, 9], fov: 48 }}
-        className="w-full h-full"
+        camera={{ position: [0, 0, 10.8], fov: 44 }}
+        className="w-full h-full overflow-visible"
         gl={{ antialias: true, alpha: true }}
       >
         <ambientLight intensity={0.8} />
@@ -299,13 +299,13 @@ export function Hero3DScene() {
           enableZoom={false}
           enablePan={false}
           autoRotate={false}
-          maxPolarAngle={Math.PI / 1.7}
-          minPolarAngle={Math.PI / 3}
+          maxPolarAngle={Math.PI / 1.6}
+          minPolarAngle={Math.PI / 3.4}
         />
       </Canvas>
 
       {/* Interactive Hint */}
-      <div className="absolute bottom-3 right-4 font-mono text-[10px] uppercase tracking-wider text-navy/50 bg-white/80 px-2.5 py-1 rounded-[3px] border border-fog/80 pointer-events-none">
+      <div className="absolute bottom-2 right-2 font-mono text-[10px] uppercase tracking-wider text-navy/50 bg-white/80 px-2.5 py-1 rounded-[3px] border border-fog/80 pointer-events-none backdrop-blur-sm">
         DRAG TO ROTATE · HOVER TO INSPECT
       </div>
     </div>

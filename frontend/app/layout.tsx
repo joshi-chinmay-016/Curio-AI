@@ -24,7 +24,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Curio AI - Learn by Teaching (Feynman Technique)",
-  description: "Curio asks you to explain concepts. Then finds exactly where your understanding breaks.",
+  description: "Explain what you know. Curio challenges your thinking, uncovers your knowledge gaps, and helps you truly understand.",
 };
 
 export default function RootLayout({
