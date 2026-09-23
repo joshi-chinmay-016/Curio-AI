@@ -22,6 +22,9 @@ logger = logging.getLogger("curio.ai.decision_engine")
 
 
 MAX_TEACHER_ATTEMPTS = 3
+TEACHER_VERIFICATION_PASS_THRESHOLD = 0.70
+TEACHER_VERIFICATION_PARTIAL_THRESHOLD = 0.40
+TEACHER_VERIFICATION_MAX_STUCK = 0.35
 
 EXPLICIT_TEACH_OR_STUCK_PHRASES = [
     # Explicit teach requests
@@ -29,27 +32,40 @@ EXPLICIT_TEACH_OR_STUCK_PHRASES = [
     "can you teach me",
     "could you teach me",
     "please teach me",
+    "teach me please",
     "teach me this",
     "teach me about",
     "teach this",
     "teach me again",
     "teach me the mechanism",
+    "teach me that",
     "please explain",
     "can you explain",
     "could you explain",
+    "can you explain this",
+    "can you explain that",
     "can you explain that again",
     "can you explain again",
     "explain to me",
+    "explain this to me",
     "explain this",
     "explain how",
     "explain the",
     "explain the mechanism",
     "help me understand",
+    "can you help me understand",
+    "could you help me understand",
+    "can you help",
+    "could you help",
     "tell me how",
     "tell me why",
     "tell me what",
+    "tell me again",
     "can you walk me through this",
     "walk me through",
+    "walk me through this",
+    "can you clarify",
+    "could you clarify",
     "what is",
     "how does",
     "describe",
@@ -64,27 +80,43 @@ EXPLICIT_TEACH_OR_STUCK_PHRASES = [
     "im not sure",
     "no idea",
     "i have no idea",
+    "no clue",
+    "i have no clue",
     "i'm stuck",
     "im stuck",
     "i am stuck",
     "stuck",
+    "completely stuck",
+    "still stuck",
     "i don't understand",
     "i do not understand",
+    "i don't understand this",
+    "i don't understand the mechanism",
+    "i do not understand the mechanism",
     "i'm confused",
     "im confused",
     "i am confused",
+    "still confused",
     "i don't get why",
     "i don't get it",
     "i do not get",
+    "i don't get the mechanism",
+    "don't get the mechanism",
     "help me",
     "i am lost",
     "i'm lost",
+    "im lost",
+    "totally lost",
+    "completely lost",
+    "lost on this",
 ]
 
 EXPLICIT_READY_PHRASES = [
     "i'll explain",
     "ill explain",
     "let me explain",
+    "let me try",
+    "let me try to explain",
     "i understand now",
     "i understand",
     "i got it",
@@ -93,6 +125,10 @@ EXPLICIT_READY_PHRASES = [
     "ready to explain",
     "ready to try",
     "i think i understand",
+    "i think i understand now",
+    "i think i get it",
+    "i think i got it",
+    "i think i can explain",
 ]
 
 NON_ANSWER_ACKNOWLEDGMENTS = [
@@ -153,8 +189,19 @@ class DecisionEngine:
         # 1. TEACHER MODE DECISION LOGIC (Phase 2D & 2E)
         # =================================================================
         if current_mode == Mode.TEACHER or (hasattr(current_mode, "value") and current_mode.value == "TEACHER"):
+            words = clean_msg.split()
+            word_count = len(words)
+
             is_teach_or_stuck = self._has_explicit_teach_or_stuck_signal(user_msg)
-            is_ready = any(phrase in clean_msg for phrase in EXPLICIT_READY_PHRASES) or clean_msg in NON_ANSWER_ACKNOWLEDGMENTS
+            is_ready_signal = any(phrase in clean_msg for phrase in EXPLICIT_READY_PHRASES)
+            is_acknowledgment = clean_msg in NON_ANSWER_ACKNOWLEDGMENTS or any(clean_msg == phrase for phrase in NON_ANSWER_ACKNOWLEDGMENTS)
+
+            stripped_content = clean_msg
+            for phrase in EXPLICIT_READY_PHRASES + NON_ANSWER_ACKNOWLEDGMENTS:
+                stripped_content = stripped_content.replace(phrase, " ")
+            substantive_word_count = len(stripped_content.split())
+
+            is_bare_ack = (is_ready_signal or is_acknowledgment) and substantive_word_count <= 3
             is_question = (
                 "?" in clean_msg
                 or clean_msg.startswith("what")
@@ -172,27 +219,24 @@ class DecisionEngine:
                 "do not understand", "still don't understand", "lost", "i'm lost", "im lost", "idk",
                 "not sure", "wrong", "fail", "failed"
             ])
-            is_non_answer = clean_msg in NON_ANSWER_ACKNOWLEDGMENTS or len(clean_msg.split()) <= 1 or is_ready
-            is_clarification_turn = (is_question or is_ready or (is_teach_or_stuck and not is_stuck_or_struggle))
+            is_clarification_turn = (is_question or is_bare_ack or (is_teach_or_stuck and not is_stuck_or_struggle))
 
             # A verification pass REQUIRES:
-            # 1. Correctness >= 0.7
-            # 2. Stuck probability < 0.35
+            # 1. Correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD (0.70)
+            # 2. Stuck probability < TEACHER_VERIFICATION_MAX_STUCK (0.35)
             # 3. No misconceptions
             # 4. NOT an explicit teach request or stuck signal ("teach me", "i don't know")
             # 5. NOT asking a question ("can you explain?", "is ASGI the server?")
-            # 6. NOT a generic non-answer acknowledgment ("yes", "ok", "sure")
-            # 7. NOT a ready signal alone ("I understand now", "Let me explain")
-            # 8. Must contain substantive content (>= 3 words)
+            # 6. NOT a generic bare non-answer acknowledgment ("yes", "ok", "sure", "i understand")
+            # 7. Must contain substantive content (>= 3 words)
             is_pass = (
-                evaluation.correctness >= 0.7
-                and evaluation.stuck_probability < 0.35
+                evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
+                and evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
                 and len(evaluation.misconceptions) == 0
                 and not is_teach_or_stuck
                 and not is_question
-                and not is_non_answer
-                and not is_ready
-                and len(clean_msg.split()) >= 3
+                and not is_bare_ack
+                and word_count >= 3
             )
 
             if is_pass:
@@ -211,7 +255,12 @@ class DecisionEngine:
                     should_offer_termination=False,
                     should_restore_interrupted_question=True,
                 )
-            elif not is_clarification_turn and evaluation.correctness >= 0.4 and evaluation.correctness < 0.7 and len(evaluation.misconceptions) == 0:
+            elif (
+                not is_clarification_turn
+                and evaluation.correctness >= TEACHER_VERIFICATION_PARTIAL_THRESHOLD
+                and evaluation.correctness < TEACHER_VERIFICATION_PASS_THRESHOLD
+                and len(evaluation.misconceptions) == 0
+            ):
                 # PARTIAL: Remain in Teacher Mode and probe missing detail (PROBE)
                 gap = (
                     evaluation.knowledge_gap
@@ -264,7 +313,7 @@ class DecisionEngine:
                         should_restore_interrupted_question=True,
                     )
                 else:
-                    if is_ready:
+                    if is_bare_ack:
                         reason = f"Learner indicated readiness to explain ('{user_msg}'). Prompting for explanation of gap: {gap}."
                     elif is_clarification_turn:
                         reason = f"Learner asked for explanation ('{user_msg}'). Explaining gap: {gap} and asking verification."
@@ -502,7 +551,10 @@ def decide_next_action(
                 reason = "User answer is partially correct or incomplete. Probing missing concepts."
 
     elif current_mode == LearningMode.TEACHER:
-        if evaluation.correctness > 0.7 and evaluation.stuck_probability < 0.3:
+        if (
+            evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
+            and evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
+        ):
             next_mode = LearningMode.STUDENT
             should_restore_interrupted_question = True
             strategy = LearningStrategy.RESTORE_INTERRUPTED_QUESTION
@@ -527,7 +579,7 @@ def decide_next_action(
     else:
         consistency = 0.5
 
-    if current_mode == LearningMode.TEACHER and evaluation.correctness > 0.7:
+    if current_mode == LearningMode.TEACHER and evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD:
         independent_correction = 1.0
     elif next_mode == LearningMode.STUDENT and len(evaluation.misconceptions) == 0 and evaluation.stuck_probability < 0.3:
         if consecutive_strong > 0:

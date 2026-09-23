@@ -49,11 +49,6 @@ class ChatService:
     ):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
-        # Retain legacy provider and orchestrator for backward compatibility until migration is verified
-        self.ai_provider = GroqLLMProvider()
-        self.orchestrator = AIOrchestrator(self.ai_provider)
-        # Canonical AI Engine with real provider
-        self.ai_engine = ai_engine or CurioEngine(self.ai_provider)
         self.ai_provider = ai_provider or GroqLLMProvider()
         # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
         self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
@@ -330,10 +325,8 @@ class ChatService:
             consecutive_failures=db_session.state.consecutive_weak_answers,
             unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
             teacher_intervention=teacher_intervention_obj,
-            teacher_attempt_count=teacher_attempts,
+            teacher_attempt_count=max(teacher_attempts, teacher_attempt_count_val),
             mode_switch_history=mode_transitions,
-            teacher_attempt_count=teacher_attempt_count_val,
-            teacher_intervention=teacher_intervention_obj,
         )
 
         conversation = ConversationContext(

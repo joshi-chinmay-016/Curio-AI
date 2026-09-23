@@ -1073,7 +1073,7 @@ export class LocalSessionRepository implements SessionRepository {
     }
 
     // 2. Topic: Binary Search
-    if (tLower.includes("binary search") || gLower.includes("binary search") || gLower.includes("order") || gLower.includes("search")) {
+    if (tLower.includes("binary search") || gLower.includes("binary search")) {
       if (clean.includes("one by one") || clean.includes("unsorted") || clean.includes("every element")) {
         return {
           isPass: false,
@@ -1180,7 +1180,7 @@ export class LocalSessionRepository implements SessionRepository {
     const qLower = userQuestion.toLowerCase();
     const tLower = topic.toLowerCase();
 
-    if (tLower.includes("fastapi") || gap.toLowerCase().includes("fastapi") || gap.toLowerCase().includes("mechanism") || gap.toLowerCase().includes("asgi") || gap.toLowerCase().includes("middleware")) {
+    if (tLower.includes("fastapi") || gap.toLowerCase().includes("fastapi") || gap.toLowerCase().includes("asgi") || gap.toLowerCase().includes("uvicorn")) {
       if (qLower.includes("middleware")) {
         return `Middleware is code that wraps around the entire request-response cycle.\n\nWhen an HTTP request arrives from the ASGI server, it passes through each middleware layer (for logging, CORS, authentication, gzip) *before* reaching your route handler. Once your endpoint returns, the response flows back out through those same middleware layers in reverse order.\n\n**Verification:**\nWhat role does middleware play before the request reaches your route handler?`;
       }
@@ -1202,7 +1202,7 @@ export class LocalSessionRepository implements SessionRepository {
     const tLower = topic.toLowerCase();
     const gLower = gap.toLowerCase();
 
-    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("mechanism") || gLower.includes("asgi")) {
+    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("asgi") || gLower.includes("uvicorn")) {
       return `Let's pause the questions for a moment and focus on how **FastAPI** actually handles requests under the hood.\n\nFastAPI is an **ASGI application** (Asynchronous Server Gateway Interface). It does not open TCP sockets or listen on HTTP ports directly. Instead, an ASGI server like **Uvicorn** handles raw network communication, accepts client connections, and passes the parsed request to FastAPI via ASGI. FastAPI then executes middleware, validates inputs with Pydantic, calls your route handler, and returns the response back to Uvicorn.\n\n**Verification:**\nWhat is the primary role of the ASGI server (such as Uvicorn) before the request reaches the FastAPI application?`;
     }
 
@@ -1221,7 +1221,7 @@ export class LocalSessionRepository implements SessionRepository {
     const tLower = topic.toLowerCase();
     const gLower = gap.toLowerCase();
 
-    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("asgi") || gLower.includes("mechanism")) {
+    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("asgi") || gLower.includes("uvicorn")) {
       if (attempt === 2) {
         return `Let's use a simple restaurant analogy to understand this:\n\n- **Uvicorn** is the **host and waiter** at the front door. They greet guests, manage the table queues, and carry orders into the kitchen.\n- **FastAPI** is the **chef in the kitchen**. The chef doesn't stand at the front door; they receive the ticket, cook the meal (execute your endpoint and Pydantic validation), and hand the finished plate back to the waiter to serve.\n\n**Verification:**\nIn this restaurant analogy, who is responsible for greeting the guest at the door (handling network connections) before the chef (FastAPI) does any cooking?`;
       }

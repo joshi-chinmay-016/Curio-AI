@@ -236,7 +236,7 @@ class MockLLMProvider(BaseLLMProvider):
                 strategy = Strategy.TEACH_GAP
 
             # Case 3: Incorrect answer
-            elif any(k in user_input for k in ["incorrect", "wrong", "iterative for loop"]):
+            elif any(k in user_input for k in ["incorrect", "wrong", "iterative for loop", "left = mid + 1", "set left", "deletes the process"]):
                 correctness = 0.10
                 clarity = 0.50
                 completeness = 0.20
@@ -336,7 +336,16 @@ class MockLLMProvider(BaseLLMProvider):
                 return "Consider [2, 5, 8, 12, 16]. The middle is 8. If our target is 5, since 5 < 8 and the list is sorted, 5 cannot possibly be in [12, 16].\n\nWhy does knowing the list is sorted allow us to discard [12, 16] without checking them?"
             elif any(k in prompt_lower for k in ["binary search", "sorted", "sorting", "ordering"]):
                 return "Sorting gives us an ordering we can rely on. If the middle value is larger than the target, every value after the middle is also larger, so that entire half can be eliminated.\n\nNow suppose the middle value is 10 and the target is 7. Why can we ignore everything after 10?"
-            return "A base case is simply a stopping condition that prevents infinite execution. Can you explain what would happen if a recursive function ran without a base case?"
+            
+            # Dynamic teacher response for other topics/gaps
+            import re
+            m_gap = re.search(r"identified knowledge gap:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            gap_str = m_gap.group(1).strip() if m_gap else "this concept"
+            m_top = re.search(r"topic:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            top_str = m_top.group(1).strip() if m_top else "the topic"
+            if "recursion" in top_str.lower() or "base case" in gap_str.lower():
+                return "A base case is simply a stopping condition that prevents infinite execution. Can you explain what would happen if a recursive function ran without a base case?"
+            return f"In {top_str}, understanding {gap_str} is essential because it governs how the system behaves under boundary conditions.\n\nCan you explain why {gap_str} is necessary for {top_str} to function correctly?"
 
         # Phase 0 baseline test preservation
         if "base case" in prompt_lower and ("recursion" in prompt_lower or "student" in prompt_lower):
@@ -344,8 +353,17 @@ class MockLLMProvider(BaseLLMProvider):
 
         # Initial turn / foundation question
         if "ask_foundation" in prompt_lower or "initial" in prompt_lower:
-            if "operating systems" in prompt_lower or "os" in prompt_lower:
+            import re
+            m = re.search(r"topic:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            topic_str = m.group(1).strip() if m else ""
+            if "operating system" in topic_str.lower() or topic_str.lower() == "os":
                 return "What is the main purpose of an operating system?"
+            if "dbms" in topic_str.lower() or "database" in topic_str.lower():
+                return "What is the primary role of a Database Management System (DBMS) in managing data?"
+            if "machine learning" in topic_str.lower() or "ml" in topic_str.lower():
+                return "How would you explain what machine learning is and how it differs from traditional programming?"
+            if topic_str and topic_str.lower() not in ("general topic", "general concept", "this topic"):
+                return f"Can you explain in simple words what {topic_str} is and what core problem it solves?"
             return "What is the core purpose of this topic in your own words?"
 
         # Strategy-specific student questions
@@ -358,6 +376,11 @@ class MockLLMProvider(BaseLLMProvider):
         elif "probe_how" in prompt_lower:
             return "How does the computer handle each recursive call under the hood?"
         elif "probe_why" in prompt_lower:
+            import re
+            m_top = re.search(r"topic:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            top_str = m_top.group(1).strip() if m_top else ""
+            if top_str and top_str.lower() not in ("recursion", "binary search", "general concept"):
+                return f"Why is that mechanism essential in {top_str}?"
             return "Why does that behavior occur in this scenario?"
         elif "increase_difficulty" in prompt_lower:
             return "How would you optimize this using memoization to avoid redundant calculations?"

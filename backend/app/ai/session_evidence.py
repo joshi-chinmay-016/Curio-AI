@@ -19,6 +19,7 @@ from backend.app.ai.schemas import (
     TurnEvaluation,
     TurnEvidence,
 )
+from backend.app.ai.decision_engine import TEACHER_VERIFICATION_PASS_THRESHOLD
 
 
 class SessionEvidenceBuilder:
@@ -215,7 +216,7 @@ class SessionEvidenceBuilder:
                             matching_eval = matching_turns[0].evaluation
                             if (
                                 matching_eval.recommended_strategy == Strategy.RESTORE_INTERRUPTED_QUESTION
-                                or matching_eval.correctness >= 0.7
+                                or matching_eval.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
                             ):
                                 verif_passed = True
                             if matching_turns[0].concept:

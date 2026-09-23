@@ -54,7 +54,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   initSession: async (sessionId: string, topicHint?: string) => {
     const currentTopic = get().topicName;
-    const resolvedHint = topicHint || (currentTopic && currentTopic !== "Binary Search" ? currentTopic : undefined);
+    const resolvedHint = topicHint || currentTopic || undefined;
     const data = await getSession(sessionId, resolvedHint);
     set({
       sessionId: data.sessionId,
