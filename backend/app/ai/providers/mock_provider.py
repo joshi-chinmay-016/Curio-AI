@@ -88,17 +88,63 @@ class MockLLMProvider(BaseLLMProvider):
                 strategy = Strategy.INCREASE_DIFFICULTY
                 difficulty = 2
 
-            # Case 4: Likely misconception (check before general concepts)
-            elif any(k in user_input for k in ["misconception", "works on any array", "stack is infinite", "infinite memory"]):
-                correctness = 0.35
-                clarity = 0.80
-                completeness = 0.40
-                depth = 0.30
-                relevance = 0.90
-                stuck_probability = 0.10
-                misconceptions = ["Binary search works on unsorted arrays"]
+            # Case: Verification Pass (Teacher Mode - Binary Search & FastAPI ASGI)
+            elif any(k in user_input for k in [
+                "ignore everything after 10",
+                "greater than 10",
+                "cannot be after",
+                "because 7 is smaller",
+                "stops the loop",
+                "verification pass",
+                "verified",
+                "asgi server handles the incoming network communication",
+                "asgi server handles incoming",
+                "passes the request to the fastapi",
+                "uvicorn is an asgi server",
+            ]):
+                correctness = 0.95
+                clarity = 0.90
+                completeness = 0.90
+                depth = 0.85
+                relevance = 1.0
+                stuck_probability = 0.05
+                misconceptions = []
+                missing_concepts = []
+                undefined_terms = []
+                mastered_concepts = ["ASGI request handling mechanism" if "asgi" in user_input or "fastapi" in prompt_lower else "Order-based elimination"]
+                knowledge_gap = None
+                strategy = Strategy.RESTORE_INTERRUPTED_QUESTION
+
+            # Case: Non-answer acknowledgments and ready signals (NOT a pass!)
+            elif any(user_input == k or user_input.startswith(k + " ") or user_input.endswith(" " + k) for k in [
+                "yes", "yeah", "yep", "ok", "okay", "sure", "i see", "i understand", "i understand now",
+                "got it", "understood", "makes sense", "right", "alright", "i get it",
+                "let me explain", "ill explain", "i'll explain", "i'll try", "ill try", "ready to explain"
+            ]) or user_input in ["yes", "ok", "okay", "sure", "i understand", "i understand now", "i got it", "let me explain"]:
+                correctness = 0.15
+                clarity = 0.40
+                completeness = 0.10
+                depth = 0.0
+                relevance = 0.50
+                stuck_probability = 0.50
+                misconceptions = []
+                missing_concepts = ["Active concept explanation"]
+                undefined_terms = []
                 mastered_concepts = []
-                knowledge_gap = "Belief that binary search does not require sorted data."
+                knowledge_gap = "Learner acknowledged or signaled readiness without explaining the concept."
+                strategy = Strategy.PROBE_WHY
+
+            # Case 4: Likely misconception (check before general concepts)
+            elif any(k in user_input for k in ["misconception", "works on any array", "stack is infinite", "infinite memory", "fastapi is a database", "directly opens the tcp"]):
+                correctness = 0.20
+                clarity = 0.80
+                completeness = 0.20
+                depth = 0.10
+                relevance = 0.80
+                stuck_probability = 0.30
+                misconceptions = ["FastAPI is a database" if "database" in user_input else "Binary search works on unsorted arrays"]
+                mastered_concepts = []
+                knowledge_gap = "Major misconception regarding the fundamental mechanism."
                 strategy = Strategy.CHALLENGE_MISCONCEPTION
 
             # Case 6: Undefined term
@@ -126,50 +172,71 @@ class MockLLMProvider(BaseLLMProvider):
                 knowledge_gap = "Answer was completely unrelated to the topic."
                 strategy = Strategy.ASK_FOUNDATION
 
-            # Case 8: Weak/uncertain answer (Stuck)
-            elif any(k in user_input for k in ["idk", "i don't know", "can you explain", "stuck", "don't understand", "weak", "uncertain", "not sure"]):
+            # Case 8: Explicit Teach / Struggle / Clarification / Question
+            elif any(k in user_input for k in [
+                "teach me",
+                "can you teach me",
+                "could you teach me",
+                "please teach me",
+                "teach this",
+                "can you explain",
+                "could you explain",
+                "explain that again",
+                "explain this",
+                "explain how",
+                "explain the mechanism",
+                "help me understand",
+                "tell me how",
+                "tell me why",
+                "tell me what",
+                "walk me through",
+                "what is",
+                "how does",
+                "describe",
+                "idk",
+                "i don't know",
+                "i do not know",
+                "not sure",
+                "no idea",
+                "i have no idea",
+                "stuck",
+                "i'm stuck",
+                "im stuck",
+                "don't understand",
+                "do not understand",
+                "confused",
+                "i'm lost",
+                "im lost",
+                "weak",
+                "uncertain",
+            ]):
                 correctness = 0.0
-                clarity = 0.20
+                clarity = 0.30
                 completeness = 0.0
                 depth = 0.0
-                relevance = 0.50
+                relevance = 0.80
                 stuck_probability = 0.95
                 mastered_concepts = []
-                knowledge_gap = "User does not understand the current concept."
+                knowledge_gap = "Learner requested teaching or expressed struggle with the mechanism."
                 strategy = Strategy.TEACH_GAP
 
-            # Case: Verification Pass (Teacher Mode)
-            elif any(k in user_input for k in ["ignore everything after 10", "greater than 10", "cannot be after", "because 7 is smaller", "stops the loop", "verification pass", "verified"]):
-                correctness = 0.90
-                clarity = 0.90
-                completeness = 0.85
-                depth = 0.80
-                relevance = 1.0
-                stuck_probability = 0.05
-                misconceptions = []
-                missing_concepts = []
-                undefined_terms = []
-                mastered_concepts = ["Order-based elimination"]
-                knowledge_gap = None
-                strategy = Strategy.RESTORE_INTERRUPTED_QUESTION
-
             # Case: Verification Fail (Teacher Mode)
-            elif any(k in user_input for k in ["still don't understand", "still stuck", "failed verification", "still confused"]):
-                correctness = 0.20
+            elif any(k in user_input for k in ["still don't understand", "still stuck", "failed verification", "still confused", "still don't get it"]):
+                correctness = 0.10
                 clarity = 0.40
-                completeness = 0.20
-                depth = 0.10
+                completeness = 0.10
+                depth = 0.0
                 relevance = 0.70
-                stuck_probability = 0.85
+                stuck_probability = 0.90
                 misconceptions = []
                 missing_concepts = []
                 undefined_terms = []
                 mastered_concepts = []
-                knowledge_gap = "Still does not understand why ordering eliminates half the search space."
+                knowledge_gap = "Still struggling to understand the mechanism."
                 strategy = Strategy.TEACH_GAP
 
             # Case 3: Incorrect answer
-            elif any(k in user_input for k in ["incorrect", "wrong", "iterative for loop"]):
+            elif any(k in user_input for k in ["incorrect", "wrong", "iterative for loop", "left = mid + 1", "set left", "deletes the process"]):
                 correctness = 0.10
                 clarity = 0.50
                 completeness = 0.20
@@ -182,17 +249,17 @@ class MockLLMProvider(BaseLLMProvider):
                 strategy = Strategy.PROBE_WHY
 
             # Case 2: Partial answer
-            elif any(k in user_input for k in ["partial", "somewhat", "calls itself until done"]):
-                correctness = 0.65
+            elif any(k in user_input for k in ["partial", "somewhat", "calls itself until done", "handles the requests", "handles requests"]):
+                correctness = 0.55
                 clarity = 0.70
                 completeness = 0.50
                 depth = 0.40
                 relevance = 0.90
                 stuck_probability = 0.10
-                missing_concepts = ["call stack limit"]
-                mastered_concepts = ["Self-invocation"]
-                knowledge_gap = "Learner understands self-invocation but omitted memory constraints."
-                strategy = Strategy.PROBE_MISSING_CONCEPT
+                missing_concepts = ["call stack limit" if "calls itself" in user_input else "ASGI interface contract"]
+                mastered_concepts = ["Self-invocation"] if "calls itself" in user_input else []
+                knowledge_gap = "Learner understands self-invocation but omitted memory constraints." if "calls itself" in user_input else "Learner understands request handling generally but omitted the ASGI interface role."
+                strategy = Strategy.PROBE_WHY
 
             # Case 5: Missing concept
             elif any(k in user_input for k in ["missing_concept", "missing concept", "explain recursion", "a function calls itself"]):
@@ -257,13 +324,28 @@ class MockLLMProvider(BaseLLMProvider):
 
         # Teacher Mode responses with attempt-aware adaptation
         if "mode: teacher" in prompt_lower or "expert, empathetic, and concise teacher" in prompt_lower:
-            if "intervention attempt: 2" in prompt_lower:
+            if "fastapi" in prompt_lower or "asgi" in prompt_lower:
+                if "intervention attempt: 2" in prompt_lower or "explain that again" in prompt_lower or "explain again" in prompt_lower:
+                    return "Think of Uvicorn and FastAPI like a waiter and a chef: Uvicorn (the ASGI server) listens to the network, receives the customer's order, and delivers it to FastAPI to prepare the response.\n\nHow does the ASGI server communicate the incoming request to the FastAPI application?"
+                elif "intervention attempt: 3" in prompt_lower:
+                    return "When an HTTP request arrives, Uvicorn accepts the TCP socket, parses the HTTP bytes into an ASGI scope dictionary, and invokes the FastAPI application callable `app(scope, receive, send)`.\n\nWhat role does the ASGI server play in receiving the network communication and passing the request?"
+                return "FastAPI is an ASGI application framework that does not handle raw network sockets directly; it relies on an ASGI server (like Uvicorn) to manage network connections and pass HTTP events into FastAPI via the ASGI interface.\n\nWhat role does the ASGI server play in this request mechanism?"
+            elif "intervention attempt: 2" in prompt_lower:
                 return "Think of a dictionary: because words are in alphabetical order, if you open to 'M' looking for 'Apple', you know 'Apple' must be in the first half.\n\nWhy does this alphabetical order guarantee 'Apple' isn't in the second half?"
             elif "intervention attempt: 3" in prompt_lower:
                 return "Consider [2, 5, 8, 12, 16]. The middle is 8. If our target is 5, since 5 < 8 and the list is sorted, 5 cannot possibly be in [12, 16].\n\nWhy does knowing the list is sorted allow us to discard [12, 16] without checking them?"
             elif any(k in prompt_lower for k in ["binary search", "sorted", "sorting", "ordering"]):
                 return "Sorting gives us an ordering we can rely on. If the middle value is larger than the target, every value after the middle is also larger, so that entire half can be eliminated.\n\nNow suppose the middle value is 10 and the target is 7. Why can we ignore everything after 10?"
-            return "A base case is simply a stopping condition that prevents infinite execution. Can you explain what would happen if a recursive function ran without a base case?"
+            
+            # Dynamic teacher response for other topics/gaps
+            import re
+            m_gap = re.search(r"identified knowledge gap:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            gap_str = m_gap.group(1).strip() if m_gap else "this concept"
+            m_top = re.search(r"topic:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            top_str = m_top.group(1).strip() if m_top else "the topic"
+            if "recursion" in top_str.lower() or "base case" in gap_str.lower():
+                return "A base case is simply a stopping condition that prevents infinite execution. Can you explain what would happen if a recursive function ran without a base case?"
+            return f"In {top_str}, understanding {gap_str} is essential because it governs how the system behaves under boundary conditions.\n\nCan you explain why {gap_str} is necessary for {top_str} to function correctly?"
 
         # Phase 0 baseline test preservation
         if "base case" in prompt_lower and ("recursion" in prompt_lower or "student" in prompt_lower):
@@ -271,8 +353,17 @@ class MockLLMProvider(BaseLLMProvider):
 
         # Initial turn / foundation question
         if "ask_foundation" in prompt_lower or "initial" in prompt_lower:
-            if "operating systems" in prompt_lower or "os" in prompt_lower:
+            import re
+            m = re.search(r"topic:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            topic_str = m.group(1).strip() if m else ""
+            if "operating system" in topic_str.lower() or topic_str.lower() == "os":
                 return "What is the main purpose of an operating system?"
+            if "dbms" in topic_str.lower() or "database" in topic_str.lower():
+                return "What is the primary role of a Database Management System (DBMS) in managing data?"
+            if "machine learning" in topic_str.lower() or "ml" in topic_str.lower():
+                return "How would you explain what machine learning is and how it differs from traditional programming?"
+            if topic_str and topic_str.lower() not in ("general topic", "general concept", "this topic"):
+                return f"Can you explain in simple words what {topic_str} is and what core problem it solves?"
             return "What is the core purpose of this topic in your own words?"
 
         # Strategy-specific student questions
@@ -285,6 +376,11 @@ class MockLLMProvider(BaseLLMProvider):
         elif "probe_how" in prompt_lower:
             return "How does the computer handle each recursive call under the hood?"
         elif "probe_why" in prompt_lower:
+            import re
+            m_top = re.search(r"topic:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            top_str = m_top.group(1).strip() if m_top else ""
+            if top_str and top_str.lower() not in ("recursion", "binary search", "general concept"):
+                return f"Why is that mechanism essential in {top_str}?"
             return "Why does that behavior occur in this scenario?"
         elif "increase_difficulty" in prompt_lower:
             return "How would you optimize this using memoization to avoid redundant calculations?"

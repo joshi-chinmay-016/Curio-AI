@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Sora, DM_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { CurioToaster } from "@/components/curio/CurioToast";
 
 const sora = Sora({
   subsets: ["latin"],
@@ -22,8 +23,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Curio AI - Learn by Teaching",
-  description: "A Feynman Technique inspired learning platform where the AI acts as your curious student.",
+  title: "Curio AI - Learn by Teaching (Feynman Technique)",
+  description: "Explain what you know. Curio challenges your thinking, uncovers your knowledge gaps, and helps you truly understand.",
 };
 
 export default function RootLayout({
@@ -34,11 +35,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sora.variable} ${dmSans.variable} ${ibmPlexMono.variable} dark`}
+      className={`${sora.variable} ${dmSans.variable} ${ibmPlexMono.variable}`}
     >
-      <body className="antialiased min-h-screen font-sans">
+      <body className="antialiased min-h-screen bg-ice text-navy font-sans selection:bg-cobalt selection:text-white">
         {children}
+        <CurioToaster />
       </body>
     </html>
   );
 }
+
