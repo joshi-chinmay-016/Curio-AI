@@ -196,13 +196,28 @@ class ChatService:
             created_at=created_at_val,
         )
 
-    def get_messages(self, db: SQLAlchemySession, session_id: UUID) -> List[MessageResponse]:
+    def get_messages(
+        self, db: SQLAlchemySession, session_id: UUID, user_id: Optional[UUID] = None
+    ) -> List[MessageResponse]:
+        if user_id:
+            db_session = self.session_repo.get_by_id_and_user(db, session_id, user_id)
+            if not db_session:
+                raise ValueError(f"Active session {session_id} not found.")
         db_messages = self.message_repo.list_by_session(db, session_id)
         return [self._to_message_response(m) for m in db_messages]
 
-    def send_message(self, db: SQLAlchemySession, session_id: UUID, message_in: MessageCreate) -> ChatTurnResponse:
-        # 1. Load Session State
-        db_session = self.session_repo.get(db, session_id)
+    def send_message(
+        self,
+        db: SQLAlchemySession,
+        session_id: UUID,
+        message_in: MessageCreate,
+        user_id: Optional[UUID] = None,
+    ) -> ChatTurnResponse:
+        # 1. Load Session State with ownership verification
+        if user_id:
+            db_session = self.session_repo.get_by_id_and_user(db, session_id, user_id)
+        else:
+            db_session = self.session_repo.get(db, session_id)
         if not db_session or not db_session.state:
             raise ValueError(f"Active session {session_id} not found.")
 
