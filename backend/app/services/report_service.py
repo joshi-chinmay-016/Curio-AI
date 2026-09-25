@@ -110,6 +110,8 @@ class ReportService:
             evaluations=evaluations,
             difficulty_history=diff_hist,
             active_concept=active_concept,
+            db=db,
+            user_id=user_id,
         )
 
         # 5. Evaluate session & generate report via CurioEngine
