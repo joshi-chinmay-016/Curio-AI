@@ -27,6 +27,7 @@ from backend.app.ai.schemas import (
     InputType,
     LearningDecision,
     Mode,
+    ModeTransition,
     StateUpdates,
     Strategy,
     TeacherIntervention,
@@ -1212,6 +1213,383 @@ def test_send_message_handles_malformed_evaluation_data_gracefully():
     assert sanitized.mastered_concepts == ["concept_ok"]
     assert sanitized.recommended_strategy == Strategy.PROBE_WHY
     assert sanitized.recommended_difficulty == 5
+
+
+# =====================================================================
+# PHASE 3 TASK 3.2: ChatService Learning State Round-Trip Tests
+# =====================================================================
+
+class TestPhase3Task32LearningStateRoundTrip:
+    """
+    Tests for Phase 3 Task 3.2: ChatService hydration and persistence of
+    concept_mastery, misconception_counts, recent_strategy_history, mode_switch_history.
+    """
+
+    def test_ai_context_hydration_includes_all_four_fields(self):
+        """
+        A. AIContext hydration: DB SessionState populated
+        -> ChatService
+        -> AIContext contains all four fields
+        """
+        session_id = uuid4()
+        mock_db = MagicMock()
+
+        mock_engine = MagicMock()
+        mock_engine.process.return_value = create_mock_ai_result()
+
+        service = ChatService(ai_engine=mock_engine)
+
+        # DB state with all four fields populated
+        db_session = create_dummy_db_session(session_id, current_mode="STUDENT")
+        db_session.state.concept_mastery = {"photosynthesis": 0.8, "cellular_respiration": 0.6}
+        db_session.state.misconception_counts = {"photosynthesis_wrong": 2, "atp_confusion": 1}
+        db_session.state.recent_strategy_history = ["PROBE_WHY", "TEACH_GAP", "INCREASE_DIFFICULTY"]
+        db_session.state.mode_switch_history = [
+            {"from_mode": "STUDENT", "to_mode": "TEACHER", "reason": "stuck", "timestamp": "2026-01-01T00:00:00"},
+            {"from_mode": "TEACHER", "to_mode": "STUDENT", "reason": "verified", "timestamp": "2026-01-01T00:05:00"},
+        ]
+
+        service.session_repo.get = MagicMock(return_value=db_session)
+        service.session_repo.update_state = MagicMock()
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+        service.message_repo.create_message = MagicMock(side_effect=[
+            create_dummy_message(uuid4(), session_id, "USER", "Test answer"),
+            create_dummy_message(uuid4(), session_id, "AI", "Test response"),
+        ])
+        service.message_repo.create_evaluation = MagicMock()
+
+        message_in = MessageCreate(content="Test answer", input_type=CommonInputType.TEXT)
+        service.send_message(mock_db, session_id, message_in)
+
+        # Verify AIContext was built with all four fields
+        mock_engine.process.assert_called_once()
+        context: AIContext = mock_engine.process.call_args[0][0]
+
+        assert context.current_state.concept_mastery == {"photosynthesis": 0.8, "cellular_respiration": 0.6}
+        assert context.current_state.misconception_counts == {"photosynthesis_wrong": 2, "atp_confusion": 1}
+        assert context.current_state.recent_strategy_history == ["PROBE_WHY", "TEACH_GAP", "INCREASE_DIFFICULTY"]
+        assert len(context.current_state.mode_switch_history) == 2
+        assert context.current_state.mode_switch_history[0].from_mode == Mode.STUDENT
+        assert context.current_state.mode_switch_history[0].to_mode == Mode.TEACHER
+
+    def test_state_updates_persistence_all_four_fields(self):
+        """
+        B. StateUpdates persistence: AI mock returns all four fields
+        -> ChatService
+        -> SessionState DB contains exact values
+        """
+        session_id = uuid4()
+        mock_db = MagicMock()
+
+        # StateUpdates with all four fields
+        state_updates = StateUpdates(
+            concept_mastery={"new_concept": 0.9, "existing_concept": 0.95},
+            misconception_counts={"new_misconception": 3},
+            recent_strategy_history=[Strategy.TEACH_GAP, Strategy.VERIFY_UNDERSTANDING],
+            mode_switch_history=[
+                ModeTransition(from_mode=Mode.STUDENT, to_mode=Mode.TEACHER, reason="entered teacher", timestamp="2026-01-01T00:10:00"),
+            ],
+        )
+
+        ai_result = create_mock_ai_result(state_updates=state_updates)
+        mock_engine = MagicMock()
+        mock_engine.process.return_value = ai_result
+
+        service = ChatService(ai_engine=mock_engine)
+
+        db_session = create_dummy_db_session(session_id, current_mode="STUDENT")
+        # Pre-existing values
+        db_session.state.concept_mastery = {"existing_concept": 0.7}
+        db_session.state.misconception_counts = {"existing_misconception": 1}
+        db_session.state.recent_strategy_history = ["PROBE_WHY"]
+        db_session.state.mode_switch_history = []
+
+        service.session_repo.get = MagicMock(return_value=db_session)
+        service.session_repo.update_state = MagicMock()
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+        service.message_repo.create_message = MagicMock(side_effect=[
+            create_dummy_message(uuid4(), session_id, "USER", "Test"),
+            create_dummy_message(uuid4(), session_id, "AI", "Response"),
+        ])
+        service.message_repo.create_evaluation = MagicMock()
+
+        message_in = MessageCreate(content="Test", input_type=CommonInputType.TEXT)
+        service.send_message(mock_db, session_id, message_in)
+
+        # Verify persistence
+        service.session_repo.update_state.assert_called_once()
+        persisted_state = service.session_repo.update_state.call_args[0][2]
+
+        # concept_mastery: replaced (not merged) - AI returns complete new state
+        assert persisted_state.concept_mastery == {"new_concept": 0.9, "existing_concept": 0.95}
+        # existing_concept from DB is replaced, not merged
+
+        # misconception_counts: replaced
+        assert persisted_state.misconception_counts == {"new_misconception": 3}
+
+        # recent_strategy_history: replaced
+        assert persisted_state.recent_strategy_history == ["TEACH_GAP", "VERIFY_UNDERSTANDING"]
+
+        # mode_switch_history: replaced
+        assert len(persisted_state.mode_switch_history) == 1
+        assert persisted_state.mode_switch_history[0]["from_mode"] == "STUDENT"
+        assert persisted_state.mode_switch_history[0]["to_mode"] == "TEACHER"
+
+    def test_partial_state_updates_preserves_existing(self):
+        """
+        C. Partial StateUpdates: Some fields are None
+        -> existing DB values remain unchanged
+        """
+        session_id = uuid4()
+        mock_db = MagicMock()
+
+        # Only concept_mastery provided, others None
+        state_updates = StateUpdates(
+            concept_mastery={"partial_update": 0.5},
+            misconception_counts=None,
+            recent_strategy_history=None,
+            mode_switch_history=None,
+        )
+
+        ai_result = create_mock_ai_result(state_updates=state_updates)
+        mock_engine = MagicMock()
+        mock_engine.process.return_value = ai_result
+
+        service = ChatService(ai_engine=mock_engine)
+
+        db_session = create_dummy_db_session(session_id, current_mode="STUDENT")
+        db_session.state.concept_mastery = {"existing": 0.8}
+        db_session.state.misconception_counts = {"old_misconception": 5}
+        db_session.state.recent_strategy_history = ["PROBE_WHY", "PROBE_HOW"]
+        db_session.state.mode_switch_history = [{"from_mode": "STUDENT", "to_mode": "TEACHER", "reason": "test", "timestamp": "2026-01-01"}]
+
+        service.session_repo.get = MagicMock(return_value=db_session)
+        service.session_repo.update_state = MagicMock()
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+        service.message_repo.create_message = MagicMock(side_effect=[
+            create_dummy_message(uuid4(), session_id, "USER", "Test"),
+            create_dummy_message(uuid4(), session_id, "AI", "Response"),
+        ])
+        service.message_repo.create_evaluation = MagicMock()
+
+        message_in = MessageCreate(content="Test", input_type=CommonInputType.TEXT)
+        service.send_message(mock_db, session_id, message_in)
+
+        service.session_repo.update_state.assert_called_once()
+        persisted_state = service.session_repo.update_state.call_args[0][2]
+
+        # concept_mastery: replaced (only partial_update provided)
+        assert persisted_state.concept_mastery == {"partial_update": 0.5}
+        # misconception_counts: preserved (not in updates)
+        assert persisted_state.misconception_counts == {"old_misconception": 5}
+        # recent_strategy_history: preserved
+        assert persisted_state.recent_strategy_history == ["PROBE_WHY", "PROBE_HOW"]
+        # mode_switch_history: preserved
+        assert len(persisted_state.mode_switch_history) == 1
+        assert persisted_state.mode_switch_history[0]["from_mode"] == "STUDENT"
+
+    def test_explicit_empty_updates_persists_empty(self):
+        """
+        D. Explicit empty updates: AI returns {} or []
+        -> DB is updated to the explicit empty value
+        """
+        session_id = uuid4()
+        mock_db = MagicMock()
+
+        # Explicit empty dict/list
+        state_updates = StateUpdates(
+            concept_mastery={},
+            misconception_counts={},
+            recent_strategy_history=[],
+            mode_switch_history=[],
+        )
+
+        ai_result = create_mock_ai_result(state_updates=state_updates)
+        mock_engine = MagicMock()
+        mock_engine.process.return_value = ai_result
+
+        service = ChatService(ai_engine=mock_engine)
+
+        db_session = create_dummy_db_session(session_id, current_mode="STUDENT")
+        db_session.state.concept_mastery = {"should_be_cleared": 0.9}
+        db_session.state.misconception_counts = {"should_be_cleared": 2}
+        db_session.state.recent_strategy_history = ["PROBE_WHY"]
+        db_session.state.mode_switch_history = [{"from_mode": "STUDENT", "to_mode": "TEACHER", "reason": "test", "timestamp": "2026-01-01"}]
+
+        service.session_repo.get = MagicMock(return_value=db_session)
+        service.session_repo.update_state = MagicMock()
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+        service.message_repo.create_message = MagicMock(side_effect=[
+            create_dummy_message(uuid4(), session_id, "USER", "Test"),
+            create_dummy_message(uuid4(), session_id, "AI", "Response"),
+        ])
+        service.message_repo.create_evaluation = MagicMock()
+
+        message_in = MessageCreate(content="Test", input_type=CommonInputType.TEXT)
+        service.send_message(mock_db, session_id, message_in)
+
+        service.session_repo.update_state.assert_called_once()
+        persisted_state = service.session_repo.update_state.call_args[0][2]
+
+        # Explicit empty should overwrite
+        assert persisted_state.concept_mastery == {}
+        assert persisted_state.misconception_counts == {}
+        assert persisted_state.recent_strategy_history == []
+        assert persisted_state.mode_switch_history == []
+
+    def test_round_trip_persistence_and_hydration(self):
+        """
+        E. Round-trip: Persist StateUpdates
+        -> start a new turn
+        -> verify the same values are hydrated into AIContext
+        """
+        session_id = uuid4()
+        mock_db = MagicMock()
+
+        # First turn: AI returns updates
+        state_updates_turn1 = StateUpdates(
+            concept_mastery={"round_trip_concept": 0.75},
+            misconception_counts={"round_trip_misconception": 1},
+            recent_strategy_history=[Strategy.PROBE_WHY],
+            mode_switch_history=[
+                ModeTransition(from_mode=Mode.STUDENT, to_mode=Mode.TEACHER, reason="test", timestamp="2026-01-01T00:00:00"),
+            ],
+        )
+
+        ai_result_turn1 = create_mock_ai_result(state_updates=state_updates_turn1)
+        mock_engine = MagicMock()
+        mock_engine.process.return_value = ai_result_turn1
+
+        service = ChatService(ai_engine=mock_engine)
+
+        db_session = create_dummy_db_session(session_id, current_mode="STUDENT")
+
+        service.session_repo.get = MagicMock(return_value=db_session)
+        service.session_repo.update_state = MagicMock()
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+        service.message_repo.create_message = MagicMock(side_effect=[
+            create_dummy_message(uuid4(), session_id, "USER", "Turn 1"),
+            create_dummy_message(uuid4(), session_id, "AI", "Response 1"),
+        ])
+        service.message_repo.create_evaluation = MagicMock()
+
+        message_in = MessageCreate(content="Turn 1", input_type=CommonInputType.TEXT)
+        service.send_message(mock_db, session_id, message_in)
+
+        # Simulate DB persistence by updating the mock db_session state
+        persisted_state = service.session_repo.update_state.call_args[0][2]
+        db_session.state.concept_mastery = persisted_state.concept_mastery
+        db_session.state.misconception_counts = persisted_state.misconception_counts
+        db_session.state.recent_strategy_history = persisted_state.recent_strategy_history
+        db_session.state.mode_switch_history = persisted_state.mode_switch_history
+
+        # Second turn: AI returns no updates (None for all four)
+        state_updates_turn2 = StateUpdates(
+            concept_mastery=None,
+            misconception_counts=None,
+            recent_strategy_history=None,
+            mode_switch_history=None,
+        )
+
+        ai_result_turn2 = create_mock_ai_result(state_updates=state_updates_turn2)
+        mock_engine.process.return_value = ai_result_turn2
+
+        service.session_repo.update_state = MagicMock()
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+        service.message_repo.create_message = MagicMock(side_effect=[
+            create_dummy_message(uuid4(), session_id, "USER", "Turn 2"),
+            create_dummy_message(uuid4(), session_id, "AI", "Response 2"),
+        ])
+
+        message_in2 = MessageCreate(content="Turn 2", input_type=CommonInputType.TEXT)
+        service.send_message(mock_db, session_id, message_in2)
+
+        # Verify AIContext in second turn has the persisted values
+        mock_engine.process.assert_called()
+        # Get the second call's context
+        second_call_context = mock_engine.process.call_args_list[1][0][0]
+
+        assert second_call_context.current_state.concept_mastery == {"round_trip_concept": 0.75}
+        assert second_call_context.current_state.misconception_counts == {"round_trip_misconception": 1}
+        assert second_call_context.current_state.recent_strategy_history == ["PROBE_WHY"]
+        assert len(second_call_context.current_state.mode_switch_history) == 1
+        assert second_call_context.current_state.mode_switch_history[0].from_mode == Mode.STUDENT
+        assert second_call_context.current_state.mode_switch_history[0].to_mode == Mode.TEACHER
+
+
+# =====================================================================
+# PHASE 3 TASK 3.2: Ownership/IDOR Tests (verify existing behavior unchanged)
+# =====================================================================
+
+class TestPhase3Task32Ownership:
+    """Verify Phase 2 ownership/IDOR behavior is unchanged."""
+
+    def test_hydration_respects_user_ownership(self):
+        """
+        F. User/session ownership: Existing Phase 2 ownership behavior remains unchanged.
+        ChatService.send_message with user_id should only access owned sessions.
+        """
+        session_id = uuid4()
+        user_id = uuid4()
+        other_user_id = uuid4()
+        mock_db = MagicMock()
+
+        mock_engine = MagicMock()
+        mock_engine.process.return_value = create_mock_ai_result()
+
+        service = ChatService(ai_engine=mock_engine)
+
+        # Session owned by user_id
+        db_session = create_dummy_db_session(session_id, current_mode="STUDENT")
+        db_session.state.concept_mastery = {"owned": 0.5}
+
+        # get_by_id_and_user returns session for correct user
+        service.session_repo.get_by_id_and_user = MagicMock(return_value=db_session)
+        service.session_repo.update_state = MagicMock()
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+        service.message_repo.create_message = MagicMock(side_effect=[
+            create_dummy_message(uuid4(), session_id, "USER", "Test"),
+            create_dummy_message(uuid4(), session_id, "AI", "Response"),
+        ])
+        service.message_repo.create_evaluation = MagicMock()
+
+        # With correct user_id
+        message_in = MessageCreate(content="Test", input_type=CommonInputType.TEXT)
+        response = service.send_message(mock_db, session_id, message_in, user_id=user_id)
+        assert response is not None
+        service.session_repo.get_by_id_and_user.assert_called_with(mock_db, session_id, user_id)
+
+        # With wrong user_id - should not find session
+        service.session_repo.get_by_id_and_user = MagicMock(return_value=None)
+        try:
+            service.send_message(mock_db, session_id, message_in, user_id=other_user_id)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "not found" in str(e).lower()
+
+    def test_get_messages_respects_ownership(self):
+        """Verify get_messages still enforces ownership."""
+        session_id = uuid4()
+        user_id = uuid4()
+        mock_db = MagicMock()
+
+        service = ChatService(ai_engine=MagicMock())
+
+        # With correct user_id
+        db_session = create_dummy_db_session(session_id, current_mode="STUDENT")
+        service.session_repo.get_by_id_and_user = MagicMock(return_value=db_session)
+        service.message_repo.list_by_session = MagicMock(return_value=[])
+        messages = service.get_messages(mock_db, session_id, user_id=user_id)
+        assert messages == []
+        service.session_repo.get_by_id_and_user.assert_called_with(mock_db, session_id, user_id)
+
+        # With wrong user_id
+        service.session_repo.get_by_id_and_user = MagicMock(return_value=None)
+        try:
+            service.get_messages(mock_db, session_id, user_id=user_id)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "not found" in str(e).lower()
 
 
 
