@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.app.db.session import Base
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -15,3 +16,4 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    concept_progress = relationship("UserConceptProgress", back_populates="user", cascade="all, delete-orphan")
