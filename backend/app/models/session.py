@@ -39,5 +39,9 @@ class SessionState(Base):
     mastered_concepts = Column(JSON, default=list, nullable=False)  # list[str]
     teacher_attempt_count = Column(Integer, default=0, server_default="0", nullable=False)
     teacher_intervention = Column(JSON, nullable=True)
+    concept_mastery = Column(JSON, default=dict, nullable=False)
+    misconception_counts = Column(JSON, default=dict, nullable=False)
+    recent_strategy_history = Column(JSON, default=list, nullable=False)
+    mode_switch_history = Column(JSON, default=list, nullable=False)
 
     session = relationship("Session", back_populates="state")
