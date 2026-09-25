@@ -17,8 +17,8 @@ from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.models.session import SessionState
 from backend.app.models.user import User
+import uuid
 from backend.app.core.security import create_access_token
-from backend.app.services.session_service import MOCK_USER_ID
 
 
 pytestmark = pytest.mark.db_integration
@@ -31,17 +31,15 @@ def api_client(override_get_db, test_db_session):
     All commits within route handlers are captured by the nested savepoint
     and rolled back cleanly on fixture exit.
 
-    Automatically provisions the MOCK_USER_ID user in the test database and
+    Dynamically provisions a unique test user in the test database and
     sets a valid JWT Authorization header so all authenticated endpoints work.
     """
-    # Ensure MOCK_USER_ID user exists in the test database
-    existing = test_db_session.query(User).filter(User.id == MOCK_USER_ID).first()
-    if not existing:
-        mock_user = User(id=MOCK_USER_ID, email="chinmay.vishal@curio.ai")
-        test_db_session.add(mock_user)
-        test_db_session.commit()
+    user = User(email=f"api_test_{uuid.uuid4().hex[:8]}@curio.ai", is_active=True)
+    test_db_session.add(user)
+    test_db_session.commit()
+    test_db_session.refresh(user)
 
-    token = create_access_token(subject=str(MOCK_USER_ID))
+    token = create_access_token(subject=str(user.id))
     with TestClient(app) as client:
         client.headers["Authorization"] = f"Bearer {token}"
         yield client
