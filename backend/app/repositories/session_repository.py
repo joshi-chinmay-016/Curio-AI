@@ -36,6 +36,10 @@ class SessionRepository:
     def get(self, db: SQLAlchemySession, id: UUID) -> Optional[Session]:
         return db.query(Session).filter(Session.id == id).first()
 
+    def get_by_id_and_user(self, db: SQLAlchemySession, session_id: UUID, user_id: UUID) -> Optional[Session]:
+        """Retrieve a session by ID ensuring it belongs to the given user."""
+        return db.query(Session).filter(Session.id == session_id, Session.user_id == user_id).first()
+
     def list_by_user(self, db: SQLAlchemySession, user_id: UUID) -> List[Session]:
         return db.query(Session).filter(Session.user_id == user_id).order_by(Session.created_at.desc()).all()
 
@@ -51,6 +55,15 @@ class SessionRepository:
         db.commit()
         db.refresh(db_session)
         return db_session
+
+    def update_by_id_and_user(
+        self, db: SQLAlchemySession, session_id: UUID, user_id: UUID, obj_in: SessionUpdate
+    ) -> Optional[Session]:
+        """Update a session only if owned by user_id."""
+        db_session = self.get_by_id_and_user(db, session_id, user_id)
+        if not db_session:
+            return None
+        return self.update(db, db_session, obj_in)
 
     def update_state(self, db: SQLAlchemySession, session_id: UUID, state_in: SessionStateBase) -> SessionState:
         db_state = db.query(SessionState).filter(SessionState.session_id == session_id).first()
@@ -82,6 +95,15 @@ class SessionRepository:
 
     def delete(self, db: SQLAlchemySession, id: UUID) -> bool:
         db_session = db.query(Session).filter(Session.id == id).first()
+        if db_session:
+            db.delete(db_session)
+            db.commit()
+            return True
+        return False
+
+    def delete_by_id_and_user(self, db: SQLAlchemySession, session_id: UUID, user_id: UUID) -> bool:
+        """Delete a session only if owned by user_id."""
+        db_session = self.get_by_id_and_user(db, session_id, user_id)
         if db_session:
             db.delete(db_session)
             db.commit()

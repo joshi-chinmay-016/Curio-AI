@@ -34,8 +34,14 @@ class ReportService:
         self.ai_engine = ai_engine or CurioEngine()
         self.evidence_builder = SessionEvidenceBuilder()
 
-    def get_report(self, db: SQLAlchemySession, session_id: UUID) -> Optional[SessionReportResponse]:
-        """Retrieve existing report for a session."""
+    def get_report(
+        self, db: SQLAlchemySession, session_id: UUID, user_id: Optional[UUID] = None
+    ) -> Optional[SessionReportResponse]:
+        """Retrieve existing report for a session with ownership verification."""
+        if user_id:
+            session = self.session_repo.get_by_id_and_user(db, session_id, user_id)
+            if not session:
+                return None
         db_report = self.report_repo.get_by_session_id(db, session_id)
         if db_report:
             return SessionReportResponse.model_validate(db_report)
@@ -46,6 +52,7 @@ class ReportService:
         db: SQLAlchemySession,
         session_id: UUID,
         force_recompute: bool = False,
+        user_id: Optional[UUID] = None,
     ) -> Optional[SessionReportResponse]:
         """
         Compiles the final learning report for a session:
@@ -53,6 +60,11 @@ class ReportService:
         - Otherwise, builds structured SessionEvidence from session messages & turn evaluations,
           evaluates understanding via CurioEngine, persists the report, and marks the session COMPLETED.
         """
+        if user_id:
+            session = self.session_repo.get_by_id_and_user(db, session_id, user_id)
+            if not session:
+                return None
+
         # 1. Idempotent check
         if not force_recompute:
             existing = self.report_repo.get_by_session_id(db, session_id)
@@ -60,7 +72,7 @@ class ReportService:
                 return SessionReportResponse.model_validate(existing)
 
         # 2. Fetch session
-        db_session = self.session_repo.get(db, session_id)
+        db_session = session if user_id else self.session_repo.get(db, session_id)
         if not db_session:
             return None
 
@@ -98,6 +110,8 @@ class ReportService:
             evaluations=evaluations,
             difficulty_history=diff_hist,
             active_concept=active_concept,
+            db=db,
+            user_id=user_id,
         )
 
         # 5. Evaluate session & generate report via CurioEngine

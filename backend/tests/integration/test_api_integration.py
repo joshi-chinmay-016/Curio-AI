@@ -16,19 +16,32 @@ import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.models.session import SessionState
+from backend.app.models.user import User
+import uuid
+from backend.app.core.security import create_access_token
 
 
 pytestmark = pytest.mark.db_integration
 
 
 @pytest.fixture
-def api_client(override_get_db):
+def api_client(override_get_db, test_db_session):
     """
     TestClient fixture bound to the isolated PostgreSQL test database session.
     All commits within route handlers are captured by the nested savepoint
     and rolled back cleanly on fixture exit.
+
+    Dynamically provisions a unique test user in the test database and
+    sets a valid JWT Authorization header so all authenticated endpoints work.
     """
+    user = User(email=f"api_test_{uuid.uuid4().hex[:8]}@curio.ai", is_active=True)
+    test_db_session.add(user)
+    test_db_session.commit()
+    test_db_session.refresh(user)
+
+    token = create_access_token(subject=str(user.id))
     with TestClient(app) as client:
+        client.headers["Authorization"] = f"Bearer {token}"
         yield client
 
 

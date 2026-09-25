@@ -15,7 +15,9 @@ class SessionStateBase(BaseModel):
     consecutive_weak_answers: int = 0
     unresolved_misconceptions: List[str] = []
     mastered_concepts: List[str] = []
-    teacher_intervention_data: Optional[dict] = None
+    concept_mastery: Dict[str, float] = {}
+    misconception_counts: Dict[str, int] = {}
+    recent_strategy_history: List[str] = []
     mode_switch_history: List[dict] = []
     teacher_attempt_count: int = 0
     teacher_intervention: Optional[Dict[str, Any]] = None

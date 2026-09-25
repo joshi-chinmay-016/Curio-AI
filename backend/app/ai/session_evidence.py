@@ -8,6 +8,7 @@ This module does NOT make final judgments or calculate mastery scores.
 It normalizes and organizes raw and derived evidence for the SessionEvaluator.
 """
 from typing import Any, Dict, List, Optional, Union
+from uuid import UUID
 
 from backend.app.ai.schemas import (
     ChatMessage,
@@ -20,6 +21,7 @@ from backend.app.ai.schemas import (
     TurnEvidence,
 )
 from backend.app.ai.decision_engine import TEACHER_VERIFICATION_PASS_THRESHOLD
+from backend.app.repositories.teacher_intervention_repository import TeacherInterventionRepository
 
 
 class SessionEvidenceBuilder:
@@ -37,6 +39,8 @@ class SessionEvidenceBuilder:
         difficulty_history: Optional[List[int]] = None,
         confidence_history: Optional[List[float]] = None,
         active_concept: str = "",
+        db: Any = None,
+        user_id: Optional[UUID] = None,
     ) -> SessionEvidence:
         """
         Build a SessionEvidence object from chronological messages and evaluations.
@@ -171,74 +175,99 @@ class SessionEvidenceBuilder:
             if turn_eval.correctness >= 0.7 and turn_diff > c_item.highest_difficulty_passed:
                 c_item.highest_difficulty_passed = turn_diff
 
-        # 3. Detect Teacher Interventions from message transcript & evaluations
-        # A teacher intervention occurs when an AI message is generated in Teacher Mode
-        # followed by a user verification response.
+# 3. Detect Teacher Interventions
+        # If database and user_id are provided, use persisted TeacherInterventionLog as authoritative source.
+        # Otherwise, fall back to heuristic detection from message transcript.
         intervention_counter = 0
-        for i, m in enumerate(normalized_messages):
-            if m["role"] == Role.ASSISTANT:
-                content = m["content"]
-                # Detect teacher mode markers or structure (e.g. 2 paragraphs with a verification question)
-                # or metadata indicating TEACHER mode
-                is_teacher = (
-                    m["metadata"].get("mode") == "TEACHER"
-                    or "Teacher" in m["metadata"].get("sender", "")
-                    or (
-                        "?" in content
-                        and any(
-                            phrase in content.lower()
-                            for phrase in [
-                                "suppose the middle",
-                                "why can we ignore",
-                                "why does this alphabetical",
-                                "consider [",
-                                "can you explain what would happen",
-                                "why does knowing",
-                            ]
-                        )
-                    )
-                )
-
-                if is_teacher:
-                    # Next user message is verification answer
-                    verif_ans = None
-                    verif_passed = False
-                    related_c = active_concept or topic
-                    gap_text = m["metadata"].get("gap", "Knowledge gap addressed by teacher")
-
-                    if i + 1 < len(normalized_messages) and normalized_messages[i + 1]["role"] == Role.USER:
-                        verif_ans = normalized_messages[i + 1]["content"]
-                        # Check subsequent turn evaluation
-                        # If the turn evaluation for this answer has Strategy.RESTORE_INTERRUPTED_QUESTION
-                        # or high correctness, verification passed
-                        matching_turns = [t for t in turns if t.learner_answer == verif_ans]
-                        if matching_turns:
-                            matching_eval = matching_turns[0].evaluation
-                            if (
-                                matching_eval.recommended_strategy == Strategy.RESTORE_INTERRUPTED_QUESTION
-                                or matching_eval.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
-                            ):
-                                verif_passed = True
-                            if matching_turns[0].concept:
-                                related_c = matching_turns[0].concept
-
+        if db is not None and user_id is not None:
+            # Use persisted TeacherInterventionLog as authoritative source
+            repo = TeacherInterventionRepository()
+            try:
+                session_uuid = UUID(str(session_id))
+                user_uuid = UUID(str(user_id))
+                intervention_logs = repo.get_by_session(db, session_uuid, user_uuid)
+                for log in intervention_logs:
+                    # Map persisted log to evidence structure
+                    related_concept = ""
+                    if log.verification_answer and log.verification_answer.strip():
+                        # Try to infer concept from verification answer context
+                        related_concept = ""
+                    
                     teacher_interventions.append(
                         TeacherInterventionEvidence(
                             intervention_index=intervention_counter,
-                            gap=gap_text,
-                            attempt_count=m["metadata"].get("attempt_count", 1),
-                            teacher_explanation=content,
-                            verification_question=content.split("\n\n")[-1] if "\n\n" in content else content,
-                            verification_answer=verif_ans,
-                            verification_passed=verif_passed,
-                            related_concept=related_c,
+                            gap=log.gap,
+                            attempt_count=log.attempt_count,
+                            teacher_explanation=log.teacher_explanation or "",
+                            verification_question=log.verification_question or "",
+                            verification_answer=log.verification_answer,
+                            verification_passed=log.verification_passed == 1,
+                            related_concept=related_concept,
                         )
                     )
                     intervention_counter += 1
+            except Exception:
+                # If database access fails, fall back to heuristic detection
+                pass
+        
+        # Fallback: heuristic detection from message transcript (when no DB or DB access failed)
+        if not teacher_interventions:
+            for i, m in enumerate(normalized_messages):
+                if m["role"] == Role.ASSISTANT:
+                    content = m["content"]
+                    is_teacher = (
+                        m["metadata"].get("mode") == "TEACHER"
+                        or "Teacher" in m["metadata"].get("sender", "")
+                        or (
+                            "?" in content
+                            and any(
+                                phrase in content.lower()
+                                for phrase in [
+                                    "suppose the middle",
+                                    "why can we ignore",
+                                    "why does this alphabetical",
+                                    "consider [",
+                                    "can you explain what would happen",
+                                    "why does knowing",
+                                ]
+                            )
+                        )
+                    )
+                    if is_teacher:
+                        verif_ans = None
+                        verif_passed = False
+                        related_c = active_concept or topic
+                        gap_text = m["metadata"].get("gap", "Knowledge gap addressed by teacher")
 
-                    # Mark concept as teacher assisted
-                    if related_c in concept_map:
-                        concept_map[related_c].teacher_assisted = True
+                        if i + 1 < len(normalized_messages) and normalized_messages[i + 1]["role"] == Role.USER:
+                            verif_ans = normalized_messages[i + 1]["content"]
+                            matching_turns = [t for t in turns if t.learner_answer == verif_ans]
+                            if matching_turns:
+                                matching_eval = matching_turns[0].evaluation
+                                if (
+                                    matching_eval.recommended_strategy == Strategy.RESTORE_INTERRUPTED_QUESTION
+                                    or matching_eval.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
+                                ):
+                                    verif_passed = True
+                                if matching_turns[0].concept:
+                                    related_c = matching_turns[0].concept
+
+                        teacher_interventions.append(
+                            TeacherInterventionEvidence(
+                                intervention_index=intervention_counter,
+                                gap=gap_text,
+                                attempt_count=m["metadata"].get("attempt_count", 1),
+                                teacher_explanation=content,
+                                verification_question=content.split("\n\n")[-1] if "\n\n" in content else content,
+                                verification_answer=verif_ans,
+                                verification_passed=verif_passed,
+                                related_concept=related_c,
+                            )
+                        )
+                        intervention_counter += 1
+
+                        if related_c in concept_map:
+                            concept_map[related_c].teacher_assisted = True
 
         # 4. Compute high-level turn counts
         total_turns = len(turns)

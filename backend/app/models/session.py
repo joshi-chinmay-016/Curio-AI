@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.app.db.session import Base
 
+
 class Session(Base):
     __tablename__ = "sessions"
 
@@ -21,6 +22,7 @@ class Session(Base):
     state = relationship("SessionState", uselist=False, back_populates="session", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
     report = relationship("SessionReport", uselist=False, back_populates="session", cascade="all, delete-orphan")
+    intervention_logs = relationship("TeacherInterventionLog", back_populates="session", cascade="all, delete-orphan")
 
 
 class SessionState(Base):
@@ -39,5 +41,9 @@ class SessionState(Base):
     mastered_concepts = Column(JSON, default=list, nullable=False)  # list[str]
     teacher_attempt_count = Column(Integer, default=0, server_default="0", nullable=False)
     teacher_intervention = Column(JSON, nullable=True)
+    concept_mastery = Column(JSON, default=dict, nullable=False)
+    misconception_counts = Column(JSON, default=dict, nullable=False)
+    recent_strategy_history = Column(JSON, default=list, nullable=False)
+    mode_switch_history = Column(JSON, default=list, nullable=False)
 
     session = relationship("Session", back_populates="state")

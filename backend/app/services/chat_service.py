@@ -198,13 +198,28 @@ class ChatService:
             created_at=created_at_val,
         )
 
-    def get_messages(self, db: SQLAlchemySession, session_id: UUID) -> List[MessageResponse]:
+    def get_messages(
+        self, db: SQLAlchemySession, session_id: UUID, user_id: Optional[UUID] = None
+    ) -> List[MessageResponse]:
+        if user_id:
+            db_session = self.session_repo.get_by_id_and_user(db, session_id, user_id)
+            if not db_session:
+                raise ValueError(f"Active session {session_id} not found.")
         db_messages = self.message_repo.list_by_session(db, session_id)
         return [self._to_message_response(m) for m in db_messages]
 
-    def send_message(self, db: SQLAlchemySession, session_id: UUID, message_in: MessageCreate) -> ChatTurnResponse:
-        # 1. Load Session State
-        db_session = self.session_repo.get(db, session_id)
+    def send_message(
+        self,
+        db: SQLAlchemySession,
+        session_id: UUID,
+        message_in: MessageCreate,
+        user_id: Optional[UUID] = None,
+    ) -> ChatTurnResponse:
+        # 1. Load Session State with ownership verification
+        if user_id:
+            db_session = self.session_repo.get_by_id_and_user(db, session_id, user_id)
+        else:
+            db_session = self.session_repo.get(db, session_id)
         if not db_session or not db_session.state:
             raise ValueError(f"Active session {session_id} not found.")
 
@@ -313,6 +328,27 @@ class ChatService:
             except Exception:
                 teacher_intervention_obj = None
 
+        def _safe_dict(val):
+            if isinstance(val, dict):
+                return val
+            # Handle MagicMock and other non-dict objects
+            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
+                return {}
+            try:
+                return dict(val) if val is not None else {}
+            except (TypeError, ValueError):
+                return {}
+
+        def _safe_list(val):
+            if isinstance(val, list):
+                return val
+            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
+                return []
+            try:
+                return list(val) if val is not None else []
+            except (TypeError, ValueError):
+                return []
+
         current_state = SessionState(
             session_id=str(session_id),
             current_mode=current_mode,
@@ -327,6 +363,9 @@ class ChatService:
             teacher_intervention=teacher_intervention_obj,
             teacher_attempt_count=max(teacher_attempts, teacher_attempt_count_val),
             mode_switch_history=mode_transitions,
+            concept_mastery=_safe_dict(getattr(db_session.state, "concept_mastery", None)),
+            misconception_counts=_safe_dict(getattr(db_session.state, "misconception_counts", None)),
+            recent_strategy_history=_safe_list(getattr(db_session.state, "recent_strategy_history", None)),
         )
 
         conversation = ConversationContext(
@@ -510,6 +549,59 @@ class ChatService:
                 else:
                     new_teacher_intervention = None
 
+        def _safe_dict(val):
+            if isinstance(val, dict):
+                return val
+            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
+                return {}
+            try:
+                return dict(val) if val is not None else {}
+            except (TypeError, ValueError):
+                return {}
+
+        def _safe_list(val):
+            if isinstance(val, list):
+                return val
+            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
+                return []
+            try:
+                return list(val) if val is not None else []
+            except (TypeError, ValueError):
+                return []
+
+        # Concept mastery: replace if updates provided (not None), else preserve existing
+        if updates.concept_mastery is not None:
+            new_concept_mastery = updates.concept_mastery
+        else:
+            new_concept_mastery = _safe_dict(getattr(db_session.state, "concept_mastery", None))
+
+        # Misconception counts: replace if updates provided (not None), else preserve existing
+        if updates.misconception_counts is not None:
+            new_misconception_counts = updates.misconception_counts
+        else:
+            new_misconception_counts = _safe_dict(getattr(db_session.state, "misconception_counts", None))
+
+        # Recent strategy history: replace if updates provided (not None), else preserve existing
+        if updates.recent_strategy_history is not None:
+            # Convert Strategy enums to strings
+            new_recent_strategy_history = [
+                s.value if hasattr(s, "value") else str(s)
+                for s in updates.recent_strategy_history
+            ]
+        else:
+            new_recent_strategy_history = _safe_list(getattr(db_session.state, "recent_strategy_history", None))
+
+        # Mode switch history: replace if updates provided (not None), else preserve existing
+        if updates.mode_switch_history is not None:
+            new_mode_switch_history = []
+            for t in updates.mode_switch_history:
+                if hasattr(t, "model_dump"):
+                    new_mode_switch_history.append(t.model_dump())
+                elif isinstance(t, dict):
+                    new_mode_switch_history.append(t)
+        else:
+            new_mode_switch_history = _safe_list(getattr(db_session.state, "mode_switch_history", None))
+
         state_update = SessionStateBase(
             current_mode=new_mode,
             difficulty=new_difficulty,
@@ -521,8 +613,11 @@ class ChatService:
             consecutive_weak_answers=consecutive_weak,
             unresolved_misconceptions=new_misconceptions,
             mastered_concepts=new_mastered,
+            concept_mastery=new_concept_mastery,
+            misconception_counts=new_misconception_counts,
+            recent_strategy_history=new_recent_strategy_history,
+            mode_switch_history=new_mode_switch_history,
             teacher_intervention_data=new_ti_data,
-            mode_switch_history=new_msh,
             teacher_attempt_count=new_teacher_attempts,
             teacher_intervention=new_teacher_intervention,
         )

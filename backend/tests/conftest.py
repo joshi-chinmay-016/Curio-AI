@@ -100,3 +100,61 @@ def override_get_db(test_db_session) -> Generator:
         yield test_db_session
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture(scope="function")
+def create_test_user(test_db_session):
+    """
+    Factory fixture to dynamically create test users in the isolated test database.
+    """
+    import uuid
+    from backend.app.models.user import User
+
+    def _create_user(email: str = None, is_active: bool = True) -> User:
+        user_email = email or f"test_user_{uuid.uuid4().hex[:8]}@curio.ai"
+        user = User(email=user_email, is_active=is_active)
+        test_db_session.add(user)
+        test_db_session.commit()
+        test_db_session.refresh(user)
+        return user
+
+    return _create_user
+
+
+@pytest.fixture(scope="function")
+def test_user(create_test_user):
+    """Function-scoped fixture providing a dynamically created test user."""
+    return create_test_user()
+
+
+@pytest.fixture(scope="function")
+def test_token(test_user) -> str:
+    """Function-scoped fixture providing a valid JWT for test_user."""
+    from backend.app.core.security import create_access_token
+    return create_access_token(subject=str(test_user.id))
+
+
+@pytest.fixture(scope="function")
+def auth_headers(test_token) -> dict:
+    """Function-scoped fixture providing Authorization header for test_user."""
+    return {"Authorization": f"Bearer {test_token}"}
+
+
+@pytest.fixture(scope="function")
+def authenticated_client(override_get_db, test_user):
+    """
+    TestClient fixture bound to the isolated PostgreSQL test database session
+    with a valid Bearer token for test_user.
+    """
+    from fastapi.testclient import TestClient
+    from backend.app.main import app
+    from backend.app.core.security import create_access_token
+
+    token = create_access_token(subject=str(test_user.id))
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(app) as client:
+        client.headers.update(headers)
+        # Attach user to client for test convenience
+        client.user = test_user
+        yield client

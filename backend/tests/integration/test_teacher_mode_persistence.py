@@ -24,6 +24,7 @@ from backend.app.models.session import Session, SessionState
 from backend.app.models.message import Message
 from backend.app.schemas.message import MessageCreate
 from backend.app.schemas.common import InputType as CommonInputType, LearningMode
+from backend.app.core.security import create_access_token
 from backend.app.services.chat_service import ChatService
 from backend.app.ai.schemas import (
     AIResult,
@@ -447,7 +448,15 @@ def test_api_endpoint_teacher_mode_flow(override_get_db):
     Verify end-to-end via FastAPI TestClient that Teacher Mode state is
     serialized correctly by GET /api/v1/sessions/{id}.
     """
+    db = override_get_db
+    user = User(email=f"teacher_flow_{uuid4().hex[:8]}@curio.ai", is_active=True)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(subject=str(user.id))
     with TestClient(app) as client:
+        client.headers["Authorization"] = f"Bearer {token}"
         # Create session via API
         create_res = client.post("/api/v1/sessions", json={"topic": "Linear Algebra", "source_type": "GENERAL"})
         assert create_res.status_code == 201

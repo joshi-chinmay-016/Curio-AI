@@ -15,14 +15,9 @@ from backend.app.repositories.report_repository import ReportRepository
 from backend.app.services.report_service import ReportService
 from backend.app.ai.engine import CurioEngine
 from backend.app.ai.providers.mock_provider import MockLLMProvider
+from backend.app.core.security import create_access_token
 
 pytestmark = pytest.mark.db_integration
-
-
-@pytest.fixture
-def api_client(override_get_db):
-    with TestClient(app) as client:
-        yield client
 
 
 @pytest.fixture
@@ -51,6 +46,18 @@ def test_user_and_session(test_db_session):
     test_db_session.commit()
 
     return user, session, state
+
+
+@pytest.fixture
+def api_client(override_get_db, test_user_and_session):
+    """
+    TestClient with a valid JWT for the test user created by test_user_and_session.
+    """
+    user, _, _ = test_user_and_session
+    token = create_access_token(subject=str(user.id))
+    with TestClient(app) as client:
+        client.headers["Authorization"] = f"Bearer {token}"
+        yield client
 
 
 def test_evaluate_valid_session(api_client, test_db_session, test_user_and_session):
