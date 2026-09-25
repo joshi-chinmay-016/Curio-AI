@@ -141,14 +141,20 @@ def auth_headers(test_token) -> dict:
 
 
 @pytest.fixture(scope="function")
-def authenticated_client(override_get_db, auth_headers):
+def authenticated_client(override_get_db, test_user):
     """
     TestClient fixture bound to the isolated PostgreSQL test database session
     with a valid Bearer token for test_user.
     """
     from fastapi.testclient import TestClient
     from backend.app.main import app
+    from backend.app.core.security import create_access_token
+
+    token = create_access_token(subject=str(test_user.id))
+    headers = {"Authorization": f"Bearer {token}"}
 
     with TestClient(app) as client:
-        client.headers.update(auth_headers)
+        client.headers.update(headers)
+        # Attach user to client for test convenience
+        client.user = test_user
         yield client
