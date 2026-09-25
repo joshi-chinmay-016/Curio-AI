@@ -14,6 +14,8 @@ from backend.app.ai.schemas import (
     Mode,
     Strategy,
     TurnEvaluation,
+    TurnIntent,
+    TurnInterpretation,
 )
 from backend.app.ai.confidence import calculate_confidence
 from backend.app.schemas.common import LearningMode, LearningStrategy
@@ -175,15 +177,33 @@ class DecisionEngine:
     def _has_explicit_stuck_signal(cls, user_msg: str) -> bool:
         return cls._has_explicit_teach_or_stuck_signal(user_msg)
 
-    def decide(self, context: AIContext, evaluation: TurnEvaluation) -> LearningDecision:
+    def decide(
+        self,
+        context: AIContext,
+        evaluation: TurnEvaluation,
+        interpretation: Optional[TurnInterpretation] = None,
+    ) -> LearningDecision:
         """
-        Produce a deterministic LearningDecision from the TurnEvaluation and AIContext.
+        Produce a deterministic LearningDecision from the TurnEvaluation, AIContext, and TurnInterpretation.
         """
         current_mode = context.current_mode
         current_difficulty = context.difficulty
         current_confidence = context.current_state.understanding_confidence
         user_msg = context.history[-1].content if context.history else ""
         clean_msg = user_msg.lower().strip()
+
+        # Initial turn without user message: always ask foundation in Student Mode at difficulty 1
+        if not user_msg:
+            return LearningDecision(
+                next_mode=Mode.STUDENT,
+                strategy=Strategy.ASK_FOUNDATION,
+                difficulty=1,
+                confidence=current_confidence,
+                reason="Initial session turn: asking foundational question.",
+                active_concept=context.active_concept or context.topic,
+                should_offer_termination=False,
+                should_restore_interrupted_question=False,
+            )
 
         # =================================================================
         # 1. TEACHER MODE DECISION LOGIC (Phase 2D & 2E)
@@ -192,9 +212,22 @@ class DecisionEngine:
             words = clean_msg.split()
             word_count = len(words)
 
-            is_teach_or_stuck = self._has_explicit_teach_or_stuck_signal(user_msg)
-            is_ready_signal = any(phrase in clean_msg for phrase in EXPLICIT_READY_PHRASES)
-            is_acknowledgment = clean_msg in NON_ANSWER_ACKNOWLEDGMENTS or any(clean_msg == phrase for phrase in NON_ANSWER_ACKNOWLEDGMENTS)
+            is_teach_or_stuck = (
+                (interpretation.is_help_request or interpretation.intent == TurnIntent.HELP_REQUEST)
+                if interpretation
+                else self._has_explicit_teach_or_stuck_signal(user_msg)
+            )
+            is_ready_signal = (
+                (interpretation.intent == TurnIntent.READY_FOR_VERIFICATION)
+                if interpretation
+                else any(phrase in clean_msg for phrase in EXPLICIT_READY_PHRASES)
+            ) or any(phrase in clean_msg for phrase in EXPLICIT_READY_PHRASES)
+
+            is_acknowledgment = (
+                (interpretation.intent in (TurnIntent.ACKNOWLEDGEMENT, TurnIntent.READY_FOR_VERIFICATION))
+                if interpretation
+                else (clean_msg in NON_ANSWER_ACKNOWLEDGMENTS or any(clean_msg == phrase for phrase in NON_ANSWER_ACKNOWLEDGMENTS))
+            ) or (clean_msg in NON_ANSWER_ACKNOWLEDGMENTS or any(clean_msg == phrase for phrase in NON_ANSWER_ACKNOWLEDGMENTS))
 
             stripped_content = clean_msg
             for phrase in EXPLICIT_READY_PHRASES + NON_ANSWER_ACKNOWLEDGMENTS:
@@ -203,6 +236,10 @@ class DecisionEngine:
 
             is_bare_ack = (is_ready_signal or is_acknowledgment) and substantive_word_count <= 3
             is_question = (
+                (interpretation.is_question or interpretation.intent in (TurnIntent.CLARIFICATION_REQUEST, TurnIntent.CONCEPTUAL_QUESTION))
+                if interpretation
+                else False
+            ) or (
                 "?" in clean_msg
                 or clean_msg.startswith("what")
                 or clean_msg.startswith("how")
@@ -212,6 +249,7 @@ class DecisionEngine:
                 or clean_msg.startswith("could ")
                 or clean_msg.startswith("tell me")
                 or clean_msg.startswith("explain")
+                or "again" in clean_msg
             )
             is_stuck_or_struggle = any(k in clean_msg for k in [
                 "i don't know", "i do not know", "no idea", "have no idea", "i'm stuck", "im stuck",
@@ -334,7 +372,23 @@ class DecisionEngine:
         # =================================================================
         # 2. STUDENT MODE: STUCK DETECTION & TRANSITION POLICY (Phase 2A)
         # =================================================================
-        trigger_a = self._has_explicit_teach_or_stuck_signal(user_msg)
+        if interpretation and interpretation.intent == TurnIntent.CLARIFICATION_REQUEST:
+            return LearningDecision(
+                next_mode=Mode.STUDENT,
+                strategy=Strategy.CLARIFY_TERM,
+                difficulty=current_difficulty,
+                confidence=current_confidence,
+                reason="Learner requested clarification on question or term.",
+                active_concept=context.active_concept or context.topic,
+                should_offer_termination=False,
+                should_restore_interrupted_question=False,
+            )
+
+        trigger_a = (
+            (interpretation.is_help_request or interpretation.intent == TurnIntent.HELP_REQUEST)
+            if interpretation
+            else self._has_explicit_teach_or_stuck_signal(user_msg)
+        ) or self._has_explicit_teach_or_stuck_signal(user_msg)
         has_knowledge_gap = bool(evaluation.knowledge_gap and evaluation.knowledge_gap.strip())
         trigger_b = evaluation.stuck_probability >= 0.75 and (
             evaluation.correctness < 0.5 or has_knowledge_gap

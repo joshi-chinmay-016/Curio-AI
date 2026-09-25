@@ -11,9 +11,15 @@ from backend.app.ai.schemas import (
     AIContext,
     AIResponse,
     AIResult,
+    ConceptModel,
+    LearnerModel,
     LearningDecision,
+    LearningObjective,
+    QuestionSelectionResult,
+    QuestionSpecification,
     StateUpdates,
     TurnEvaluation,
+    TurnInterpretation,
 )
 from backend.app.ai.nodes.student_nodes import (
     evaluation_node,
@@ -35,6 +41,12 @@ class CurioGraphState(TypedDict, total=False):
     response: Optional[AIResponse]
     state_updates: Optional[StateUpdates]
     result: Optional[AIResult]
+    concept_model: Optional[ConceptModel]
+    learner_model: Optional[LearnerModel]
+    interpretation: Optional[TurnInterpretation]
+    learning_objective: Optional[LearningObjective]
+    question_specification: Optional[QuestionSpecification]
+    selection_result: Optional[QuestionSelectionResult]
 
 
 def build_curio_graph(provider: Optional[BaseAIProvider] = None):

@@ -86,6 +86,11 @@ class CurioEngine:
             state_updates=state_updates,
             session_evaluation=final_state.get("session_evaluation"),
             learning_report=final_state.get("learning_report"),
+            turn_interpretation=final_state.get("interpretation"),
+            learning_objective=final_state.get("learning_objective"),
+            question_specification=final_state.get("question_specification"),
+            concept_model=final_state.get("concept_model"),
+            learner_model=final_state.get("learner_model"),
         )
 
         return result

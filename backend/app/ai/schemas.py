@@ -92,6 +92,156 @@ class ModeTransition(BaseModel):
 
 
 # =====================================================================
+# ADAPTIVE LEARNING CORE CONTRACTS
+# =====================================================================
+
+class TurnIntent(str, Enum):
+    ANSWER_ATTEMPT = "ANSWER_ATTEMPT"
+    CLARIFICATION_REQUEST = "CLARIFICATION_REQUEST"
+    HELP_REQUEST = "HELP_REQUEST"
+    CONCEPTUAL_QUESTION = "CONCEPTUAL_QUESTION"
+    ACKNOWLEDGEMENT = "ACKNOWLEDGEMENT"
+    OFF_TOPIC = "OFF_TOPIC"
+    READY_FOR_VERIFICATION = "READY_FOR_VERIFICATION"
+    UNKNOWN = "UNKNOWN"
+
+
+class TurnInterpretation(BaseModel):
+    intent: TurnIntent = TurnIntent.UNKNOWN
+    is_answer_attempt: bool = False
+    is_question: bool = False
+    is_help_request: bool = False
+    referenced_concept: Optional[str] = None
+    target: Optional[str] = None
+    answer_evidence: Optional[str] = None
+    requested_action: Optional[str] = None
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class ConceptNode(BaseModel):
+    id: str
+    name: str
+    definition: str = ""
+    prerequisites: List[str] = Field(default_factory=list)
+    sub_concepts: List[str] = Field(default_factory=list)
+    applications: List[str] = Field(default_factory=list)
+    constraints: List[str] = Field(default_factory=list)
+    common_misconceptions: List[str] = Field(default_factory=list)
+    edge_cases: List[str] = Field(default_factory=list)
+    difficulty_level: int = Field(default=1, ge=1, le=5)
+
+
+class ConceptRelationship(BaseModel):
+    source_concept_id: str
+    target_concept_id: str
+    relation_type: str = "PREREQUISITE_OF"
+    description: str = ""
+
+
+class ConceptModel(BaseModel):
+    topic: str
+    concepts: List[ConceptNode] = Field(default_factory=list)
+    relationships: List[ConceptRelationship] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def get_concept(self, concept_id: str) -> Optional[ConceptNode]:
+        for c in self.concepts:
+            if c.id == concept_id:
+                return c
+        return None
+
+    def get_prerequisites(self, concept_id: str) -> List[str]:
+        node = self.get_concept(concept_id)
+        if node:
+            return list(node.prerequisites)
+        return []
+
+
+class ConceptState(BaseModel):
+    concept_id: str
+    mastery: float = Field(default=0.0, ge=0.0, le=1.0)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    evidence_count: int = Field(default=0, ge=0)
+    misconception_count: int = Field(default=0, ge=0)
+    attempt_count: int = Field(default=0, ge=0)
+    last_evaluated: Optional[str] = None
+    recent_scores: List[float] = Field(default_factory=list)
+    unresolved_gap: bool = False
+    active_misconceptions: List[str] = Field(default_factory=list)
+
+
+class LearnerModel(BaseModel):
+    session_id: str
+    concepts: Dict[str, ConceptState] = Field(default_factory=dict)
+    overall_mastery: float = Field(default=0.0, ge=0.0, le=1.0)
+    recent_performances: List[float] = Field(default_factory=list)
+    unresolved_gaps: List[str] = Field(default_factory=list)
+
+    def get_or_create_concept(self, concept_id: str) -> ConceptState:
+        if concept_id not in self.concepts:
+            self.concepts[concept_id] = ConceptState(concept_id=concept_id)
+        return self.concepts[concept_id]
+
+
+class ObjectiveType(str, Enum):
+    UNDERSTAND_DEFINITION = "UNDERSTAND_DEFINITION"
+    UNDERSTAND_MECHANISM = "UNDERSTAND_MECHANISM"
+    UNDERSTAND_CAUSAL_RELATION = "UNDERSTAND_CAUSAL_RELATION"
+    EXPLAIN_IN_OWN_WORDS = "EXPLAIN_IN_OWN_WORDS"
+    APPLY_CONCEPT = "APPLY_CONCEPT"
+    DISTINGUISH_CONCEPTS = "DISTINGUISH_CONCEPTS"
+    RESOLVE_MISCONCEPTION = "RESOLVE_MISCONCEPTION"
+    VERIFY_GAP = "VERIFY_GAP"
+    HANDLE_EDGE_CASE = "HANDLE_EDGE_CASE"
+    SYNTHESIZE_CONCEPTS = "SYNTHESIZE_CONCEPTS"
+    INCREASE_DIFFICULTY = "INCREASE_DIFFICULTY"
+    REINFORCE_WEAK_CONCEPT = "REINFORCE_WEAK_CONCEPT"
+
+
+class LearningObjective(BaseModel):
+    objective_type: ObjectiveType
+    target_concept: str
+    difficulty: int = Field(ge=1, le=5)
+    reason: str
+    evidence_expected: str
+
+
+class QuestionSpecification(BaseModel):
+    target_concept: str
+    learning_objective: LearningObjective
+    difficulty: int = Field(ge=1, le=5)
+    reason: str
+    evidence_expected: str
+    generation_constraints: List[str] = Field(default_factory=list)
+
+
+class QuestionCandidate(BaseModel):
+    candidate_id: str
+    question_text: str
+    rationale: str = ""
+
+
+class CandidateList(BaseModel):
+    candidates: List[QuestionCandidate] = Field(default_factory=list)
+
+
+class QuestionValidation(BaseModel):
+    candidate_id: str
+    is_valid: bool
+    rejection_reasons: List[str] = Field(default_factory=list)
+    score: float = 0.0
+
+
+class QuestionSelectionResult(BaseModel):
+    specification: QuestionSpecification
+    candidates: List[QuestionCandidate] = Field(default_factory=list)
+    validations: List[QuestionValidation] = Field(default_factory=list)
+    selected_candidate: Optional[QuestionCandidate] = None
+    selection_reason: str = ""
+    novelty_passed: bool = True
+
+
+# =====================================================================
 # SESSION STATE
 # =====================================================================
 
@@ -112,6 +262,11 @@ class SessionState(BaseModel):
     unresolved_misconceptions: List[str] = Field(default_factory=list)
     teacher_intervention: Optional[TeacherIntervention] = None
     mode_switch_history: List[ModeTransition] = Field(default_factory=list)
+    concept_model: Optional[ConceptModel] = None
+    learner_model: Optional[LearnerModel] = None
+    current_objective: Optional[LearningObjective] = None
+    latest_interpretation: Optional[TurnInterpretation] = None
+    question_specification: Optional[QuestionSpecification] = None
 
     @field_validator("session_id", mode="before")
     @classmethod
@@ -197,6 +352,11 @@ class StateUpdates(BaseModel):
     recent_strategy_history: Optional[List[Strategy]] = None
     misconception_counts: Optional[Dict[str, int]] = None
     mode_switch_history: Optional[List[ModeTransition]] = None
+    concept_model: Optional[ConceptModel] = None
+    learner_model: Optional[LearnerModel] = None
+    current_objective: Optional[LearningObjective] = None
+    latest_interpretation: Optional[TurnInterpretation] = None
+    question_specification: Optional[QuestionSpecification] = None
 
     @field_validator("concept_mastery")
     @classmethod
@@ -390,6 +550,11 @@ class AIResult(BaseModel):
     state_updates: StateUpdates
     session_evaluation: Optional[SessionEvaluation] = None
     learning_report: Optional[LearningReport] = None
+    turn_interpretation: Optional[TurnInterpretation] = None
+    learning_objective: Optional[LearningObjective] = None
+    question_specification: Optional[QuestionSpecification] = None
+    concept_model: Optional[ConceptModel] = None
+    learner_model: Optional[LearnerModel] = None
 
 
 # =====================================================================

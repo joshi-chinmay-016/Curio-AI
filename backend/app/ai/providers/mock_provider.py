@@ -2,10 +2,20 @@
 Deterministic mock LLM provider for Curio AI tests.
 Supports all 8 evaluation cases, strategy-specific questions, and preserves Phase 0 test fixtures.
 """
-from typing import Any, Dict, Type
+import re
+from typing import Any, Dict, List, Optional, Type
 from pydantic import BaseModel
 from backend.app.ai.providers.base import BaseLLMProvider
-from backend.app.ai.schemas import Strategy, TurnEvaluation
+from backend.app.ai.schemas import (
+    ConceptModel,
+    ConceptNode,
+    ConceptRelationship,
+    QuestionCandidate,
+    Strategy,
+    TurnEvaluation,
+    TurnIntent,
+    TurnInterpretation,
+)
 from backend.app.schemas.common import LearningStrategy
 from backend.app.schemas.report import MasteryLevel, SessionReportResponse
 
@@ -316,6 +326,188 @@ class MockLLMProvider(BaseLLMProvider):
                 recommended_exercises=["Implement factorial recursively and iteratively"],
                 created_at="2026-07-14T17:00:00Z",
             )
+
+        elif "turninterpretation" in response_model.__name__.lower() or "turn interpreter" in prompt_lower:
+            user_input = ""
+            if "learner's latest message:" in prompt_lower:
+                after = prompt_lower.split("learner's latest message:")[1]
+                if '"' in after:
+                    parts = after.split('"')
+                    if len(parts) >= 2:
+                        user_input = parts[1].strip()
+                if not user_input:
+                    user_input = after.split("\n")[0].strip()
+            elif "user:" in prompt_lower:
+                parts = prompt_lower.split("user:")
+                if len(parts) > 1:
+                    user_input = parts[-1].split("\n")[0].strip()
+
+            clean = user_input.lower().strip()
+            clean_no_punct = clean.rstrip("?.!").strip()
+            is_teacher = "current learning mode: teacher" in prompt_lower or "mode: teacher" in prompt_lower
+
+            # Intent classification logic
+            if any(k in clean for k in ["what do you mean", "clarify", "what does that mean", "what is meant by", "explain that again", "explain again", "can you explain", "could you explain"]):
+                return TurnInterpretation(
+                    intent=TurnIntent.CLARIFICATION_REQUEST,
+                    is_answer_attempt=False,
+                    is_question=True,
+                    is_help_request=False,
+                    answer_evidence=None,
+                    requested_action="clarify",
+                    confidence=0.95,
+                )
+            elif any(k in clean for k in ["teach me", "don't understand", "dont understand", "stuck", "lost", "help me", "not sure", "don't know", "no idea"]):
+                return TurnInterpretation(
+                    intent=TurnIntent.HELP_REQUEST,
+                    is_answer_attempt=False,
+                    is_question=True if "?" in clean else False,
+                    is_help_request=True,
+                    answer_evidence=None,
+                    requested_action="teach",
+                    confidence=0.95,
+                )
+            elif is_teacher and any(k in clean for k in ["understand now", "i'm good now", "im good now", "let me try", "ready", "ok", "okay", "got it", "i see", "yes"]):
+                return TurnInterpretation(
+                    intent=TurnIntent.READY_FOR_VERIFICATION,
+                    is_answer_attempt=False,
+                    is_question=False,
+                    is_help_request=False,
+                    answer_evidence=None,
+                    requested_action="verify",
+                    confidence=0.90,
+                )
+            elif any(k == clean_no_punct for k in ["ok", "okay", "yes", "yeah", "yep", "sure", "got it", "i see", "understood", "ok got it"]):
+                return TurnInterpretation(
+                    intent=TurnIntent.ACKNOWLEDGEMENT,
+                    is_answer_attempt=False,
+                    is_question=False,
+                    is_help_request=False,
+                    answer_evidence=None,
+                    requested_action="continue",
+                    confidence=0.90,
+                )
+            elif "?" in clean and (clean.startswith("how ") or clean.startswith("why ") or clean.startswith("what") or clean.startswith("can") or clean.startswith("could") or clean.startswith("is")):
+                return TurnInterpretation(
+                    intent=TurnIntent.CONCEPTUAL_QUESTION if not any(k in clean for k in ["explain", "mean", "clarify"]) else TurnIntent.CLARIFICATION_REQUEST,
+                    is_answer_attempt=False,
+                    is_question=True,
+                    is_help_request=False,
+                    answer_evidence=None,
+                    requested_action="explain",
+                    confidence=0.85,
+                )
+            elif len(clean.split()) >= 3 and "?" not in clean:
+                return TurnInterpretation(
+                    intent=TurnIntent.ANSWER_ATTEMPT,
+                    is_answer_attempt=True,
+                    is_question=False,
+                    is_help_request=False,
+                    answer_evidence=user_input,
+                    requested_action=None,
+                    confidence=0.90,
+                )
+            else:
+                return TurnInterpretation(
+                    intent=TurnIntent.UNKNOWN,
+                    is_answer_attempt=False,
+                    is_question=False,
+                    is_help_request=False,
+                    confidence=0.5,
+                )
+
+        elif "conceptmodel" in response_model.__name__.lower() or "concept model" in prompt_lower:
+            topic = next(
+                (
+                    line.strip()[6:].strip()
+                    for line in prompt.splitlines()
+                    if line.strip().lower().startswith("topic:") and line.strip()[6:].strip()
+                ),
+                "General Topic",
+            )
+
+            norm_top = re.sub(r"[^a-zA-Z0-9_]+", "_", topic.lower()).strip("_")
+            c1 = ConceptNode(
+                id=f"{norm_top}_foundation",
+                name=f"{topic} Fundamentals",
+                definition=f"Foundational concepts and principles of {topic}.",
+                prerequisites=[],
+                difficulty_level=1,
+            )
+            c2 = ConceptNode(
+                id=f"{norm_top}_mechanism",
+                name=f"{topic} Core Mechanism",
+                definition=f"The underlying mechanism and execution flow of {topic}.",
+                prerequisites=[f"{norm_top}_foundation"],
+                difficulty_level=2,
+            )
+            c3 = ConceptNode(
+                id=f"{norm_top}_application",
+                name=f"{topic} Application",
+                definition=f"Applying {topic} to solve computational problems.",
+                prerequisites=[f"{norm_top}_mechanism"],
+                difficulty_level=3,
+            )
+            c4 = ConceptNode(
+                id=f"{norm_top}_edge_cases",
+                name=f"{topic} Edge Cases & Constraints",
+                definition=f"Edge cases, constraints, and limitations in {topic}.",
+                prerequisites=[f"{norm_top}_application"],
+                difficulty_level=4,
+            )
+            rels = [
+                ConceptRelationship(
+                    source_concept_id=f"{norm_top}_foundation",
+                    target_concept_id=f"{norm_top}_mechanism",
+                    relation_type="PREREQUISITE_OF",
+                ),
+                ConceptRelationship(
+                    source_concept_id=f"{norm_top}_mechanism",
+                    target_concept_id=f"{norm_top}_application",
+                    relation_type="PREREQUISITE_OF",
+                ),
+                ConceptRelationship(
+                    source_concept_id=f"{norm_top}_application",
+                    target_concept_id=f"{norm_top}_edge_cases",
+                    relation_type="PREREQUISITE_OF",
+                ),
+            ]
+            return ConceptModel(
+                topic=topic,
+                concepts=[c1, c2, c3, c4],
+                relationships=rels,
+                metadata={"built_by": "MockLLMProvider"},
+            )
+
+        elif "candidatelist" in response_model.__name__.lower() or "candidate" in response_model.__name__.lower():
+            target_concept = "core concept"
+            if "target concept:" in prompt_lower:
+                target_concept = prompt_lower.split("target concept:")[1].split("\n")[0].strip()
+
+            c_name = target_concept.replace("_", " ").title()
+            if "base_case" in target_concept.lower() or "base case" in prompt_lower:
+                c1_text = "What would happen if the recursive function did not contain a base case?"
+            else:
+                c1_text = f"How does {c_name} ensure correctness when executing in the system?"
+
+            cands = [
+                QuestionCandidate(
+                    candidate_id="cand_1",
+                    question_text=c1_text,
+                    rationale=f"Direct mechanistic inquiry into {c_name}",
+                ),
+                QuestionCandidate(
+                    candidate_id="cand_2",
+                    question_text=f"What happens during {c_name} if the input conditions are altered or invalid?",
+                    rationale=f"Scenario and edge-case probing on {c_name}",
+                ),
+                QuestionCandidate(
+                    candidate_id="cand_3",
+                    question_text=f"Why is {c_name} essential for maintaining consistency across operations?",
+                    rationale=f"Causal rationale question on {c_name}",
+                ),
+            ]
+            return response_model(candidates=cands)
 
         return response_model()
 

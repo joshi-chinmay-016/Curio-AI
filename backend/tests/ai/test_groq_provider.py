@@ -279,17 +279,49 @@ def test_curio_engine_contract_invariance_with_groq_provider(mock_groq_cls):
         "recommended_strategy": "INCREASE_DIFFICULTY",
         "recommended_difficulty": 3,
     }
-    mock_choice_eval = MagicMock()
-    mock_choice_eval.message.content = json.dumps(valid_eval)
+    def mock_create(**kwargs):
+        messages = kwargs.get("messages", [])
+        prompt = messages[0].get("content", "") if messages else ""
+        prompt_lower = prompt.lower()
 
-    mock_choice_text = MagicMock()
-    mock_choice_text.message.content = "How do photons excite electrons in chlorophyll?"
+        if "concept_model" in prompt_lower or "concept model" in prompt_lower:
+            payload = {
+                "topic": "Photosynthesis",
+                "concepts": [
+                    {"id": "light_reactions", "name": "Light Reactions", "definition": "Converts light energy to chemical energy.", "prerequisites": [], "difficulty_level": 2},
+                    {"id": "calvin_cycle", "name": "Calvin Cycle", "definition": "Fixes carbon into glucose.", "prerequisites": ["light_reactions"], "difficulty_level": 3},
+                ],
+                "relationships": [
+                    {"source_concept_id": "light_reactions", "target_concept_id": "calvin_cycle", "relation_type": "PREREQUISITE_OF"}
+                ],
+            }
+            return MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps(payload)))])
+        elif "turninterpretation" in prompt_lower or "turn interpreter" in prompt_lower:
+            payload = {
+                "intent": "ANSWER_ATTEMPT",
+                "is_answer_attempt": True,
+                "is_question": False,
+                "is_help_request": False,
+                "referenced_concept": "Light Reactions",
+                "target": "Light Reactions",
+                "answer_evidence": "photons excite electrons",
+                "requested_action": None,
+                "confidence": 0.9,
+            }
+            return MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps(payload)))])
+        elif "candidatelist" in prompt_lower or "candidate" in prompt_lower:
+            payload = {
+                "candidates": [
+                    {"candidate_id": "cand_1", "question_text": "How do photons excite electrons in chlorophyll?", "rationale": "Direct probe"},
+                    {"candidate_id": "cand_2", "question_text": "What happens if photon absorption is blocked?", "rationale": "Edge case probe"},
+                    {"candidate_id": "cand_3", "question_text": "Why are electrons necessary for ATP synthesis?", "rationale": "Causal probe"},
+                ]
+            }
+            return MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps(payload)))])
+        else:
+            return MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps(valid_eval)))])
 
-    # First call is generate_structured (evaluation), second call is generate_text (response)
-    mock_instance.chat.completions.create.side_effect = [
-        MagicMock(choices=[mock_choice_eval]),
-        MagicMock(choices=[mock_choice_text]),
-    ]
+    mock_instance.chat.completions.create.side_effect = mock_create
 
     provider = GroqLLMProvider(api_key="gsk_contract_test")
     engine = CurioEngine(provider=provider)

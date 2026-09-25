@@ -86,7 +86,7 @@ export function useGapReport(sessionId?: string) {
         await saveToPracticeQueue({
           gapId: gap.id,
           conceptName: gap.title,
-          topicName: report?.topicName || "Binary Search",
+          topicName: report?.topicName || "General Topic",
           severity: gap.severity,
         });
         curioToast.success("SAVED FOR LATER.", "Added to your practice queue.");
