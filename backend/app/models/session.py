@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.app.db.session import Base
 
+
 class Session(Base):
     __tablename__ = "sessions"
 
@@ -21,6 +22,7 @@ class Session(Base):
     state = relationship("SessionState", uselist=False, back_populates="session", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
     report = relationship("SessionReport", uselist=False, back_populates="session", cascade="all, delete-orphan")
+    intervention_logs = relationship("TeacherInterventionLog", back_populates="session", cascade="all, delete-orphan")
 
 
 class SessionState(Base):
