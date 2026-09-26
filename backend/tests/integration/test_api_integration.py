@@ -98,16 +98,29 @@ def test_api_create_session_validation_error(api_client):
 
 
 def test_api_list_sessions(api_client):
-    """Verify GET /api/v1/sessions returns a list of session summaries."""
+    """Verify GET /api/v1/sessions returns a paginated list of session summaries."""
     # Create two sessions
     s1 = api_client.post("/api/v1/sessions", json={"topic": "Linear Algebra", "source_type": "GENERAL"}).json()
     s2 = api_client.post("/api/v1/sessions", json={"topic": "Graph Theory", "source_type": "GENERAL"}).json()
 
     res = api_client.get("/api/v1/sessions")
     assert res.status_code == 200
-    session_list = res.json()
+    session_page = res.json()
+    
+    # Verify paginated response structure
+    assert "items" in session_page
+    assert "total" in session_page
+    assert "page" in session_page
+    assert "page_size" in session_page
+    assert "pages" in session_page
+    
+    session_list = session_page["items"]
     assert isinstance(session_list, list)
     assert len(session_list) >= 2
+    assert session_page["total"] >= 2
+    assert session_page["page"] == 1
+    assert session_page["page_size"] == 20
+    assert session_page["pages"] >= 1
 
     session_ids = [item["session_id"] for item in session_list]
     assert s1["id"] in session_ids

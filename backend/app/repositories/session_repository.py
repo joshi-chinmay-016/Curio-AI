@@ -1,8 +1,11 @@
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Optional, Tuple
 from uuid import UUID
+from sqlalchemy import func
 from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.models.session import Session, SessionState
 from backend.app.schemas.session import SessionCreate, SessionUpdate, SessionStateBase
+from backend.app.schemas.common import SessionStatus
 
 class SessionRepository:
     def create(self, db: SQLAlchemySession, user_id: UUID, obj_in: SessionCreate) -> Session:
@@ -42,6 +45,54 @@ class SessionRepository:
 
     def list_by_user(self, db: SQLAlchemySession, user_id: UUID) -> List[Session]:
         return db.query(Session).filter(Session.user_id == user_id).order_by(Session.created_at.desc()).all()
+
+    def list_by_user_paginated(
+        self,
+        db: SQLAlchemySession,
+        user_id: UUID,
+        page: int = 1,
+        page_size: int = 20,
+        status: Optional[SessionStatus] = None,
+        created_after: Optional[datetime] = None,
+        created_before: Optional[datetime] = None,
+    ) -> Tuple[List[Session], int]:
+        """
+        List sessions for a user with pagination and optional filters.
+
+        Args:
+            db: Database session.
+            user_id: Owner user ID (always enforced).
+            page: Page number (1-indexed), must be >= 1.
+            page_size: Items per page, capped at 100.
+            status: Optional session status filter.
+            created_after: Optional filter for sessions created at or after this timestamp.
+            created_before: Optional filter for sessions created at or before this timestamp.
+
+        Returns:
+            Tuple of (session list for the page, total count).
+        """
+        page = max(1, page)
+        page_size = min(max(1, page_size), 100)
+
+        query = db.query(Session).filter(Session.user_id == user_id)
+
+        if status is not None:
+            query = query.filter(Session.status == status.value)
+
+        if created_after is not None:
+            query = query.filter(Session.created_at >= created_after)
+
+        if created_before is not None:
+            query = query.filter(Session.created_at <= created_before)
+
+        query = query.order_by(Session.created_at.desc(), Session.id.desc())
+
+        total = query.count()
+
+        offset = (page - 1) * page_size
+        items = query.offset(offset).limit(page_size).all()
+
+        return items, total
 
     def update(self, db: SQLAlchemySession, db_session: Session, obj_in: SessionUpdate) -> Session:
         if obj_in.topic is not None:
