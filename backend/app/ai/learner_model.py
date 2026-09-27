@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 import logging
 from typing import Dict, List, Optional
 
+from backend.app.ai.answer_intelligence.mastery_gate import MasteryGate
+from backend.app.ai.answer_intelligence.schemas import LearningAssessment, MasteryDecision
 from backend.app.ai.schemas import (
     ConceptState,
     LearnerModel,
@@ -27,10 +29,17 @@ class LearnerModelManager:
     3. Strong misconceptions penalize mastery, record misconception count, and mark gap.
     4. Successful Teacher verification resolves gaps and boosts mastery.
     5. Failed Teacher verification increments attempts and preserves unresolved gap.
+    6. Irrelevant or off-topic responses NEVER increase mastery.
     """
 
-    def __init__(self, model: Optional[LearnerModel] = None, session_id: str = "default_session"):
+    def __init__(
+        self,
+        model: Optional[LearnerModel] = None,
+        session_id: str = "default_session",
+        mastery_gate: Optional[MasteryGate] = None,
+    ):
         self.model = model or LearnerModel(session_id=session_id)
+        self.mastery_gate = mastery_gate or MasteryGate()
 
     def get_or_create_concept_state(self, concept_id: str) -> ConceptState:
         return self.model.get_or_create_concept(concept_id)
@@ -43,6 +52,66 @@ class LearnerModelManager:
         state = self.get_or_create_concept_state(concept_id)
         state.attempt_count += 1
         # No change to mastery, confidence, or evidence_count!
+        return state
+
+    def update_from_assessment(
+        self,
+        concept_id: str,
+        assessment: LearningAssessment,
+    ) -> ConceptState:
+        """
+        Update concept state strictly governed by MasteryGate.
+        Protects against false mastery from irrelevant, incorrect, contradictory, or acknowledgement turns.
+        """
+        if not concept_id:
+            concept_id = "general_understanding"
+
+        decision: MasteryDecision = self.mastery_gate.evaluate(assessment, concept_id)
+        state = self.get_or_create_concept_state(concept_id)
+        now_str = datetime.now(timezone.utc).isoformat()
+        state.last_evaluated = now_str
+        state.attempt_count += 1
+
+        score = float(assessment.correctness_score)
+        state.recent_scores.append(score)
+        if len(state.recent_scores) > 5:
+            state.recent_scores = state.recent_scores[-5:]
+        self.model.recent_performances.append(score)
+        if len(self.model.recent_performances) > 10:
+            self.model.recent_performances = self.model.recent_performances[-10:]
+
+        if decision.record_as_misconception:
+            state.misconception_count += len(assessment.misconceptions) or 1
+            for m in assessment.misconceptions:
+                m_desc = m.description if hasattr(m, "description") else str(m)
+                if m_desc not in state.active_misconceptions:
+                    state.active_misconceptions.append(m_desc)
+            state.unresolved_gap = True
+            if concept_id not in self.model.unresolved_gaps:
+                self.model.unresolved_gaps.append(concept_id)
+            state.mastery = max(0.0, min(0.35, state.mastery * 0.7))
+            state.confidence = max(0.1, state.confidence * 0.8)
+
+        elif decision.record_as_gap:
+            state.unresolved_gap = True
+            if concept_id not in self.model.unresolved_gaps:
+                self.model.unresolved_gaps.append(concept_id)
+            state.mastery = max(0.0, state.mastery * 0.85)
+            state.confidence = max(0.1, state.confidence * 0.75)
+
+        elif decision.mastery_delta_allowed:
+            state.evidence_count += decision.evidence_count_increment
+            delta = (1.0 - state.mastery) * decision.allowed_delta
+            state.mastery = min(1.0, state.mastery + delta)
+            state.confidence = min(1.0, max(state.confidence, score * 0.9))
+
+            if state.unresolved_gap and score >= 0.80 and not assessment.misconception_status:
+                state.unresolved_gap = False
+                state.active_misconceptions = []
+                if concept_id in self.model.unresolved_gaps:
+                    self.model.unresolved_gaps.remove(concept_id)
+
+        self._refresh_overall_mastery()
         return state
 
     def update_from_evaluation(
@@ -66,6 +135,11 @@ class LearnerModelManager:
             TurnIntent.OFF_TOPIC,
             TurnIntent.CLARIFICATION_REQUEST,
         ):
+            state.attempt_count += 1
+            return state
+
+        # Irrelevant responses NEVER award positive mastery
+        if float(getattr(evaluation, "relevance", 1.0)) < 0.65:
             state.attempt_count += 1
             return state
 

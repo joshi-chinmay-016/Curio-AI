@@ -18,6 +18,11 @@ from backend.app.ai.schemas import (
     TurnInterpretation,
 )
 from backend.app.ai.confidence import calculate_confidence
+from backend.app.ai.answer_intelligence.schemas import (
+    CorrectnessLevel,
+    LearningAssessment,
+    RelevanceLevel,
+)
 from backend.app.schemas.common import LearningMode, LearningStrategy
 
 logger = logging.getLogger("curio.ai.decision_engine")
@@ -182,9 +187,11 @@ class DecisionEngine:
         context: AIContext,
         evaluation: TurnEvaluation,
         interpretation: Optional[TurnInterpretation] = None,
+        assessment: Optional[LearningAssessment] = None,
     ) -> LearningDecision:
         """
-        Produce a deterministic LearningDecision from the TurnEvaluation, AIContext, and TurnInterpretation.
+        Produce a deterministic LearningDecision from the TurnEvaluation, AIContext, TurnInterpretation,
+        and LearningAssessment.
         """
         current_mode = context.current_mode
         current_difficulty = context.difficulty
@@ -267,15 +274,34 @@ class DecisionEngine:
             # 5. NOT asking a question ("can you explain?", "is ASGI the server?")
             # 6. NOT a generic bare non-answer acknowledgment ("yes", "ok", "sure", "i understand")
             # 7. Must contain substantive content (>= 3 words)
-            is_pass = (
-                evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
-                and evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
-                and len(evaluation.misconceptions) == 0
-                and not is_teach_or_stuck
-                and not is_question
-                and not is_bare_ack
-                and word_count >= 3
-            )
+            # 8. Must be relevant to target concept (never pass on irrelevant answers!)
+            if assessment is not None:
+                is_pass = (
+                    (assessment.supports_mastery or assessment.correctness == CorrectnessLevel.CORRECT)
+                    and assessment.correctness not in (
+                        CorrectnessLevel.PARTIALLY_CORRECT,
+                        CorrectnessLevel.INCOMPLETE,
+                        CorrectnessLevel.INCORRECT,
+                        CorrectnessLevel.MISCONCEPTION,
+                        CorrectnessLevel.IRRELEVANT,
+                    )
+                    and assessment.relevance_level in (RelevanceLevel.RELEVANT, RelevanceLevel.PARTIALLY_RELEVANT)
+                    and len(assessment.misconceptions) == 0
+                    and not is_teach_or_stuck
+                    and not is_question
+                    and not is_bare_ack
+                    and word_count >= 3
+                )
+            else:
+                is_pass = (
+                    evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
+                    and evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
+                    and len(evaluation.misconceptions) == 0
+                    and not is_teach_or_stuck
+                    and not is_question
+                    and not is_bare_ack
+                    and word_count >= 3
+                )
 
             if is_pass:
                 # Verification PASS: Restore interrupted question and return to Student Mode
@@ -295,9 +321,12 @@ class DecisionEngine:
                 )
             elif (
                 not is_clarification_turn
-                and evaluation.correctness >= TEACHER_VERIFICATION_PARTIAL_THRESHOLD
-                and evaluation.correctness < TEACHER_VERIFICATION_PASS_THRESHOLD
+                and (
+                    (evaluation.correctness >= TEACHER_VERIFICATION_PARTIAL_THRESHOLD and evaluation.correctness < TEACHER_VERIFICATION_PASS_THRESHOLD)
+                    or (assessment is not None and assessment.correctness in (CorrectnessLevel.PARTIALLY_CORRECT, CorrectnessLevel.INCOMPLETE) and assessment.relevance_level != RelevanceLevel.IRRELEVANT)
+                )
                 and len(evaluation.misconceptions) == 0
+                and (assessment is None or len(assessment.misconceptions) == 0)
             ):
                 # PARTIAL: Remain in Teacher Mode and probe missing detail (PROBE)
                 gap = (
@@ -380,6 +409,32 @@ class DecisionEngine:
                 confidence=current_confidence,
                 reason="Learner requested clarification on question or term.",
                 active_concept=context.active_concept or context.topic,
+                should_offer_termination=False,
+                should_restore_interrupted_question=False,
+            )
+
+        # Handle off-topic / irrelevant answers in Student Mode (Section 49)
+        # Avoid false failure triggering or praising; gently redirect to active concept
+        trigger_a_pre = (
+            (interpretation.is_help_request or interpretation.intent == TurnIntent.HELP_REQUEST)
+            if interpretation
+            else self._has_explicit_teach_or_stuck_signal(user_msg)
+        ) or self._has_explicit_teach_or_stuck_signal(user_msg)
+
+        is_irrelevant = (
+            (assessment.relevance_level in (RelevanceLevel.IRRELEVANT, RelevanceLevel.UNCERTAIN))
+            if assessment is not None
+            else (evaluation.relevance < 0.50 and not trigger_a_pre)
+        )
+        if is_irrelevant and not trigger_a_pre:
+            target_c = context.active_concept or context.topic
+            return LearningDecision(
+                next_mode=Mode.STUDENT,
+                strategy=Strategy.PROBE_WHY,
+                difficulty=current_difficulty,
+                confidence=current_confidence,
+                reason=f"Learner response does not address target concept '{target_c}'. Redirecting focus to target concept.",
+                active_concept=target_c,
                 should_offer_termination=False,
                 should_restore_interrupted_question=False,
             )

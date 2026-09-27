@@ -91,6 +91,7 @@ class CurioEngine:
             question_specification=final_state.get("question_specification"),
             concept_model=final_state.get("concept_model"),
             learner_model=final_state.get("learner_model"),
+            learning_assessment=final_state.get("assessment"),
         )
 
         return result
