@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.app.ai.answer_intelligence.schemas import LearningAssessment
+
 
 # =====================================================================
 # ENUMS
@@ -145,8 +147,11 @@ class ConceptModel(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def get_concept(self, concept_id: str) -> Optional[ConceptNode]:
+        cid_norm = (concept_id or "").strip().lower().replace(" ", "_")
         for c in self.concepts:
-            if c.id == concept_id:
+            if c.id == concept_id or c.id.strip().lower().replace(" ", "_") == cid_norm:
+                return c
+            if c.name and (c.name.strip().lower() == (concept_id or "").strip().lower() or c.name.strip().lower().replace(" ", "_") == cid_norm):
                 return c
         return None
 
@@ -267,6 +272,7 @@ class SessionState(BaseModel):
     current_objective: Optional[LearningObjective] = None
     latest_interpretation: Optional[TurnInterpretation] = None
     question_specification: Optional[QuestionSpecification] = None
+    learning_assessment: Optional[LearningAssessment] = None
 
     @field_validator("session_id", mode="before")
     @classmethod
@@ -555,6 +561,7 @@ class AIResult(BaseModel):
     question_specification: Optional[QuestionSpecification] = None
     concept_model: Optional[ConceptModel] = None
     learner_model: Optional[LearnerModel] = None
+    learning_assessment: Optional[LearningAssessment] = None
 
 
 # =====================================================================
@@ -668,16 +675,19 @@ class AIContext(BaseModel):
         if isinstance(interrupted_q, str):
             interrupted_q = CurrentQuestion(id="int_q", content=interrupted_q, concept=active_concept, difficulty=difficulty)
 
+        teacher_int = data.get("teacher_intervention")
+
         current_state = SessionState(
             session_id=session_id,
             current_mode=current_mode,
             current_difficulty=difficulty,
             active_concept=active_concept,
             current_question=curr_q,
-            interrupted_question=interrupted_q
+            interrupted_question=interrupted_q,
+            teacher_intervention=teacher_int,
         )
 
-        raw_history = data.get("history", data.get("recent_messages", []))
+        raw_history = data.get("history", data.get("recent_messages", data.get("messages", [])))
         messages: List[ChatMessage] = []
         for item in raw_history:
             if isinstance(item, ChatMessage):
@@ -735,3 +745,7 @@ class AIContext(BaseModel):
     @property
     def interrupted_question(self) -> Optional[CurrentQuestion]:
         return self.current_state.interrupted_question
+
+    @property
+    def teacher_intervention(self) -> Optional[TeacherIntervention]:
+        return self.current_state.teacher_intervention or self.learning_context.teacher_intervention
