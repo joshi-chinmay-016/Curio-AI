@@ -26,12 +26,29 @@ from backend.app.ai.schemas import (
     CurrentQuestion,
     InputType,
     LearningDecision,
+    LearningObjective,
     Mode,
     ModeTransition,
+    QuestionSpecification,
     StateUpdates,
     Strategy,
     TeacherIntervention,
     TurnEvaluation,
+    TurnInterpretation,
+)
+from backend.app.ai.answer_intelligence.schemas import (
+    AssessmentClassification,
+    AssessmentIntent,
+    AssessmentStatus,
+    ClaimType,
+    CompletenessLevel,
+    CorrectnessLevel,
+    EvidenceItem,
+    EvidenceStatus,
+    LearnerClaim,
+    LearningAssessment,
+    MisconceptionEvidence,
+    RelevanceLevel,
 )
 
 

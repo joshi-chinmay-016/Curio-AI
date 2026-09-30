@@ -31,4 +31,4 @@ class TeacherInterventionLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     session = relationship("Session", back_populates="intervention_logs")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])

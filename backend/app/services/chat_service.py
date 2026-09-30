@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.repositories.session_repository import SessionRepository
 from backend.app.repositories.message_repository import MessageRepository
+from backend.app.repositories.turn_assessment_repository import TurnAssessmentRepository
 from backend.app.schemas.message import (
     MessageCreate,
     ChatTurnResponse,
@@ -46,9 +47,11 @@ class ChatService:
         self,
         ai_engine: Optional[CurioEngine] = None,
         ai_provider: Optional[BaseAIProvider] = None,
+        turn_assessment_repo: Optional[TurnAssessmentRepository] = None,
     ):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
+        self.turn_assessment_repo = turn_assessment_repo or TurnAssessmentRepository()
         self.ai_provider = ai_provider or GroqLLMProvider()
         # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
         self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
@@ -430,6 +433,35 @@ class ChatService:
             recommended_difficulty=evaluation.recommended_difficulty
         )
         self.message_repo.create_evaluation(db, user_msg.id, turn_eval_in)
+
+        # 6b. Persist Turn Assessment (LearningAssessment, TurnInterpretation, LearningObjective, QuestionSpecification)
+        if ai_result.learning_assessment or ai_result.turn_interpretation or ai_result.learning_objective or ai_result.question_specification:
+            # Get user_id from session for ownership
+            session_user_id = db_session.user_id
+            learning_assessment_dict = None
+            turn_interpretation_dict = None
+            learning_objective_dict = None
+            question_specification_dict = None
+
+            if ai_result.learning_assessment:
+                learning_assessment_dict = ai_result.learning_assessment.model_dump(mode="json")
+            if ai_result.turn_interpretation:
+                turn_interpretation_dict = ai_result.turn_interpretation.model_dump(mode="json")
+            if ai_result.learning_objective:
+                learning_objective_dict = ai_result.learning_objective.model_dump(mode="json")
+            if ai_result.question_specification:
+                question_specification_dict = ai_result.question_specification.model_dump(mode="json")
+
+            self.turn_assessment_repo.create_assessment(
+                db=db,
+                message_id=user_msg.id,
+                session_id=session_id,
+                user_id=session_user_id,
+                learning_assessment=learning_assessment_dict,
+                turn_interpretation=turn_interpretation_dict,
+                learning_objective=learning_objective_dict,
+                question_specification=question_specification_dict,
+            )
 
         # 7. Update Session State in DB (Merging StateUpdates with existing DB state)
         if updates.current_mode is not None:
