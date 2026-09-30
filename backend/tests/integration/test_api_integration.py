@@ -378,7 +378,8 @@ def test_api_isolation_marker_step_2(api_client):
     """Verify previous test's API writes were rolled back and do not leak into this test."""
     list_res = api_client.get("/api/v1/sessions")
     assert list_res.status_code == 200
-    topics = [s["topic"] for s in list_res.json()]
+    session_page = list_res.json()
+    topics = [s["topic"] for s in session_page["items"]]
     assert "API_ISOLATION_CHECK_MARKER" not in topics, (
         "API Test isolation failure: marker session leaked across tests!"
     )

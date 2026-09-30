@@ -490,7 +490,8 @@ def test_api_endpoint_teacher_mode_flow(override_get_db):
         # Query GET /api/v1/sessions (summary list)
         list_res = client.get("/api/v1/sessions")
         assert list_res.status_code == 200
-        matching = next((s for s in list_res.json() if s["session_id"] == session_id), None)
+        session_page = list_res.json()
+        matching = next((s for s in session_page["items"] if s["session_id"] == session_id), None)
         assert matching is not None
         assert matching["current_mode"] == "TEACHER"
 
