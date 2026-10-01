@@ -9,12 +9,15 @@ from backend.app.models.user import User
 from backend.app.schemas.session import SessionCreate, SessionUpdate, SessionResponse, SessionSummaryResponse, SessionListResponse
 from backend.app.schemas.common import SessionStatus
 from backend.app.schemas.report import SessionReportResponse
+from backend.app.schemas.evaluation_history import EvaluationHistoryListResponse
 from backend.app.services.session_service import SessionService
 from backend.app.services.report_service import ReportService
+from backend.app.services.evaluation_history_service import EvaluationHistoryService
 
 router = APIRouter()
 session_service = SessionService()
 report_service = ReportService()
+evaluation_history_service = EvaluationHistoryService()
 
 
 @router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
@@ -182,3 +185,31 @@ def evaluate_session(
     if not report:
         raise HTTPException(status_code=404, detail="Session not found or failed to compile report")
     return report
+
+
+@router.get("/sessions/{session_id}/evaluations", response_model=EvaluationHistoryListResponse)
+def get_evaluation_history(
+    session_id: UUID,
+    db: SQLAlchemySession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, description="Items per page (capped at 100)"),
+):
+    """
+    Retrieve paginated evaluation history for a session.
+    
+    Returns chronological history of learner turns with their persisted
+    evaluation and assessment data. Only accessible to the session owner.
+    
+    Anti-enumeration: Returns 404 for non-existent or foreign sessions.
+    """
+    history = evaluation_history_service.get_evaluation_history(
+        db=db,
+        session_id=session_id,
+        user_id=current_user.id,
+        page=page,
+        page_size=page_size,
+    )
+    if history is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return history
