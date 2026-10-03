@@ -6,6 +6,7 @@ from backend.app.repositories.session_repository import SessionRepository
 from backend.app.repositories.message_repository import MessageRepository
 from backend.app.repositories.turn_assessment_repository import TurnAssessmentRepository
 from backend.app.repositories.teacher_intervention_repository import TeacherInterventionRepository
+from backend.app.repositories.concept_progress_repository import ConceptProgressRepository
 from backend.app.schemas.message import (
     MessageCreate,
     ChatTurnResponse,
@@ -50,11 +51,13 @@ class ChatService:
         ai_provider: Optional[BaseAIProvider] = None,
         turn_assessment_repo: Optional[TurnAssessmentRepository] = None,
         teacher_intervention_repo: Optional[TeacherInterventionRepository] = None,
+        concept_progress_repo: Optional[ConceptProgressRepository] = None,
     ):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
         self.turn_assessment_repo = turn_assessment_repo or TurnAssessmentRepository()
         self.teacher_intervention_repo = teacher_intervention_repo or TeacherInterventionRepository()
+        self.concept_progress_repo = concept_progress_repo or ConceptProgressRepository()
         self.ai_provider = ai_provider or GroqLLMProvider()
         # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
         self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
@@ -670,6 +673,13 @@ class ChatService:
             message_in=message_in,
         )
 
+        # 9. Synchronize UserConceptProgress from structured AIResult StateUpdates
+        self._sync_user_concept_progress(
+            db=db,
+            user_id=user_id,
+            updates=ai_result.state_updates,
+        )
+
         return ChatTurnResponse(
             user_message=self._to_message_response(user_msg),
             ai_message=self._to_message_response(ai_msg),
@@ -816,6 +826,76 @@ class ChatService:
 
         except Exception:
             # If persistence fails, rollback this specific operation
+            # but don't fail the entire turn (consistent with current architecture)
+            db.rollback()
+            # Log error in production; here we silently continue
+            pass
+
+    def _sync_user_concept_progress(
+        self,
+        db: SQLAlchemySession,
+        user_id: Optional[UUID],
+        updates: Any,
+    ) -> None:
+        """
+        Synchronize UserConceptProgress from structured AIResult StateUpdates.
+
+        Only persists absolute AI-authoritative values:
+        - mastery_score from concept_mastery
+        - misconception_count from misconception_counts
+        - last_difficulty from difficulty (when provided)
+
+        Does NOT modify total_attempts or successful_attempts
+        (not available in StateUpdates contract).
+
+        Does NOT calculate or infer any pedagogical values.
+        """
+        if not user_id:
+            return
+
+        # Extract AI-authoritative fields from StateUpdates
+        concept_mastery = getattr(updates, "concept_mastery", None) or {}
+        misconception_counts = getattr(updates, "misconception_counts", None) or {}
+
+        # Difficulty: use AI-provided value if present, otherwise preserve existing
+        difficulty = getattr(updates, "difficulty", None)
+
+        if not concept_mastery:
+            return
+
+        try:
+            for concept, mastery_score in concept_mastery.items():
+                # Only sync valid mastery values (0.0-1.0)
+                if not isinstance(mastery_score, (int, float)):
+                    continue
+                mastery_score = float(mastery_score)
+                if not (0.0 <= mastery_score <= 1.0):
+                    continue
+
+                # Misconception count: only update if explicitly provided by AI
+                misconception_count = misconception_counts.get(concept)
+                if misconception_count is not None and not isinstance(misconception_count, bool):
+                    misconception_count = int(misconception_count)
+                else:
+                    # Preserve existing misconception count when AI doesn't provide it
+                    misconception_count = None
+
+                # Difficulty: only update if explicitly provided by AI
+                last_difficulty = None
+                if difficulty is not None and isinstance(difficulty, int) and not isinstance(difficulty, bool):
+                    last_difficulty = difficulty
+
+                self.concept_progress_repo.upsert(
+                    db=db,
+                    user_id=user_id,
+                    concept=concept,
+                    mastery_score=mastery_score,
+                    misconception_count=misconception_count,
+                    last_difficulty=last_difficulty,
+                    last_practiced_at=datetime.now(timezone.utc),
+                )
+        except Exception:
+            # If synchronization fails, rollback this specific operation
             # but don't fail the entire turn (consistent with current architecture)
             db.rollback()
             # Log error in production; here we silently continue
