@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from backend.app.schemas.common import LearningMode, SessionStatus, SourceType
 
 class SessionStateBase(BaseModel):
@@ -64,3 +64,11 @@ class SessionSummaryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SessionListResponse(BaseModel):
+    items: List[SessionSummaryResponse]
+    total: int
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    pages: int

@@ -4,6 +4,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.repositories.session_repository import SessionRepository
 from backend.app.repositories.message_repository import MessageRepository
+from backend.app.repositories.turn_assessment_repository import TurnAssessmentRepository
+from backend.app.repositories.teacher_intervention_repository import TeacherInterventionRepository
+from backend.app.repositories.concept_progress_repository import ConceptProgressRepository
 from backend.app.schemas.message import (
     MessageCreate,
     ChatTurnResponse,
@@ -46,9 +49,15 @@ class ChatService:
         self,
         ai_engine: Optional[CurioEngine] = None,
         ai_provider: Optional[BaseAIProvider] = None,
+        turn_assessment_repo: Optional[TurnAssessmentRepository] = None,
+        teacher_intervention_repo: Optional[TeacherInterventionRepository] = None,
+        concept_progress_repo: Optional[ConceptProgressRepository] = None,
     ):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
+        self.turn_assessment_repo = turn_assessment_repo or TurnAssessmentRepository()
+        self.teacher_intervention_repo = teacher_intervention_repo or TeacherInterventionRepository()
+        self.concept_progress_repo = concept_progress_repo or ConceptProgressRepository()
         self.ai_provider = ai_provider or GroqLLMProvider()
         # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
         self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
@@ -431,6 +440,35 @@ class ChatService:
         )
         self.message_repo.create_evaluation(db, user_msg.id, turn_eval_in)
 
+        # 6b. Persist Turn Assessment (LearningAssessment, TurnInterpretation, LearningObjective, QuestionSpecification)
+        if ai_result.learning_assessment or ai_result.turn_interpretation or ai_result.learning_objective or ai_result.question_specification:
+            # Get user_id from session for ownership
+            session_user_id = db_session.user_id
+            learning_assessment_dict = None
+            turn_interpretation_dict = None
+            learning_objective_dict = None
+            question_specification_dict = None
+
+            if ai_result.learning_assessment:
+                learning_assessment_dict = ai_result.learning_assessment.model_dump(mode="json")
+            if ai_result.turn_interpretation:
+                turn_interpretation_dict = ai_result.turn_interpretation.model_dump(mode="json")
+            if ai_result.learning_objective:
+                learning_objective_dict = ai_result.learning_objective.model_dump(mode="json")
+            if ai_result.question_specification:
+                question_specification_dict = ai_result.question_specification.model_dump(mode="json")
+
+            self.turn_assessment_repo.create_assessment(
+                db=db,
+                message_id=user_msg.id,
+                session_id=session_id,
+                user_id=session_user_id,
+                learning_assessment=learning_assessment_dict,
+                turn_interpretation=turn_interpretation_dict,
+                learning_objective=learning_objective_dict,
+                question_specification=question_specification_dict,
+            )
+
         # 7. Update Session State in DB (Merging StateUpdates with existing DB state)
         if updates.current_mode is not None:
             new_mode = LearningMode(updates.current_mode.value if hasattr(updates.current_mode, "value") else str(updates.current_mode))
@@ -624,6 +662,24 @@ class ChatService:
 
         self.session_repo.update_state(db, session_id, state_update)
 
+        # 8. Persist Teacher Intervention Log (if Teacher Mode event occurred)
+        self._persist_teacher_intervention(
+            db=db,
+            session_id=session_id,
+            user_id=user_id,
+            db_session=db_session,
+            ai_result=ai_result,
+            ai_msg=ai_msg,
+            message_in=message_in,
+        )
+
+        # 9. Synchronize UserConceptProgress from structured AIResult StateUpdates
+        self._sync_user_concept_progress(
+            db=db,
+            user_id=user_id,
+            updates=ai_result.state_updates,
+        )
+
         return ChatTurnResponse(
             user_message=self._to_message_response(user_msg),
             ai_message=self._to_message_response(ai_msg),
@@ -637,7 +693,212 @@ class ChatService:
                 active_concept=decision.active_concept,
                 should_offer_termination=decision.should_offer_termination,
                 should_restore_interrupted_question=decision.should_restore_interrupted_question
-            )
-        )
+)
+    )
+
+    def _persist_teacher_intervention(
+        self,
+        db: SQLAlchemySession,
+        session_id: UUID,
+        user_id: Optional[UUID],
+        db_session: Any,
+        ai_result: AIResult,
+        ai_msg: Any,
+        message_in: MessageCreate,
+    ) -> None:
+        """
+        Persist Teacher Intervention Log based on structured AIResult data.
+
+        Only persists when structured Teacher Intervention data is present.
+        Does not parse AI response text for pedagogical information.
+        """
+        if not user_id:
+            return
+
+        updates = ai_result.state_updates
+        decision = ai_result.decision
+        evaluation = ai_result.evaluation
+
+        # Get the previous mode from the session state before this turn
+        prev_mode_val = getattr(db_session.state, "current_mode", None)
+        prev_mode = prev_mode_val.value if hasattr(prev_mode_val, "value") else str(prev_mode_val)
+
+        # Get the new mode from state updates
+        new_mode_val = updates.current_mode
+        new_mode = new_mode_val.value if hasattr(new_mode_val, "value") else str(new_mode_val) if new_mode_val else prev_mode
+
+        # Check if there was an active teacher intervention in the PREVIOUS session state
+        # (for exit/fallback detection, since updates may have cleared it)
+        prev_ti = getattr(db_session.state, "teacher_intervention", None)
+        prev_ti_active = False
+        prev_gap = ""
+        prev_attempt_count = 0
+        if isinstance(prev_ti, dict):
+            prev_ti_active = prev_ti.get("active", False)
+            prev_gap = prev_ti.get("gap", "") or ""
+            prev_attempt_count = prev_ti.get("attempt_count", 0) or 0
+        elif hasattr(prev_ti, "active"):
+            prev_ti_active = getattr(prev_ti, "active", False)
+            prev_gap = getattr(prev_ti, "gap", "") or ""
+            prev_attempt_count = getattr(prev_ti, "attempt_count", 0) or 0
+
+        # Check if there's an active teacher intervention in the state updates
+        # (for enter/continue detection)
+        ti = updates.teacher_intervention
+        ti_active = ti is not None and getattr(ti, "active", False)
+
+        # Determine attempt count and gap
+        if ti_active:
+            attempt_count = updates.teacher_attempt_count or getattr(ti, "attempt_count", 1)
+            gap = getattr(ti, "gap", "") or ""
+        elif prev_ti_active:
+            attempt_count = updates.teacher_attempt_count or getattr(db_session.state, "teacher_attempt_count", 0) or prev_attempt_count
+            gap = prev_gap
+        else:
+            # No intervention data in updates or previous state
+            return
+
+        if not isinstance(attempt_count, int) or isinstance(attempt_count, bool):
+            attempt_count = 1
+
+        # Determine intervention type from mode transition
+        intervention_type = None
+
+        # EXIT or LIMIT_FALLBACK: Was TEACHER, now STUDENT with restoration
+        # Check this FIRST, before enter/continue, since updates may have cleared ti
+        if prev_mode == "TEACHER" and new_mode == "STUDENT" and decision.should_restore_interrupted_question:
+            # We cannot reliably distinguish exit vs limit_fallback from structured data alone
+            # without parsing response text. Default to "exit" and leave verification_passed NULL
+            # since the backend doesn't have structured verification result.
+            intervention_type = "exit"
+
+        # ENTER: Previous was STUDENT, now TEACHER with active intervention
+        elif prev_mode != "TEACHER" and new_mode == "TEACHER" and ti_active:
+            intervention_type = "enter"
+
+        # CONTINUE: Was TEACHER, still TEACHER with active intervention
+        elif prev_mode == "TEACHER" and new_mode == "TEACHER" and ti_active:
+            intervention_type = "continue"
+
+        if not intervention_type:
+            return
+
+        try:
+            if intervention_type in ("enter", "continue"):
+                # Check for existing open intervention at this attempt to avoid duplicates
+                existing = self.teacher_intervention_repo.get_latest_open_by_session(
+                    db=db,
+                    session_id=session_id,
+                    user_id=user_id,
+                    attempt_count=attempt_count,
+                )
+                if existing:
+                    # Update existing open intervention if gap changed
+                    if existing.gap != gap:
+                        existing.gap = gap
+                    db.commit()
+                else:
+                    # Create new intervention record
+                    # Note: We do NOT extract teacher_explanation or verification_question
+                    # from AI response text per architectural boundary.
+                    self.teacher_intervention_repo.create(
+                        db=db,
+                        session_id=session_id,
+                        user_id=user_id,
+                        gap=gap,
+                        attempt_count=attempt_count,
+                        teacher_explanation=None,
+                        verification_question=None,
+                        intervention_type=intervention_type,
+                    )
+
+            elif intervention_type == "exit":
+                # Find the latest open intervention and update it
+                open_log = self.teacher_intervention_repo.get_latest_open_by_session(
+                    db=db,
+                    session_id=session_id,
+                    user_id=user_id,
+                )
+                if open_log:
+                    open_log.verification_answer = message_in.content if message_in.content else None
+                    open_log.intervention_type = "exit"
+                    db.commit()
+
+        except Exception:
+            # If persistence fails, rollback this specific operation
+            # but don't fail the entire turn (consistent with current architecture)
+            db.rollback()
+            # Log error in production; here we silently continue
+            pass
+
+    def _sync_user_concept_progress(
+        self,
+        db: SQLAlchemySession,
+        user_id: Optional[UUID],
+        updates: Any,
+    ) -> None:
+        """
+        Synchronize UserConceptProgress from structured AIResult StateUpdates.
+
+        Only persists absolute AI-authoritative values:
+        - mastery_score from concept_mastery
+        - misconception_count from misconception_counts
+        - last_difficulty from difficulty (when provided)
+
+        Does NOT modify total_attempts or successful_attempts
+        (not available in StateUpdates contract).
+
+        Does NOT calculate or infer any pedagogical values.
+        """
+        if not user_id:
+            return
+
+        # Extract AI-authoritative fields from StateUpdates
+        concept_mastery = getattr(updates, "concept_mastery", None) or {}
+        misconception_counts = getattr(updates, "misconception_counts", None) or {}
+
+        # Difficulty: use AI-provided value if present, otherwise preserve existing
+        difficulty = getattr(updates, "difficulty", None)
+
+        if not concept_mastery:
+            return
+
+        try:
+            for concept, mastery_score in concept_mastery.items():
+                # Only sync valid mastery values (0.0-1.0)
+                if not isinstance(mastery_score, (int, float)):
+                    continue
+                mastery_score = float(mastery_score)
+                if not (0.0 <= mastery_score <= 1.0):
+                    continue
+
+                # Misconception count: only update if explicitly provided by AI
+                misconception_count = misconception_counts.get(concept)
+                if misconception_count is not None and not isinstance(misconception_count, bool):
+                    misconception_count = int(misconception_count)
+                else:
+                    # Preserve existing misconception count when AI doesn't provide it
+                    misconception_count = None
+
+                # Difficulty: only update if explicitly provided by AI
+                last_difficulty = None
+                if difficulty is not None and isinstance(difficulty, int) and not isinstance(difficulty, bool):
+                    last_difficulty = difficulty
+
+                self.concept_progress_repo.upsert(
+                    db=db,
+                    user_id=user_id,
+                    concept=concept,
+                    mastery_score=mastery_score,
+                    misconception_count=misconception_count,
+                    last_difficulty=last_difficulty,
+                    last_practiced_at=datetime.now(timezone.utc),
+                )
+        except Exception:
+            # If synchronization fails, rollback this specific operation
+            # but don't fail the entire turn (consistent with current architecture)
+            db.rollback()
+            # Log error in production; here we silently continue
+            pass
 
 

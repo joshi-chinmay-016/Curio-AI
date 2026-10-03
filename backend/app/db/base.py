@@ -9,3 +9,5 @@ from backend.app.models.document import Document
 from backend.app.models.report import SessionReport
 from backend.app.models.concept_progress import UserConceptProgress
 from backend.app.models.teacher_intervention import TeacherInterventionLog
+from backend.app.models.turn_assessment import TurnAssessment
+from backend.app.models.report_version import SessionReportVersion

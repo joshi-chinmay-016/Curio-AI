@@ -405,7 +405,8 @@ class TestSessionListIsolation:
         _, token_a = user_a
         res = raw_client.get("/api/v1/sessions", headers=_auth_header(token_a))
         assert res.status_code == 200
-        session_ids = [s["session_id"] for s in res.json()]
+        session_page = res.json()
+        session_ids = [s["session_id"] for s in session_page["items"]]
         assert str(session_a.id) in session_ids
         assert str(session_b.id) not in session_ids
 
@@ -413,7 +414,8 @@ class TestSessionListIsolation:
         _, token_b = user_b
         res = raw_client.get("/api/v1/sessions", headers=_auth_header(token_b))
         assert res.status_code == 200
-        session_ids = [s["session_id"] for s in res.json()]
+        session_page = res.json()
+        session_ids = [s["session_id"] for s in session_page["items"]]
         assert str(session_b.id) in session_ids
         assert str(session_a.id) not in session_ids
 

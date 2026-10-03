@@ -61,8 +61,14 @@ def test_db_session(test_db_engine) -> Generator:
     """
     from sqlalchemy.orm import sessionmaker
     import backend.app.db.base  # Ensure all models are registered in mapper registry
+    from backend.app.db.session import Base
 
     connection = test_db_engine.connect()
+    # Ensure all tables exist (run migrations or create_all)
+    # Must be called before starting a transaction, and committed
+    Base.metadata.create_all(bind=connection)
+    connection.commit()  # Commit the implicit transaction from create_all
+    
     transaction = connection.begin()
 
     TestingSessionLocal = sessionmaker(
