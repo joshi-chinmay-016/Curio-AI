@@ -11,10 +11,11 @@ class ReportRepository:
     def get_by_session_id(self, db: SQLAlchemySession, session_id: UUID) -> Optional[SessionReport]:
         return db.query(SessionReport).filter(SessionReport.session_id == session_id).first()
 
-    def create_or_update(self, db: SQLAlchemySession, report: SessionReport) -> SessionReport:
+    def create_or_update(self, db: SQLAlchemySession, report: SessionReport, commit: bool = True) -> SessionReport:
         merged = db.merge(report)
-        db.commit()
-        db.refresh(merged)
+        if commit:
+            db.commit()
+            db.refresh(merged)
         return merged
 
     def delete(self, db: SQLAlchemySession, session_id: UUID) -> bool:

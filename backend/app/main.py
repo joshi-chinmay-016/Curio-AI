@@ -23,6 +23,7 @@ from backend.app.models.session import Session, SessionState  # noqa: F401
 from backend.app.models.message import Message  # noqa: F401
 from backend.app.models.evaluation import TurnEvaluation  # noqa: F401
 from backend.app.models.report import SessionReport  # noqa: F401
+from backend.app.models.report_version import SessionReportVersion  # noqa: F401
 
 setup_logging()
 logger = logging.getLogger("curio_main")

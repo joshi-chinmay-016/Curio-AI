@@ -22,6 +22,7 @@ class Session(Base):
     state = relationship("SessionState", uselist=False, back_populates="session", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
     report = relationship("SessionReport", uselist=False, back_populates="session", cascade="all, delete-orphan")
+    report_versions = relationship("SessionReportVersion", back_populates="session", cascade="all, delete-orphan", order_by="desc(SessionReportVersion.version_number)")
     intervention_logs = relationship("TeacherInterventionLog", back_populates="session", cascade="all, delete-orphan")
 
 
