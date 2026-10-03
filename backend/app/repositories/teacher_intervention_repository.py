@@ -37,6 +37,28 @@ class TeacherInterventionRepository:
         db.refresh(intervention)
         return intervention
 
+    def get_latest_open_by_session(
+        self,
+        db: SQLAlchemySession,
+        session_id: UUID,
+        user_id: UUID,
+        attempt_count: Optional[int] = None,
+    ) -> Optional[TeacherInterventionLog]:
+        """
+        Retrieve the most recent intervention log for a session where
+        verification_passed IS NULL (i.e., the intervention episode is still open).
+        Optionally filter by attempt_count.
+        Ordered by created_at DESC for most recent first.
+        """
+        query = db.query(TeacherInterventionLog).filter(
+            TeacherInterventionLog.session_id == session_id,
+            TeacherInterventionLog.user_id == user_id,
+            TeacherInterventionLog.verification_passed.is_(None),
+        )
+        if attempt_count is not None:
+            query = query.filter(TeacherInterventionLog.attempt_count == attempt_count)
+        return query.order_by(TeacherInterventionLog.created_at.desc()).first()
+
     def get_by_session(
         self, db: SQLAlchemySession, session_id: UUID, user_id: UUID
     ) -> List[TeacherInterventionLog]:
