@@ -11,14 +11,17 @@ from backend.app.ai.engine import CurioEngine
 from backend.app.ai.schemas import (
     LearningReport,
     SessionEvaluation,
+    SessionEvidence,
     TurnEvaluation,
 )
 from backend.app.ai.session_evidence import SessionEvidenceBuilder
 from backend.app.models.report import SessionReport
 from backend.app.models.report_version import SessionReportVersion
+from backend.app.models.report_evidence_snapshot import ReportEvidenceSnapshot
 from backend.app.models.session import Session
 from backend.app.repositories.report_repository import ReportRepository
 from backend.app.repositories.report_version_repository import ReportVersionRepository
+from backend.app.repositories.report_evidence_snapshot_repository import ReportEvidenceSnapshotRepository
 from backend.app.repositories.session_repository import SessionRepository
 from backend.app.schemas.report import (
     SessionReportHistoryListResponse,
@@ -34,10 +37,12 @@ class ReportService:
         session_repo: Optional[SessionRepository] = None,
         report_repo: Optional[ReportRepository] = None,
         version_repo: Optional[ReportVersionRepository] = None,
+        evidence_snapshot_repo: Optional[ReportEvidenceSnapshotRepository] = None,
     ):
         self.session_repo = session_repo or SessionRepository()
         self.report_repo = report_repo or ReportRepository()
         self.version_repo = version_repo or ReportVersionRepository()
+        self.evidence_snapshot_repo = evidence_snapshot_repo or ReportEvidenceSnapshotRepository()
         self.ai_engine = ai_engine or CurioEngine()
         self.evidence_builder = SessionEvidenceBuilder()
 
@@ -106,10 +111,10 @@ class ReportService:
         db: SQLAlchemySession,
         db_session: Session,
         user_id: Optional[UUID],
-    ) -> dict:
+    ) -> tuple[dict, SessionEvidence]:
         """
         Assembles evidence and runs CurioEngine to produce structured report data.
-        Returns a dictionary of mapped report fields ready for persistence.
+        Returns a tuple of (report_data dict, SessionEvidence object).
         """
         history_msgs = db_session.messages or []
         evaluations = []
@@ -178,7 +183,7 @@ class ReportService:
         if not concepts_mastered and learning_report.understanding_score >= 70:
             concepts_mastered = [db_session.topic]
 
-        return {
+        report_data = {
             "understanding_score": learning_report.understanding_score,
             "mastery_level": mastery_val,
             "strengths": learning_report.strengths,
@@ -205,6 +210,8 @@ class ReportService:
                 else {}
             ),
         }
+
+        return report_data, evidence
 
     def compile_report(
         self,
@@ -252,16 +259,27 @@ class ReportService:
         next_version = (max_version or 0) + 1
 
         try:
-            # 4. Generate report via CurioEngine
-            report_data = self._build_report_data(db, locked_session, user_id)
+            # 4. Build evidence (used for both snapshot and AI generation)
+            report_data, evidence = self._build_report_data(db, locked_session, user_id)
 
-            # 5. Insert immutable historical version
+            # 5. Create version object first (to get ID)
             version_obj = SessionReportVersion(
                 session_id=session_id,
                 version_number=next_version,
                 **report_data,
             )
             self.version_repo.create_version(db, version_obj, commit=False)
+            # Flush to get version ID
+            db.flush()
+
+            # 5. Create evidence snapshot with version reference
+            evidence_json = evidence.model_dump(mode="json")
+            snapshot = ReportEvidenceSnapshot(
+                report_version_id=version_obj.id,
+                schema_version=1,
+                evidence_json=evidence_json,
+            )
+            self.evidence_snapshot_repo.create(db, snapshot, commit=False)
 
             # 6. Update current/latest SessionReport cache
             db_report = SessionReport(
@@ -329,18 +347,29 @@ class ReportService:
         next_version = (max_version or 0) + 1
 
         try:
-            # 5. Generate report via CurioEngine
-            report_data = self._build_report_data(db, locked_session, user_id)
+            # 5. Build evidence (used for both snapshot and AI generation)
+            report_data, evidence = self._build_report_data(db, locked_session, user_id)
 
-            # 6. Insert immutable version N+1
+            # 6. Create version object first (to get ID)
             version_obj = SessionReportVersion(
                 session_id=session_id,
                 version_number=next_version,
                 **report_data,
             )
             self.version_repo.create_version(db, version_obj, commit=False)
+            # Flush to get version ID
+            db.flush()
 
-            # 7. Update SessionReport latest cache
+            # 7. Create evidence snapshot with version reference
+            evidence_json = evidence.model_dump(mode="json")
+            snapshot = ReportEvidenceSnapshot(
+                report_version_id=version_obj.id,
+                schema_version=1,
+                evidence_json=evidence_json,
+            )
+            self.evidence_snapshot_repo.create(db, snapshot, commit=False)
+
+            # 8. Update SessionReport latest cache
             db_report = SessionReport(
                 session_id=session_id,
                 version_number=next_version,
@@ -350,12 +379,12 @@ class ReportService:
                 db, db_report, commit=False
             )
 
-            # 8. Complete session if not already completed
+            # 9. Complete session if not already completed
             locked_session.status = "COMPLETED"
             if not locked_session.ended_at:
                 locked_session.ended_at = datetime.now(timezone.utc)
 
-            # 9. Single atomic commit
+            # 10. Single atomic commit
             db.commit()
             db.refresh(persisted_report)
             return SessionReportResponse.model_validate(persisted_report)

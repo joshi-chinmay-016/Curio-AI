@@ -3,6 +3,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Float, Integer, String, JSO
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.app.db.session import Base
+from backend.app.models.report_evidence_snapshot import ReportEvidenceSnapshot
 
 
 class SessionReportVersion(Base):
@@ -35,6 +36,12 @@ class SessionReportVersion(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     session = relationship("Session", back_populates="report_versions")
+    evidence_snapshot = relationship(
+        "ReportEvidenceSnapshot",
+        back_populates="report_version",
+        uselist=False,
+        foreign_keys=ReportEvidenceSnapshot.report_version_id,
+    )
 
     __table_args__ = (
         UniqueConstraint("session_id", "version_number", name="uq_session_report_version"),
