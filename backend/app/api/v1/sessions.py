@@ -10,14 +10,17 @@ from backend.app.schemas.session import SessionCreate, SessionUpdate, SessionRes
 from backend.app.schemas.common import SessionStatus
 from backend.app.schemas.report import SessionReportResponse
 from backend.app.schemas.evaluation_history import EvaluationHistoryListResponse
+from backend.app.schemas.timeline import TimelineListResponse
 from backend.app.services.session_service import SessionService
 from backend.app.services.report_service import ReportService
 from backend.app.services.evaluation_history_service import EvaluationHistoryService
+from backend.app.services.timeline_service import TimelineService
 
 router = APIRouter()
 session_service = SessionService()
 report_service = ReportService()
 evaluation_history_service = EvaluationHistoryService()
+timeline_service = TimelineService()
 
 
 @router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
@@ -213,3 +216,42 @@ def get_evaluation_history(
     if history is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return history
+
+
+@router.get("/users/me/timeline", response_model=TimelineListResponse)
+def get_user_timeline(
+    db: SQLAlchemySession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, description="Items per page (capped at 100)"),
+    session_id: Optional[UUID] = Query(None, description="Filter timeline to a specific owned session"),
+    event_types: Optional[str] = Query(None, description="Comma-separated event types to include"),
+    start: Optional[str] = Query(None, description="Filter events at or after this timestamp (ISO 8601)"),
+    end: Optional[str] = Query(None, description="Filter events at or before this timestamp (ISO 8601)"),
+):
+    """
+    Retrieve paginated learning timeline for the authenticated user.
+    
+    Returns chronological history of learning events across all owned sessions.
+    Supports filtering by session, event types, and date range.
+    
+    Anti-enumeration: Returns 404 if session_id is provided but not owned by the user.
+    """
+    try:
+        timeline = timeline_service.get_timeline(
+            db=db,
+            user_id=current_user.id,
+            page=page,
+            page_size=page_size,
+            session_id=session_id,
+            event_types=event_types,
+            start=start,
+            end=end,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    
+    if timeline is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return timeline
