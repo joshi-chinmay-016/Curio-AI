@@ -2,7 +2,7 @@
 Prompt builder for 3 candidate questions from QuestionSpecification.
 Enforces the Feynman technique, hard one-question rule, grounding, and constraint compliance.
 """
-from typing import List, Optional
+from typing import Any, List, Optional
 from backend.app.ai.schemas import AIContext, QuestionSpecification
 
 
@@ -10,6 +10,8 @@ def build_candidate_generation_prompt(
     spec: QuestionSpecification,
     context: Optional[AIContext] = None,
     recent_questions: Optional[List[str]] = None,
+    assessment: Optional[Any] = None,
+    prompt_context: Optional[Any] = None,
 ) -> str:
     recent_dialogue = ""
     if context and context.conversation and context.conversation.recent_messages:
@@ -21,6 +23,15 @@ def build_candidate_generation_prompt(
 
     recent_q_str = "\n".join([f"- {q}" for q in (recent_questions or [])[-4:]]) or "None yet."
     constraints_str = "\n".join([f"- {c}" for c in spec.generation_constraints])
+
+    # Dynamic structured assessment context
+    structured_assessment_section = ""
+    if prompt_context and hasattr(prompt_context, "to_prompt_section"):
+        structured_assessment_section = f"\n{prompt_context.to_prompt_section()}\n"
+    elif assessment is not None:
+        from backend.app.ai.answer_intelligence.prompt_augmentation import build_dynamic_prompt_context
+        dyn_ctx = build_dynamic_prompt_context(assessment, context=context, difficulty=spec.difficulty)
+        structured_assessment_section = f"\n{dyn_ctx.to_prompt_section()}\n"
 
     return f"""You are the Question Generator for Curio AI, an inquisitive student learning through the Feynman Technique.
 Your goal is to generate 3 diverse candidate questions that probe the learner's understanding based strictly on the following specification.
@@ -34,7 +45,7 @@ SPECIFICATION:
 
 MANDATORY CONSTRAINTS:
 {constraints_str}
-
+{structured_assessment_section}
 RECENT QUESTIONS ASKED (AVOID REPEATING THESE):
 {recent_q_str}
 

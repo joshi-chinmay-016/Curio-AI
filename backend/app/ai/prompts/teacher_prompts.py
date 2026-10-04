@@ -6,7 +6,7 @@ Enforces:
 - Exactly ONE verification question testing the exact gap
 - Never answering the entire interrupted question for the learner
 """
-from typing import List, Optional
+from typing import Any, List, Optional
 from backend.app.ai.schemas import AIContext
 
 
@@ -44,9 +44,11 @@ def build_teacher_prompt(
     attempt_count: int = 1,
     interrupted_question: Optional[str] = None,
     misconceptions: Optional[List[str]] = None,
+    assessment: Optional[Any] = None,
+    prompt_context: Optional[Any] = None,
 ) -> str:
     """
-    Constructs the prompt for Teacher Mode response generation.
+    Constructs the prompt for Teacher Mode response generation with structured assessment evidence.
     """
     history_str = "\n".join(
         [f"{msg.sender}: {msg.content}" for msg in context.history[-4:]]
@@ -66,6 +68,15 @@ def build_teacher_prompt(
     int_q_text = f"Interrupted Original Question: \"{interrupted_question}\"" if interrupted_question else ""
     misc_text = f"Learner Misconceptions: {', '.join(misconceptions)}" if misconceptions else ""
 
+    # Dynamic structured assessment context
+    structured_assessment_section = ""
+    if prompt_context and hasattr(prompt_context, "to_prompt_section"):
+        structured_assessment_section = f"\n{prompt_context.to_prompt_section()}\n"
+    elif assessment is not None:
+        from backend.app.ai.answer_intelligence.prompt_augmentation import build_dynamic_prompt_context
+        dyn_ctx = build_dynamic_prompt_context(assessment, context=context, difficulty=1)
+        structured_assessment_section = f"\n{dyn_ctx.to_prompt_section()}\n"
+
     return f"""{TEACHER_PERSONA_GUIDELINES}
 Topic: '{context.topic}'
 Mode: TEACHER
@@ -73,7 +84,7 @@ Identified Knowledge Gap: '{gap}'
 Intervention Attempt: {attempt_count} of 3
 {int_q_text}
 {misc_text}
-
+{structured_assessment_section}
 Recent Conversation:
 {history_str}
 

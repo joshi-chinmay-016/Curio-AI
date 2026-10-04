@@ -3,7 +3,7 @@ Prompts for Student Mode question generation in Curio AI (Phase 1).
 Enforces the Feynman Technique: Curio is a curious student who learns from the user.
 Strictly adheres to the HARD ONE-QUESTION RULE.
 """
-from typing import Optional
+from typing import Any, Optional
 from backend.app.ai.difficulty import get_difficulty_label
 from backend.app.ai.schemas import AIContext, LearningDecision, TurnEvaluation
 
@@ -45,9 +45,12 @@ def build_student_question_prompt(
     context: AIContext,
     decision: LearningDecision,
     evaluation: Optional[TurnEvaluation] = None,
+    assessment: Optional[Any] = None,
+    prompt_context: Optional[Any] = None,
 ) -> str:
     """
-    Constructs the prompt for a follow-up Student Mode question based on the decision and evaluation.
+    Constructs the prompt for a follow-up Student Mode question based on the decision,
+    evaluation, and authoritative structured assessment context (Milestone B).
     """
     difficulty_label = get_difficulty_label(decision.difficulty)
     history_str = "\n".join(
@@ -94,6 +97,15 @@ def build_student_question_prompt(
 
     gap_text = f"Identified Gap: {evaluation.knowledge_gap}" if evaluation and evaluation.knowledge_gap else ""
 
+    # Dynamic structured assessment context
+    structured_assessment_section = ""
+    if prompt_context and hasattr(prompt_context, "to_prompt_section"):
+        structured_assessment_section = f"\n{prompt_context.to_prompt_section()}\n"
+    elif assessment is not None:
+        from backend.app.ai.answer_intelligence.prompt_augmentation import build_dynamic_prompt_context
+        dyn_ctx = build_dynamic_prompt_context(assessment, context=context, decision=decision, difficulty=decision.difficulty)
+        structured_assessment_section = f"\n{dyn_ctx.to_prompt_section()}\n"
+
     return f"""{STUDENT_PERSONA_GUIDELINES}
 Topic: '{context.topic}'
 Mode: STUDENT
@@ -101,7 +113,7 @@ Active Concept: '{decision.active_concept}'
 Current Difficulty: {decision.difficulty} ({difficulty_label})
 Selected Strategy: {decision.strategy.value}
 {gap_text}
-
+{structured_assessment_section}
 Recent Conversation:
 {history_str}
 
