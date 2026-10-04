@@ -147,17 +147,22 @@ class HybridSemanticProvider(BaseAssessmentProvider):
         if local_rel == RelevanceLevel.IRRELEVANT and sem_score < 0.35:
             return RelevanceLevel.IRRELEVANT, round(min(local_score, sem_score), 2)
 
-        # Semantic embedding veto for completely unrelated text
-        if sem_score < 0.25 and not has_direct_concept:
-            return RelevanceLevel.IRRELEVANT, round(sem_score, 2)
+        # Semantic embedding veto for completely unrelated text when local lexical also has low support
+        if sem_score < 0.18 and local_score < 0.35 and not has_direct_concept:
+            return RelevanceLevel.IRRELEVANT, round(min(sem_score, local_score), 2)
 
         # Blended relevance score
         blended_score = 0.55 * sem_score + 0.45 * local_score
 
-        # If direct concept is present or strong semantic similarity
-        if sem_score >= 0.45 or local_score >= 0.65 or (sem_score >= 0.38 and local_score >= 0.40):
+        # If direct concept is present or strong semantic similarity or strong lexical support
+        if (
+            sem_score >= 0.45
+            or local_score >= 0.60
+            or (sem_score >= 0.30 and local_score >= 0.40)
+            or (local_rel == RelevanceLevel.RELEVANT and sem_score >= 0.20)
+        ):
             return RelevanceLevel.RELEVANT, round(max(blended_score, 0.70), 2)
-        elif blended_score >= 0.28 or sem_score >= 0.30 or local_score >= 0.30:
+        elif blended_score >= 0.28 or sem_score >= 0.28 or local_score >= 0.30:
             return RelevanceLevel.PARTIALLY_RELEVANT, round(max(blended_score, 0.40), 2)
         else:
             return RelevanceLevel.IRRELEVANT, round(blended_score, 2)

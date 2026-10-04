@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 import numpy as np
 
 from backend.app.ai.answer_intelligence.providers.base import BaseAssessmentProvider
-from backend.app.ai.answer_intelligence.providers.local_model import LocalAssessmentProvider
+from backend.app.ai.answer_intelligence.providers.local_model import (
+    LocalAssessmentProvider,
+    _tokenize_meaningful,
+    has_negated_phrase,
+)
 from backend.app.ai.answer_intelligence.schemas import (
     AssessmentClassification,
     AssessmentIntent,
@@ -275,11 +279,8 @@ class SemanticEmbeddingProvider(BaseAssessmentProvider):
             # High semantic similarity threshold
             if best_sim >= 0.48 and best_claim_idx >= 0:
                 matching_claim = claims[best_claim_idx].text
-                claim_has_neg = has_negation(matching_claim)
-                cons_has_neg = has_negation(constraint)
-
-                # Check for polarity mismatch (e.g. claim says 'not' while constraint requires presence)
-                if claim_has_neg != cons_has_neg and "all or nothing" not in matching_claim.lower():
+                # Check for explicit contradiction (claim explicitly negates constraint)
+                if has_negated_phrase(matching_claim, constraint):
                     status = EvidenceStatus.CONTRADICTED
                     contra_claim = matching_claim
                 elif best_sim >= 0.58:
@@ -335,16 +336,33 @@ class SemanticEmbeddingProvider(BaseAssessmentProvider):
             "all or nothing", "all-or-nothing", "rolls back",
         ]
 
+        COMMON_DOMAIN_TERMS = {
+            "fastapi", "asgi", "wsgi", "uvicorn", "python", "javascript", "js", "dbms", "database",
+            "sql", "nosql", "array", "arrays", "list", "lists", "function", "functions", "variable",
+            "variables", "system", "systems", "process", "processes", "thread", "threads", "memory",
+            "server", "servers", "client", "clients", "algorithm", "algorithms", "tree", "trees",
+            "node", "nodes", "table", "tables", "data", "code", "application", "applications",
+            "app", "apps", "request", "requests", "response", "responses", "network", "web",
+            "program", "programs", "execution", "operating", "os", "key", "keys", "value", "values",
+            "element", "elements", "item", "items", "file", "files", "class", "classes", "object",
+            "objects", "method", "methods", "number", "numbers", "index", "indices",
+        }
+
         for m_idx, misc_text in enumerate(misconceptions):
             sim = cosine_similarity(user_emb, misc_embs[m_idx])
             claim_sims = [cosine_similarity(ce, misc_embs[m_idx]) for ce in claim_embs]
             best_sim = max([sim] + claim_sims) if claim_sims else sim
 
-            # If the learner's answer closely mirrors the misconception statement
-            if best_sim >= 0.50:
-                # Ensure the learner isn't explicitly refuting the misconception
-                is_refuting = any(p in user_text.lower() for p in refuting_patterns)
-                if not is_refuting:
+            is_refuting = any(p in user_text.lower() for p in refuting_patterns)
+            if not is_refuting:
+                concept_tokens = _tokenize_meaningful(expected.concept_id.replace("_", " "))
+                predicate_tokens = (_tokenize_meaningful(misc_text) - concept_tokens) - COMMON_DOMAIN_TERMS
+                if not predicate_tokens:
+                    predicate_tokens = _tokenize_meaningful(misc_text) - concept_tokens
+                user_tokens = _tokenize_meaningful(user_text)
+
+                if best_sim >= 0.70:
+                    # Very high dense vector match across entire misconception
                     detected.append(
                         MisconceptionEvidence(
                             concept_id=expected.concept_id,
@@ -353,6 +371,17 @@ class SemanticEmbeddingProvider(BaseAssessmentProvider):
                             severity="HIGH",
                         )
                     )
+                elif best_sim >= 0.50:
+                    # Moderate similarity requires at least one keyword overlap with misconception predicate
+                    if predicate_tokens and (user_tokens & predicate_tokens):
+                        detected.append(
+                            MisconceptionEvidence(
+                                concept_id=expected.concept_id,
+                                description=misc_text,
+                                learner_statement=user_text,
+                                severity="HIGH",
+                            )
+                        )
 
         return detected
 
