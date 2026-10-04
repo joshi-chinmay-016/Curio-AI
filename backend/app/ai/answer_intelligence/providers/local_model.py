@@ -157,7 +157,9 @@ class LocalAssessmentProvider(BaseAssessmentProvider):
             "totally lost", "completely lost", "teach me", "please explain",
             "help me", "can you explain", "could you explain", "don't understand",
             "dont understand", "i am confused", "i'm confused", "im confused",
-            "still confused", "can you teach me", "walk me through",
+            "still confused", "can you teach me", "walk me through", "can you remind me",
+            "remind me", "i always mix up", "i mix up", "i forgot", "give me a hint",
+            "can you give me a hint",
         ]
         if any(s in clean for s in stuck_signals):
             return AssessmentIntent.HELP_REQUEST, 0.95
@@ -181,8 +183,8 @@ class LocalAssessmentProvider(BaseAssessmentProvider):
             "yes i'm ready", "i get it", "all clear", "cool", "fine", "yep", "yeah",
         }
         clean_punct = re.sub(r"[,.!?]+", "", clean).strip()
-        if clean_punct in ack_phrases:
-            if clean_punct in {"ready", "yes i am ready", "yes i'm ready"}:
+        if clean_punct in ack_phrases or any(p in clean_punct for p in ["got it", "makes sense", "understood", "i understand", "i see"]):
+            if any(r in clean_punct for r in ["ready", "teach me again"]):
                 return AssessmentIntent.READY_TO_CONTINUE, 0.95
             return AssessmentIntent.ACKNOWLEDGEMENT, 0.95
 
