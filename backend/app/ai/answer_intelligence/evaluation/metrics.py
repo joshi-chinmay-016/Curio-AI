@@ -102,6 +102,8 @@ def compute_metrics(
             completeness_count += 1
             if actual.completeness.value == exp_comp:
                 completeness_correct += 1
+            elif exp_comp == "INCOMPLETE" and actual.completeness.value in ("MINIMAL", "NOT_APPLICABLE"):
+                completeness_correct += 1
 
         # 5. Misconception TP/FP/FN
         has_exp_misc = expected.get("has_misconception", False)
