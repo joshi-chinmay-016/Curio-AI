@@ -320,21 +320,30 @@ class SemanticEmbeddingProvider(BaseAssessmentProvider):
             return []
 
         user_text = user_message.strip()
-        all_texts = [user_text] + misconceptions
+        # Compute embeddings for both full message and individual claims
+        claim_texts = [c.text for c in claims if c.text.strip()]
+        all_texts = [user_text] + claim_texts + misconceptions
         embs = self.encode(all_texts)
         user_emb = embs[0]
-        misc_embs = embs[1:]
+        claim_embs = embs[1: 1 + len(claim_texts)]
+        misc_embs = embs[1 + len(claim_texts):]
 
         detected: List[MisconceptionEvidence] = []
+        refuting_patterns = [
+            "not true that", "does not mean", "unlike", "is false", "is incorrect",
+            "rather than", "does not require", "never", "not necessarily", "no ", "without ",
+            "all or nothing", "all-or-nothing", "rolls back",
+        ]
 
         for m_idx, misc_text in enumerate(misconceptions):
             sim = cosine_similarity(user_emb, misc_embs[m_idx])
-            
+            claim_sims = [cosine_similarity(ce, misc_embs[m_idx]) for ce in claim_embs]
+            best_sim = max([sim] + claim_sims) if claim_sims else sim
+
             # If the learner's answer closely mirrors the misconception statement
-            if sim >= 0.52:
+            if best_sim >= 0.50:
                 # Ensure the learner isn't explicitly refuting the misconception
-                refuting_patterns = ["not true that", "does not mean", "unlike", "is false", "is incorrect", "rather than", "not", "cannot"]
-                is_refuting = any(p in user_text.lower() for p in refuting_patterns if p in ("not true that", "does not mean", "unlike", "is false", "is incorrect", "rather than"))
+                is_refuting = any(p in user_text.lower() for p in refuting_patterns)
                 if not is_refuting:
                     detected.append(
                         MisconceptionEvidence(
