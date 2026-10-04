@@ -57,7 +57,19 @@ class AssessmentAggregator:
         provider: Optional[BaseAssessmentProvider] = None,
         mastery_gate: Optional[MasteryGate] = None,
     ):
-        self.provider = provider or LocalAssessmentProvider()
+        if provider is not None:
+            self.provider = provider
+        else:
+            try:
+                from backend.app.ai.answer_intelligence.providers.hybrid_provider import (
+                    HybridSemanticProvider,
+                )
+                self.provider = HybridSemanticProvider()
+            except Exception as exc:
+                logger.warning(
+                    f"HybridSemanticProvider initialization failed ({exc}). Falling back to LocalAssessmentProvider."
+                )
+                self.provider = LocalAssessmentProvider()
         self.intent_classifier = IntentClassifier(self.provider)
         self.relevance_model = SemanticRelevanceModel(self.provider)
         self.claim_extractor = ClaimExtractor(self.provider)
