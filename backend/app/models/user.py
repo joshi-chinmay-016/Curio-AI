@@ -17,3 +17,4 @@ class User(Base):
 
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
     concept_progress = relationship("UserConceptProgress", back_populates="user", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")

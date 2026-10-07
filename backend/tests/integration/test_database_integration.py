@@ -303,6 +303,7 @@ def test_document_and_session_set_null_cascade(test_db_session):
     """Verify that deleting a Document sets session.document_id to NULL rather than deleting session."""
     user = User(email=f"doc_user_{uuid.uuid4().hex[:8]}@curio.ai")
     doc = Document(
+        user_id=user.id,
         filename="lecture_notes.pdf",
         file_size=10240,
         mime_type="application/pdf"
