@@ -1,15 +1,72 @@
+from pathlib import Path
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session as SQLAlchemySession
+from fastapi import UploadFile, HTTPException, status
 from backend.app.repositories.document_repository import DocumentRepository
 from backend.app.schemas.document import DocumentResponse, DocumentListResponse
+from backend.app.storage import get_storage
+from backend.app.core.config import settings
+
 
 class DocumentService:
-    def __init__(self):
+    def __init__(self, storage=None):
         self.repo = DocumentRepository()
+        self._storage = storage or get_storage()
 
-    def upload_document(self, db: SQLAlchemySession, user_id: UUID, filename: str, file_size: int, mime_type: str) -> DocumentResponse:
-        db_doc = self.repo.create(db, user_id, filename, file_size, mime_type)
+    @property
+    def storage(self):
+        return self._storage
+
+    def upload_document(
+        self,
+        db: SQLAlchemySession,
+        user_id: UUID,
+        file: UploadFile,
+    ) -> DocumentResponse:
+        # Validate file type first
+        filename = file.filename or ""
+        mime_type = file.content_type or "application/octet-stream"
+        
+        try:
+            extension = self._storage.validate_file_type(filename, mime_type)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+        # Generate document ID upfront for storage path
+        import uuid
+        document_id = uuid.uuid4()
+
+        # Stream file to storage
+        try:
+            storage_path, actual_size, content_hash = self._storage.save_uploaded_file(
+                upload_file=file,
+                user_id=user_id,
+                document_id=document_id,
+                filename=filename,
+                mime_type=mime_type,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to store file")
+
+        # Persist document metadata
+        try:
+            db_doc = self.repo.create(
+                db,
+                user_id=user_id,
+                filename=filename,
+                file_size=actual_size,
+                mime_type=mime_type,
+                storage_path=str(storage_path),
+                content_hash=content_hash,
+            )
+        except Exception as e:
+            # Cleanup stored file on DB failure
+            self._storage.delete_file(storage_path)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create document record")
+
         return DocumentResponse(
             document_id=db_doc.id,
             filename=db_doc.filename,
@@ -58,4 +115,18 @@ class DocumentService:
         )
 
     def delete_document(self, db: SQLAlchemySession, document_id: UUID, user_id: UUID) -> bool:
-        return self.repo.delete_by_id_and_user(db, document_id, user_id)
+        # Get document first to access storage_path
+        db_doc = self.repo.get_by_id_and_user(db, document_id, user_id)
+        if not db_doc:
+            return False
+        
+        # Delete database record
+        deleted = self.repo.delete_by_id_and_user(db, document_id, user_id)
+        if not deleted:
+            return False
+        
+        # Delete physical file if it exists
+        if db_doc.storage_path:
+            self._storage.delete_file(Path(db_doc.storage_path))
+        
+        return True

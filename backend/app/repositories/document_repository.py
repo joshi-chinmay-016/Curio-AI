@@ -3,13 +3,25 @@ from uuid import UUID
 from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.models.document import Document
 
+
 class DocumentRepository:
-    def create(self, db: SQLAlchemySession, user_id: UUID, filename: str, file_size: int, mime_type: str) -> Document:
+    def create(
+        self,
+        db: SQLAlchemySession,
+        user_id: UUID,
+        filename: str,
+        file_size: int,
+        mime_type: str,
+        storage_path: str = None,
+        content_hash: str = None,
+    ) -> Document:
         db_doc = Document(
             user_id=user_id,
             filename=filename,
             file_size=file_size,
-            mime_type=mime_type
+            mime_type=mime_type,
+            storage_path=storage_path,
+            content_hash=content_hash,
         )
         db.add(db_doc)
         db.commit()

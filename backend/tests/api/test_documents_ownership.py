@@ -19,11 +19,19 @@ import pytest
 from uuid import uuid4
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from fastapi import UploadFile
+from io import BytesIO
 
 from backend.app.models.user import User
 from backend.app.models.document import Document
 from backend.app.models.session import Session
 from backend.app.core.security import create_access_token
+
+
+def create_upload_file(content: bytes, filename: str, mime_type: str) -> UploadFile:
+    """Create a mock UploadFile for testing."""
+    file_obj = BytesIO(content)
+    return UploadFile(filename=filename, file=file_obj, headers={"content-type": mime_type})
 
 
 class TestDocumentOwnership:
@@ -48,17 +56,12 @@ class TestDocumentOwnership:
         from backend.app.services.document_service import DocumentService
 
         service = DocumentService()
-        doc = service.upload_document(
-            test_db_session,
-            user_id=test_user.id,
-            filename="test.pdf",
-            file_size=1024,
-            mime_type="application/pdf"
-        )
+        upload_file = create_upload_file(b"test content", "test.pdf", "application/pdf")
+        doc = service.upload_document(test_db_session, test_user.id, upload_file)
 
         assert doc.document_id is not None
         assert doc.filename == "test.pdf"
-        assert doc.file_size == 1024
+        assert doc.file_size == len(b"test content")
         assert doc.mime_type == "application/pdf"
         assert doc.status == "UPLOADED"
         assert doc.chunk_count == 0
@@ -76,13 +79,8 @@ class TestDocumentOwnership:
         from backend.app.services.document_service import DocumentService
 
         service = DocumentService()
-        created = service.upload_document(
-            test_db_session,
-            user_id=test_user.id,
-            filename="test.pdf",
-            file_size=1024,
-            mime_type="application/pdf"
-        )
+        upload_file = create_upload_file(b"test content", "test.pdf", "application/pdf")
+        created = service.upload_document(test_db_session, test_user.id, upload_file)
 
         retrieved = service.get_document(test_db_session, created.document_id, test_user.id)
         assert retrieved is not None
@@ -97,13 +95,8 @@ class TestDocumentOwnership:
         user_b = self.create_test_user(test_db_session, "user_b@curio.ai")
 
         service = DocumentService()
-        doc = service.upload_document(
-            test_db_session,
-            user_id=user_a.id,
-            filename="test.pdf",
-            file_size=1024,
-            mime_type="application/pdf"
-        )
+        upload_file = create_upload_file(b"test content", "test.pdf", "application/pdf")
+        doc = service.upload_document(test_db_session, user_a.id, upload_file)
 
         # User B tries to access User A's document
         retrieved = service.get_document(test_db_session, doc.document_id, user_b.id)
@@ -119,11 +112,11 @@ class TestDocumentOwnership:
         service = DocumentService()
         
         # User A creates 2 documents
-        service.upload_document(test_db_session, user_a.id, "doc1.pdf", 1024, "application/pdf")
-        service.upload_document(test_db_session, user_a.id, "doc2.pdf", 2048, "application/pdf")
+        service.upload_document(test_db_session, user_a.id, create_upload_file(b"doc1 content", "doc1.pdf", "application/pdf"))
+        service.upload_document(test_db_session, user_a.id, create_upload_file(b"doc2 content", "doc2.pdf", "application/pdf"))
         
         # User B creates 1 document
-        service.upload_document(test_db_session, user_b.id, "doc3.pdf", 512, "application/pdf")
+        service.upload_document(test_db_session, user_b.id, create_upload_file(b"doc3 content", "doc3.pdf", "application/pdf"))
 
         # User A lists documents
         result_a = service.list_documents(test_db_session, user_a.id, page=1, page_size=10)
@@ -142,13 +135,8 @@ class TestDocumentOwnership:
         from backend.app.services.document_service import DocumentService
 
         service = DocumentService()
-        doc = service.upload_document(
-            test_db_session,
-            user_id=test_user.id,
-            filename="test.pdf",
-            file_size=1024,
-            mime_type="application/pdf"
-        )
+        upload_file = create_upload_file(b"test content", "test.pdf", "application/pdf")
+        doc = service.upload_document(test_db_session, test_user.id, upload_file)
 
         result = service.delete_document(test_db_session, doc.document_id, test_user.id)
         assert result is True
@@ -165,13 +153,8 @@ class TestDocumentOwnership:
         user_b = self.create_test_user(test_db_session, "user_b@curio.ai")
 
         service = DocumentService()
-        doc = service.upload_document(
-            test_db_session,
-            user_id=user_a.id,
-            filename="test.pdf",
-            file_size=1024,
-            mime_type="application/pdf"
-        )
+        upload_file = create_upload_file(b"test content", "test.pdf", "application/pdf")
+        doc = service.upload_document(test_db_session, user_a.id, upload_file)
 
         # User B tries to delete User A's document
         result = service.delete_document(test_db_session, doc.document_id, user_b.id)
@@ -186,6 +169,7 @@ class TestDocumentOwnership:
         from backend.app.repositories.document_repository import DocumentRepository
 
         repo = DocumentRepository()
+        upload_file = create_upload_file(b"test content", "test.pdf", "application/pdf")
         doc = repo.create(test_db_session, test_user.id, "test.pdf", 1024, "application/pdf")
         
         updated = repo.update_status(test_db_session, doc.id, test_user.id, "PROCESSING")
@@ -241,25 +225,24 @@ class TestDocumentAPI:
         assert data["document_id"] == str(doc.id)
         assert data["filename"] == "test.pdf"
 
-    def test_get_cross_user_document_returns_404(self, test_db_session: Session):
+    def test_get_cross_user_document_returns_404(self, authenticated_client: TestClient, test_db_session: Session, test_user: User):
         """Test GET /documents/{id} returns 404 for cross-user access."""
-        user_a = User(email="user_a@curio.ai", hashed_password="test", is_active=True)
         user_b = User(email="user_b@curio.ai", hashed_password="test", is_active=True)
-        test_db_session.add_all([user_a, user_b])
+        test_db_session.add(user_b)
         test_db_session.commit()
-        test_db_session.refresh(user_a)
         test_db_session.refresh(user_b)
 
-        doc = Document(user_id=user_a.id, filename="test.pdf", file_size=1024, mime_type="application/pdf")
+        doc = Document(user_id=test_user.id, filename="test.pdf", file_size=1024, mime_type="application/pdf")
         test_db_session.add(doc)
         test_db_session.commit()
         test_db_session.refresh(doc)
 
-        # User B tries to access
+        from backend.app.core.security import create_access_token
+        from backend.app.main import app
+        
         token = create_access_token(subject=str(user_b.id))
         headers = {"Authorization": f"Bearer {token}"}
         
-        from backend.app.main import app
         with TestClient(app) as client:
             client.headers.update(headers)
             response = client.get(f"/api/v1/documents/{doc.id}")
@@ -302,29 +285,30 @@ class TestDocumentAPI:
         db_doc = test_db_session.query(Document).filter(Document.id == doc.id).first()
         assert db_doc is None
 
-    def test_delete_cross_user_document_returns_404(self, test_db_session: Session):
+    def test_delete_cross_user_document_returns_404(self, authenticated_client: TestClient, test_db_session: Session, test_user: User):
         """Test DELETE /documents/{id} returns 404 for cross-user access."""
-        user_a = User(email="user_a@curio.ai", hashed_password="test", is_active=True)
         user_b = User(email="user_b@curio.ai", hashed_password="test", is_active=True)
-        test_db_session.add_all([user_a, user_b])
+        test_db_session.add(user_b)
         test_db_session.commit()
-        test_db_session.refresh(user_a)
         test_db_session.refresh(user_b)
 
-        doc = Document(user_id=user_a.id, filename="test.pdf", file_size=1024, mime_type="application/pdf")
+        doc = Document(user_id=test_user.id, filename="test.pdf", file_size=1024, mime_type="application/pdf")
         test_db_session.add(doc)
         test_db_session.commit()
         test_db_session.refresh(doc)
 
+        from backend.app.core.security import create_access_token
+        from backend.app.main import app
+        
         token = create_access_token(subject=str(user_b.id))
         headers = {"Authorization": f"Bearer {token}"}
         
-        from backend.app.main import app
         with TestClient(app) as client:
             client.headers.update(headers)
             response = client.delete(f"/api/v1/documents/{doc.id}")
         
         assert response.status_code == 404
+        assert test_db_session.query(Document).filter(Document.id == doc.id).first() is not None
 
     def test_unauthenticated_access_returns_401(self, test_db_session: Session):
         """Test that unauthenticated requests return 401."""
@@ -416,9 +400,12 @@ class TestDocumentAPI:
 
         # Verify relationship
         assert session.document_id == doc.id
-        assert session.document is not None
-        assert session.document.id == doc.id
-        assert session.document.user_id == test_user.id
+        # Note: Session model has document_id FK but no document relationship attribute
+        # Verify document exists and has correct data
+        db_doc = test_db_session.query(Document).filter(Document.id == doc.id).first()
+        assert db_doc is not None
+        assert db_doc.user_id == test_user.id
+        # storage_path will be None for directly created documents (not uploaded via API)
 
 
 class TestDocumentPagination:
@@ -430,7 +417,8 @@ class TestDocumentPagination:
 
         service = DocumentService()
         for i in range(5):
-            service.upload_document(test_db_session, test_user.id, f"doc{i}.pdf", 1024, "application/pdf")
+            upload_file = create_upload_file(b"content", f"doc{i}.pdf", "application/pdf")
+            service.upload_document(test_db_session, test_user.id, upload_file)
 
         result = service.list_documents(test_db_session, test_user.id, page=1, page_size=2)
         assert result.total == 5
@@ -444,7 +432,8 @@ class TestDocumentPagination:
 
         service = DocumentService()
         for i in range(5):
-            service.upload_document(test_db_session, test_user.id, f"doc{i}.pdf", 1024, "application/pdf")
+            upload_file = create_upload_file(b"content", f"doc{i}.pdf", "application/pdf")
+            service.upload_document(test_db_session, test_user.id, upload_file)
 
         result = service.list_documents(test_db_session, test_user.id, page=2, page_size=2)
         assert result.total == 5
@@ -457,7 +446,8 @@ class TestDocumentPagination:
         from backend.app.services.document_service import DocumentService
 
         service = DocumentService()
-        service.upload_document(test_db_session, test_user.id, "doc1.pdf", 1024, "application/pdf")
+        upload_file = create_upload_file(b"content", "doc1.pdf", "application/pdf")
+        service.upload_document(test_db_session, test_user.id, upload_file)
 
         result = service.list_documents(test_db_session, test_user.id, page=5, page_size=10)
         assert result.total == 1

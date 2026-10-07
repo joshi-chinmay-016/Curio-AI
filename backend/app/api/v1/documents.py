@@ -16,18 +16,7 @@ def upload_document(
     db: SQLAlchemySession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # Retrieve file size
-    file.file.seek(0, 2)
-    file_size = file.file.tell()
-    file.file.seek(0)
-
-    return doc_service.upload_document(
-        db,
-        user_id=current_user.id,
-        filename=file.filename,
-        file_size=file_size,
-        mime_type=file.content_type
-    )
+    return doc_service.upload_document(db, user_id=current_user.id, file=file)
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 def get_document(
