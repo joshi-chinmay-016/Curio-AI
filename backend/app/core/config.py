@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1000  # Target chunk size in characters
     CHUNK_OVERLAP: int = 200  # Overlap between adjacent chunks in characters
 
+    # Embedding Configuration
+    EMBEDDING_PROVIDER: str = "openai"  # Options: "openai"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIMENSIONS: int = 1536
+    EMBEDDING_API_KEY: str = ""
+    EMBEDDING_TIMEOUT_SECONDS: float = 30.0
+    EMBEDDING_MAX_RETRIES: int = 2
+    EMBEDDING_BATCH_SIZE: int = 100  # Max chunks per API call
+
     class Config:
         case_sensitive = True
         extra = "ignore"
