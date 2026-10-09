@@ -529,7 +529,7 @@ class TestDocumentProcessingLifecycle:
         # Verify final status
         assert processed.status == "PROCESSED"
         assert processed.page_count == 1
-        assert processed.processing_error is None
+        # DocumentResponse doesn't expose processing_error; verify in database
         
         # Verify in database
         db_doc = test_db_session.query(Document).filter(Document.id == response.document_id).first()

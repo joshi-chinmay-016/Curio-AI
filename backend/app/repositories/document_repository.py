@@ -14,8 +14,10 @@ class DocumentRepository:
         mime_type: str,
         storage_path: str = None,
         content_hash: str = None,
+        document_id: UUID = None,
     ) -> Document:
         db_doc = Document(
+            id=document_id,
             user_id=user_id,
             filename=filename,
             file_size=file_size,

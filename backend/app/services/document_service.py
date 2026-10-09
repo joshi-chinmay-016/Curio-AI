@@ -52,7 +52,7 @@ class DocumentService:
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to store file")
 
-        # Persist document metadata
+        # Persist document metadata with the pre-generated document_id
         try:
             db_doc = self.repo.create(
                 db,
@@ -62,6 +62,7 @@ class DocumentService:
                 mime_type=mime_type,
                 storage_path=str(storage_path),
                 content_hash=content_hash,
+                document_id=document_id,
             )
         except Exception as e:
             # Cleanup stored file on DB failure
