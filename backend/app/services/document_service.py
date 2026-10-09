@@ -179,18 +179,17 @@ class DocumentService:
         try:
             result = extraction_service.extract(storage_path, db_doc.mime_type)
         except ExtractionError as e:
-            # Mark as failed with safe error message
-            error_msg = e.message
-            if e.details:
-                error_msg += f": {e.details}"
+            # Mark as failed with safe error message (details logged server-side only)
+            safe_error_msg = e.message
+            # Store safe message in DB; details are for server-side logging only
             self.repo.update_processing_result(
                 db, document_id, user_id,
                 status="FAILED",
-                processing_error=error_msg
+                processing_error=safe_error_msg
             )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Extraction failed: {error_msg}"
+                detail=f"Extraction failed: {safe_error_msg}"
             )
         
         # Mark as processed with page_count
