@@ -47,3 +47,25 @@ def delete_document(
     success = doc_service.delete_document(db, document_id, current_user.id)
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
+
+
+@router.post("/documents/{document_id}/process", response_model=DocumentResponse)
+def process_document(
+    document_id: UUID,
+    db: SQLAlchemySession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Trigger text extraction for a document.
+    
+    Flow: UPLOADED -> PROCESSING -> PROCESSED (or FAILED)
+    
+    Does not perform chunking, embedding, or AI processing.
+    Extraction result is consumed by downstream chunking infrastructure (Task 5.4).
+    """
+    try:
+        return doc_service.process_document(db, document_id, current_user.id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Processing failed")

@@ -6,6 +6,7 @@ from fastapi import UploadFile, HTTPException, status
 from backend.app.repositories.document_repository import DocumentRepository
 from backend.app.schemas.document import DocumentResponse, DocumentListResponse
 from backend.app.storage import get_storage
+from backend.app.extraction import ExtractionService, ExtractionError
 from backend.app.core.config import settings
 
 
@@ -130,3 +131,86 @@ class DocumentService:
             self._storage.delete_file(Path(db_doc.storage_path))
         
         return True
+
+    def process_document(self, db: SQLAlchemySession, document_id: UUID, user_id: UUID) -> DocumentResponse:
+        """
+        Process a document: extract text and update status.
+        
+        Flow: UPLOADED -> PROCESSING -> PROCESSED (or FAILED)
+        
+        Does not perform chunking, embedding, or AI processing.
+        Extraction result is returned but not stored in Document table
+        (will be consumed by Task 5.4 chunking infrastructure).
+        """
+        # Verify ownership and get document
+        db_doc = self.repo.get_by_id_and_user(db, document_id, user_id)
+        if not db_doc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        
+        # Verify storage path exists
+        if not db_doc.storage_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Document has no stored file to process"
+            )
+        
+        storage_path = Path(db_doc.storage_path)
+        if not storage_path.exists():
+            # File missing - mark as failed
+            self.repo.update_processing_result(
+                db, document_id, user_id,
+                status="FAILED",
+                processing_error="Source file not found in storage"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Source file not found in storage"
+            )
+        
+        # Update status to PROCESSING
+        self.repo.update_processing_result(
+            db, document_id, user_id,
+            status="PROCESSING",
+            processing_error=None
+        )
+        
+        # Run extraction
+        extraction_service = ExtractionService()
+        try:
+            result = extraction_service.extract(storage_path, db_doc.mime_type)
+        except ExtractionError as e:
+            # Mark as failed with safe error message
+            error_msg = e.message
+            if e.details:
+                error_msg += f": {e.details}"
+            self.repo.update_processing_result(
+                db, document_id, user_id,
+                status="FAILED",
+                processing_error=error_msg
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Extraction failed: {error_msg}"
+            )
+        
+        # Mark as processed with page_count
+        self.repo.update_processing_result(
+            db, document_id, user_id,
+            status="PROCESSED",
+            page_count=result.page_count,
+            processing_error=None
+        )
+        
+        # Refresh document
+        db.refresh(db_doc)
+        
+        return DocumentResponse(
+            document_id=db_doc.id,
+            filename=db_doc.filename,
+            file_size=db_doc.file_size,
+            mime_type=db_doc.mime_type,
+            status=db_doc.status,
+            page_count=db_doc.page_count,
+            chunk_count=db_doc.chunk_count,
+            created_at=db_doc.created_at
+        )

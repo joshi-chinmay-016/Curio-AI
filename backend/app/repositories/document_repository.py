@@ -58,3 +58,32 @@ class DocumentRepository:
         db.commit()
         db.refresh(db_doc)
         return db_doc
+
+    def update_processing_result(
+        self,
+        db: SQLAlchemySession,
+        document_id: UUID,
+        user_id: UUID,
+        status: str,
+        page_count: Optional[int] = None,
+        processing_error: Optional[str] = None,
+    ) -> Optional[Document]:
+        """
+        Update document status, page_count, and processing_error atomically.
+        
+        Used after extraction to mark PROCESSED with page_count or FAILED with error.
+        """
+        db_doc = db.query(Document).filter(Document.id == document_id, Document.user_id == user_id).first()
+        if not db_doc:
+            return None
+        db_doc.status = status
+        if page_count is not None:
+            db_doc.page_count = page_count
+        if processing_error is not None:
+            db_doc.processing_error = processing_error
+        elif status == "PROCESSED":
+            # Clear error on successful processing
+            db_doc.processing_error = None
+        db.commit()
+        db.refresh(db_doc)
+        return db_doc
