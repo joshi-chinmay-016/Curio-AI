@@ -4,6 +4,8 @@ from sqlalchemy import Column, DateTime, String, Integer, Text, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.app.db.session import Base
+from pgvector.sqlalchemy import Vector
+
 
 class Document(Base):
     __tablename__ = "documents"
@@ -36,8 +38,9 @@ class DocumentChunk(Base):
     start_char = Column(Integer, nullable=True)
     end_char = Column(Integer, nullable=True)
     chunk_metadata = Column(JSON, nullable=True)
-    embedding = Column(Text, nullable=True)  # Store as text for flexibility; pgvector.Vector(dim) can be used when model is finalized
+    embedding = Column(Text, nullable=True)  # Legacy JSON storage
     embedding_model = Column(String, nullable=True)
+    embedding_vector = Column(Vector(1536), nullable=True)  # Native pgvector column
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

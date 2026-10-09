@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     EMBEDDING_MAX_RETRIES: int = 2
     EMBEDDING_BATCH_SIZE: int = 100  # Max chunks per API call
 
+    # Retrieval Configuration
+    RETRIEVAL_TOP_K: int = 5  # Default number of results to return
+    RETRIEVAL_SIMILARITY_THRESHOLD: float = 0.0  # Minimum cosine similarity (0-1)
+
     class Config:
         case_sensitive = True
         extra = "ignore"
