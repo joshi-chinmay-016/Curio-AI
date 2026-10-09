@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     ]
     ALLOWED_DOCUMENT_EXTENSIONS: List[str] = [".pdf", ".txt", ".docx"]
 
+    # Chunking Configuration
+    CHUNK_SIZE: int = 1000  # Target chunk size in characters
+    CHUNK_OVERLAP: int = 200  # Overlap between adjacent chunks in characters
+
     class Config:
         case_sensitive = True
         extra = "ignore"
