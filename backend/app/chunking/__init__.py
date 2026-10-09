@@ -8,6 +8,7 @@ from backend.app.chunking.service import (
     ChunkingError,
     create_chunking_service,
 )
+from backend.app.repositories.document_chunk_repository import DocumentChunkRepository
 
 __all__ = [
     "ChunkingService",
@@ -15,4 +16,5 @@ __all__ = [
     "Chunk",
     "ChunkingError",
     "create_chunking_service",
+    "DocumentChunkRepository",
 ]
