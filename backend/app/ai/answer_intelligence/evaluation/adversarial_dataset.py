@@ -506,6 +506,7 @@ ADVERSARIAL_BENCHMARK_CASES: List[Dict[str, Any]] = [
         "target_concept": "atomicity",
         "concept_definition": "All operations in a transaction either commit together or roll back completely.",
         "expected_evidence": ["all operations in transaction commit together", "entire transaction rolls back on failure"],
+        "common_misconceptions": ["some operations can still succeed and commit even if another fails", "transaction can partially succeed under atomicity"],
         "question": "Explain atomicity in DBMS.",
         "learner_answer": "Atomicity is all-or-nothing where all operations commit together, but some operations can still succeed and commit even if another fails.",
         "expected": {

@@ -149,9 +149,9 @@ class AssessmentAggregator:
             return LearningAssessment(
                 intent=intent,
                 is_answer_attempt=False,
-                relevance_score=1.0,
-                relevance_level=RelevanceLevel.RELEVANT,
-                concept_alignment_score=1.0,
+                relevance_score=0.0,
+                relevance_level=RelevanceLevel.IRRELEVANT,
+                concept_alignment_score=0.0,
                 claims=[],
                 evidence=[],
                 correctness=CorrectnessLevel.UNASSESSABLE,

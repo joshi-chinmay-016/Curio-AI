@@ -1,0 +1,145 @@
+{
+  "benchmark_version": "AI Milestone C",
+  "total_cases": 255,
+  "dataset_domains": 12,
+  "results": {
+    "Baseline Local": {
+      "metrics": {
+        "total_samples": 255,
+        "intent_accuracy": 0.945,
+        "relevance_accuracy": 0.875,
+        "correctness_accuracy": 0.6,
+        "completeness_accuracy": 0.525,
+        "misconception_precision": 0.0,
+        "misconception_recall": 0.0,
+        "misconception_detection_rate": 0.0,
+        "mastery_precision": 0.859,
+        "mastery_recall": 0.701,
+        "false_mastery_rate": 0.1837,
+        "false_rejection_rate": 0.2994,
+        "irrelevant_acceptance_rate": 0.1765,
+        "abstention_rate": 0.0,
+        "average_latency_ms": 0.47,
+        "p95_latency_ms": 0.83,
+        "cold_start_latency_ms": 0.93,
+        "details": {
+          "false_mastery_count": 18,
+          "incorrect_or_irrelevant_total": 98,
+          "false_rejection_count": 47,
+          "correct_substantive_total": 157,
+          "mastery_tp": 110,
+          "mastery_fp": 18,
+          "mastery_fn": 47,
+          "misconception_tp": 0,
+          "misconception_fp": 0,
+          "misconception_fn": 36
+        }
+      },
+      "details": {
+        "false_mastery_count": 18,
+        "incorrect_or_irrelevant_total": 98,
+        "false_rejection_count": 47,
+        "correct_substantive_total": 157,
+        "mastery_tp": 110,
+        "mastery_fp": 18,
+        "mastery_fn": 47,
+        "misconception_tp": 0,
+        "misconception_fp": 0,
+        "misconception_fn": 36
+      },
+      "provider_class": "LocalAssessmentProvider"
+    },
+    "Semantic Embedding": {
+      "metrics": {
+        "total_samples": 255,
+        "intent_accuracy": 0.945,
+        "relevance_accuracy": 0.925,
+        "correctness_accuracy": 0.475,
+        "completeness_accuracy": 0.471,
+        "misconception_precision": 0.431,
+        "misconception_recall": 0.611,
+        "misconception_detection_rate": 0.611,
+        "mastery_precision": 0.849,
+        "mastery_recall": 0.287,
+        "false_mastery_rate": 0.0816,
+        "false_rejection_rate": 0.7134,
+        "irrelevant_acceptance_rate": 0.0588,
+        "abstention_rate": 0.039,
+        "average_latency_ms": 61.96,
+        "p95_latency_ms": 95.03,
+        "cold_start_latency_ms": 78.06,
+        "details": {
+          "false_mastery_count": 8,
+          "incorrect_or_irrelevant_total": 98,
+          "false_rejection_count": 112,
+          "correct_substantive_total": 157,
+          "mastery_tp": 45,
+          "mastery_fp": 8,
+          "mastery_fn": 112,
+          "misconception_tp": 22,
+          "misconception_fp": 29,
+          "misconception_fn": 14
+        }
+      },
+      "details": {
+        "false_mastery_count": 8,
+        "incorrect_or_irrelevant_total": 98,
+        "false_rejection_count": 112,
+        "correct_substantive_total": 157,
+        "mastery_tp": 45,
+        "mastery_fp": 8,
+        "mastery_fn": 112,
+        "misconception_tp": 22,
+        "misconception_fp": 29,
+        "misconception_fn": 14
+      },
+      "provider_class": "SemanticEmbeddingProvider"
+    },
+    "Hybrid Semantic": {
+      "metrics": {
+        "total_samples": 255,
+        "intent_accuracy": 0.945,
+        "relevance_accuracy": 0.925,
+        "correctness_accuracy": 0.698,
+        "completeness_accuracy": 0.616,
+        "misconception_precision": 0.75,
+        "misconception_recall": 0.667,
+        "misconception_detection_rate": 0.667,
+        "mastery_precision": 0.864,
+        "mastery_recall": 0.771,
+        "false_mastery_rate": 0.1939,
+        "false_rejection_rate": 0.2293,
+        "irrelevant_acceptance_rate": 0.1765,
+        "abstention_rate": 0.008,
+        "average_latency_ms": 80.69,
+        "p95_latency_ms": 149.04,
+        "cold_start_latency_ms": 91.75,
+        "details": {
+          "false_mastery_count": 19,
+          "incorrect_or_irrelevant_total": 98,
+          "false_rejection_count": 36,
+          "correct_substantive_total": 157,
+          "mastery_tp": 121,
+          "mastery_fp": 19,
+          "mastery_fn": 36,
+          "misconception_tp": 24,
+          "misconception_fp": 8,
+          "misconception_fn": 12
+        }
+      },
+      "details": {
+        "false_mastery_count": 19,
+        "incorrect_or_irrelevant_total": 98,
+        "false_rejection_count": 36,
+        "correct_substantive_total": 157,
+        "mastery_tp": 121,
+        "mastery_fp": 19,
+        "mastery_fn": 36,
+        "misconception_tp": 24,
+        "misconception_fp": 8,
+        "misconception_fn": 12
+      },
+      "provider_class": "HybridSemanticProvider"
+    }
+  }
+}

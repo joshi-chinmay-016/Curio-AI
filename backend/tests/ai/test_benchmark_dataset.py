@@ -15,8 +15,8 @@ from backend.app.ai.answer_intelligence.evaluation.benchmark_dataset import (
 
 
 def test_benchmark_dataset_size_and_schema():
-    """Verify that the benchmark dataset contains at least 100 structured cases."""
-    assert len(BENCHMARK_CASES_DATA) >= 100
+    """Verify that the benchmark dataset contains at least 250 structured cases for Milestone C."""
+    assert len(BENCHMARK_CASES_DATA) >= 250
     assert len(ALL_BENCHMARK_CASES) == len(BENCHMARK_CASES_DATA)
 
     # Check uniqueness of IDs
@@ -25,7 +25,7 @@ def test_benchmark_dataset_size_and_schema():
 
 
 def test_benchmark_dataset_domain_coverage():
-    """Verify coverage across all 11 computer science domains specified in Milestone B."""
+    """Verify coverage across all 12 computer science domains specified in Milestone C."""
     required_domains = {
         "DBMS",
         "Operating Systems",
@@ -38,6 +38,8 @@ def test_benchmark_dataset_domain_coverage():
         "Backend",
         "Distributed Systems",
         "Machine Learning",
+        "System Design",
+        "Software Engineering",
     }
     present_domains = {c.domain for c in BENCHMARK_CASES_DATA}
     missing = required_domains - present_domains

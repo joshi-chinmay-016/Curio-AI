@@ -39,6 +39,14 @@ class ClaimType(str, Enum):
     META_COMMENT = "META_COMMENT"
 
 
+class EvidenceStatus(str, Enum):
+    SUPPORTED = "SUPPORTED"
+    PARTIALLY_SUPPORTED = "PARTIALLY_SUPPORTED"
+    CONTRADICTED = "CONTRADICTED"
+    MISSING = "MISSING"
+    UNKNOWN = "UNKNOWN"
+
+
 class LearnerClaim(BaseModel):
     """Structured atomic claim extracted from the learner's response."""
     text: str = Field(description="The exact or paraphrased claim made by the learner.")
@@ -46,14 +54,12 @@ class LearnerClaim(BaseModel):
     claim_type: ClaimType = Field(default=ClaimType.FACTUAL_ASSERTION)
     alignment_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Semantic alignment with target concept.")
     is_factually_sound: Optional[bool] = Field(default=None, description="General factual soundness if assessable.")
-
-
-class EvidenceStatus(str, Enum):
-    SUPPORTED = "SUPPORTED"
-    PARTIALLY_SUPPORTED = "PARTIALLY_SUPPORTED"
-    CONTRADICTED = "CONTRADICTED"
-    MISSING = "MISSING"
-    UNKNOWN = "UNKNOWN"
+    support_status: EvidenceStatus = Field(default=EvidenceStatus.UNKNOWN, description="Claim-level support status against expected evidence.")
+    contradiction_status: bool = Field(default=False, description="Whether claim contradicts another claim or expected evidence.")
+    contradicts_claim: Optional[str] = Field(default=None, description="Text of the component or claim contradicted.")
+    misconception_labels: List[str] = Field(default_factory=list, description="Any detected misconception anti-patterns.")
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence in this claim-level evaluation.")
+    assessment_rationale: Optional[str] = Field(default=None, description="Short rationale for the claim assessment.")
 
 
 class EvidenceItem(BaseModel):
