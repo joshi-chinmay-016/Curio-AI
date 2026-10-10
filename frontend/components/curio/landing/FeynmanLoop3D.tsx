@@ -393,7 +393,14 @@ function Card3D({
 export function FeynmanLoop3D({ steps }: FeynmanLoop3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeStep, setActiveStep] = useState(0);
-  const reducedMotion = useReducedMotion();
+  const reducedMotionRaw = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const reducedMotion = mounted ? Boolean(reducedMotionRaw) : false;
 
   // Scroll tracking across the sticky scroll track
   const { scrollYProgress } = useScroll({

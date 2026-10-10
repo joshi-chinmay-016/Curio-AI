@@ -15,6 +15,7 @@ import { TeacherModeDemo } from "@/components/curio/landing/TeacherModeDemo";
 import { ReportPreviewSection } from "@/components/curio/landing/ReportPreviewSection";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { CurioFooter } from "@/components/curio/CurioFooter";
+import { ScrollJourneyLayer } from "@/components/curio/journey/ScrollJourneyLayer";
 
 export default function LandingPage() {
   const scrollToHowItWorks = () => {
@@ -22,12 +23,13 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-ice text-navy flex flex-col selection:bg-cobalt selection:text-white">
+    <div className="min-h-screen bg-transparent text-navy flex flex-col selection:bg-cobalt selection:text-white relative">
+      <ScrollJourneyLayer />
       <DiagonalSweepTransition />
       <CurioNav />
 
       {/* 1. HERO SECTION */}
-      <section className="relative w-full max-w-7xl mx-auto px-6 pt-10 pb-16 md:pt-16 md:pb-24">
+      <section id="hero-section" className="relative w-full max-w-7xl mx-auto px-6 pt-10 pb-16 md:pt-16 md:pb-24">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Column: Headline, Subtext, CTAs */}
           <div className="lg:col-span-6 flex flex-col items-start z-10">
@@ -87,19 +89,27 @@ export default function LandingPage() {
       <LearningParadox3D />
 
       {/* 3. HOW CURIO THINKS (5-Stage Loop) */}
-      <HowCurioThinks />
+      <div id="how-curio-thinks">
+        <HowCurioThinks />
+      </div>
 
       {/* 4. ADAPTIVE NETWORK TOPOLOGY */}
-      <AdaptiveNetworkSection />
+      <div id="adaptive-network">
+        <AdaptiveNetworkSection />
+      </div>
 
       {/* 5. TEACHER MODE INTERACTIVE DEMO */}
-      <TeacherModeDemo />
+      <div id="teacher-mode-demo">
+        <TeacherModeDemo />
+      </div>
 
       {/* 6. LEARNING REPORT & GAP MAP */}
-      <ReportPreviewSection />
+      <div id="report-preview">
+        <ReportPreviewSection />
+      </div>
 
       {/* 7. FINAL CTA */}
-      <section className="py-24 border-t border-navy bg-white text-center">
+      <section id="final-cta" className="py-24 border-t border-navy bg-white text-center">
         <div className="max-w-3xl mx-auto px-6">
           <span className="font-mono text-xs font-bold uppercase tracking-widest text-cobalt block mb-3">
             START YOUR LABORATORY
