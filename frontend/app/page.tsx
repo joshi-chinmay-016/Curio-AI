@@ -23,7 +23,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-ice text-navy flex flex-col selection:bg-cobalt selection:text-white relative">
+    <div className="min-h-screen bg-transparent text-navy flex flex-col selection:bg-cobalt selection:text-white relative">
       <ScrollJourneyLayer />
       <DiagonalSweepTransition />
       <CurioNav />
