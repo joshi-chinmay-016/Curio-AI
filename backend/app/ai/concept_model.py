@@ -348,13 +348,14 @@ def extract_assessment_subgraph(model: ConceptModel, active_concept_id: str) -> 
     """
     node = model.get_concept(active_concept_id)
     if not node:
-        return {"active_concept": active_concept_id, "found": False}
+        return {"active_concept": None, "found": False, "concept_id": active_concept_id}
 
     direct_prereqs = model.get_prerequisites(node.id)
     objs = model.get_objectives_for_concept(node.id)
     ev_reqs = model.get_expected_evidence_for_concept(node.id)
 
     return {
+        "found": True,
         "active_concept": {
             "id": node.id,
             "name": node.name,
@@ -395,7 +396,7 @@ def summarize_for_prompt(model: ConceptModel, active_concept_id: Optional[str] =
     """
     if active_concept_id:
         subgraph = extract_assessment_subgraph(model, active_concept_id)
-        if subgraph.get("active_concept"):
+        if subgraph.get("found", False) and isinstance(subgraph.get("active_concept"), dict):
             ac = subgraph["active_concept"]
             lines = [
                 f"### Active Learning Target: {ac['name']} (`{ac['id']}`)",

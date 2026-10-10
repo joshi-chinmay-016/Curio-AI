@@ -448,6 +448,10 @@ class QuestionSpecification(BaseModel):
     reason: str
     evidence_expected: str
     generation_constraints: List[str] = Field(default_factory=list)
+    expected_evidence_requirements: List[ExpectedEvidenceRequirement] = Field(default_factory=list)
+    concept_constraints: List[ConceptConstraint] = Field(default_factory=list)
+    prerequisite_context: List[str] = Field(default_factory=list)
+    cognitive_action: Optional[CognitiveAction] = None
 
 
 class QuestionCandidate(BaseModel):
@@ -907,15 +911,17 @@ class AIContext(BaseModel):
 
         teacher_int = data.get("teacher_intervention")
 
-        current_state = SessionState(
-            session_id=session_id,
-            current_mode=current_mode,
-            current_difficulty=difficulty,
-            active_concept=active_concept,
-            current_question=curr_q,
-            interrupted_question=interrupted_q,
-            teacher_intervention=teacher_int,
-        )
+        current_state = data.get("current_state")
+        if not current_state:
+            current_state = SessionState(
+                session_id=session_id,
+                current_mode=current_mode,
+                current_difficulty=difficulty,
+                active_concept=active_concept,
+                current_question=curr_q,
+                interrupted_question=interrupted_q,
+                teacher_intervention=teacher_int,
+            )
 
         raw_history = data.get("history", data.get("recent_messages", data.get("messages", [])))
         messages: List[ChatMessage] = []

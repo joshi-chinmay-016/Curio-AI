@@ -106,15 +106,54 @@ class EvidenceExtractor:
         core_components: List[str] = []
         misconceptions: List[str] = []
 
-        if spec and spec.evidence_expected:
-            core_components.extend(spec.evidence_expected)
+        # 1. Evidence directly from QuestionSpecification
+        if spec:
+            if isinstance(spec.evidence_expected, list):
+                for item in spec.evidence_expected:
+                    if item and item not in core_components:
+                        core_components.append(item)
+            elif isinstance(spec.evidence_expected, str) and spec.evidence_expected:
+                if spec.evidence_expected not in core_components:
+                    core_components.append(spec.evidence_expected)
+            for req in getattr(spec, "expected_evidence_requirements", []):
+                if req.description and req.description not in core_components:
+                    core_components.append(req.description)
 
-        if concept_node and concept_node.constraints:
-            for c in concept_node.constraints:
-                if c not in core_components:
-                    core_components.append(c)
+        # 2. Evidence from LearningObjective
+        if objective and getattr(objective, "expected_evidence", None):
+            for req in objective.expected_evidence:
+                desc = req.description if hasattr(req, "description") else str(req)
+                if desc and desc not in core_components:
+                    core_components.append(desc)
+
+        # 3. Evidence and constraints from ConceptNode
+        if concept_node:
+            for req in getattr(concept_node, "expected_evidence", []):
+                desc = req.description if hasattr(req, "description") else str(req)
+                if desc and desc not in core_components:
+                    core_components.append(desc)
+
+            for obj_item in getattr(concept_node, "learning_objectives", []):
+                for req in getattr(obj_item, "expected_evidence", []):
+                    desc = req.description if hasattr(req, "description") else str(req)
+                    if desc and desc not in core_components:
+                        core_components.append(desc)
+
+            for c in (concept_node.concept_constraints or concept_node.constraints):
+                rule = c.rule if hasattr(c, "rule") else (c.description if hasattr(c, "description") else str(c))
+                if rule and rule not in core_components:
+                    core_components.append(rule)
+
             if concept_node.common_misconceptions:
-                misconceptions.extend(concept_node.common_misconceptions)
+                for m in concept_node.common_misconceptions:
+                    if m not in misconceptions:
+                        misconceptions.append(m)
+
+            for m_def in getattr(concept_node, "misconception_definitions", []):
+                if m_def.description and m_def.description not in misconceptions:
+                    misconceptions.append(m_def.description)
+                if m_def.incorrect_claim_pattern and m_def.incorrect_claim_pattern not in misconceptions:
+                    misconceptions.append(m_def.incorrect_claim_pattern)
 
         # If constraints are not provided, check canonical CS knowledge
         if not core_components:
