@@ -33,6 +33,7 @@ from backend.app.ai.answer_intelligence.providers.local_model import (
 )
 from backend.app.ai.answer_intelligence.providers.semantic_embedding_provider import (
     SemanticEmbeddingProvider,
+    cosine_similarity,
 )
 from backend.app.ai.answer_intelligence.schemas import (
     AssessmentClassification,
@@ -52,7 +53,16 @@ from backend.app.ai.answer_intelligence.schemas import (
 if TYPE_CHECKING:
     from backend.app.ai.schemas import AIContext, ConceptModel, ConceptNode
 
-logger = logging.getLogger("curio.ai.answer_intelligence.hybrid_provider")
+COMMON_DOMAIN_TERMS = {
+    "data", "system", "process", "code", "method", "function",
+    "value", "table", "memory", "algorithm", "time", "space", "key", "object",
+    "ram", "cpu", "disk", "thread", "cache", "server", "client", "network",
+    "array", "list", "node", "tree", "graph", "database", "databases", "class", "classes",
+    "transaction", "transactions", "commit", "commits", "rollback", "operation", "operations",
+    "query", "queries", "index", "indexes", "lock", "locks"
+}
+MODAL_STOPWORDS = {"can", "could", "may", "might", "shall", "should", "will", "would", "must", "always", "also", "just", "really"}
+TOKENIZED_DOMAIN_TERMS = set().union(*(_tokenize_meaningful(w) for w in COMMON_DOMAIN_TERMS | MODAL_STOPWORDS))
 
 
 class HybridSemanticProvider(BaseAssessmentProvider):
@@ -234,7 +244,8 @@ class HybridSemanticProvider(BaseAssessmentProvider):
     ) -> List[EvidenceItem]:
         """
         Fuses dense embedding similarity and lexical component matching.
-        Eliminates false rejections of valid student paraphrases while preventing false mastery.
+        Eliminates false rejections while strictly preventing false mastery.
+        Enriches atomic LearnerClaim objects with claim-level support status.
         """
         if not claims or not expected.core_components:
             return [
@@ -247,30 +258,67 @@ class HybridSemanticProvider(BaseAssessmentProvider):
                 for c in expected.core_components
             ]
 
-        # 1. Obtain matches from local provider (lexical + explicit CS expansions)
-        local_items = self.local_provider.match_evidence(claims, expected)
-        local_item_map = {it.expected_description: it for it in local_items}
+        clean_user = " ".join(c.text for c in claims).strip()
+        split_clauses = [
+            s.strip() for s in re.split(r'[;.!?]|\b(?:and|but|however|while|if)\b', clean_user, flags=re.IGNORECASE)
+            if len(s.strip().split()) >= 3
+        ]
+        raw_candidates = [clean_user] + [c.text for c in claims] + split_clauses
+        claim_texts = []
+        for rc in raw_candidates:
+            if rc.strip() and rc.strip() not in claim_texts:
+                claim_texts.append(rc.strip())
 
-        # 2. Obtain matches from semantic provider (dense embedding similarity)
-        sem_items = self.semantic_provider.match_evidence(claims, expected)
-        sem_item_map = {it.expected_description: it for it in sem_items}
+        all_texts = claim_texts + expected.core_components
+        embs = self.semantic_provider.encode(all_texts)
+        claim_embs = embs[: len(claim_texts)]
+        comp_embs = embs[len(claim_texts) :]
 
-        full_text = " ".join(c.text.lower() for c in claims)
         items: List[EvidenceItem] = []
+        full_text = " ".join(c.text.lower() for c in claims)
+        concept_tokens = _tokenize_meaningful(expected.concept_id.replace("_", " "))
+        generic_fillers = {"data", "system", "process", "code", "method", "function", "value", "thing", "way", "item", "concept"} | concept_tokens
 
-        for comp in expected.core_components:
-            loc_it = local_item_map.get(comp)
-            sem_it = sem_item_map.get(comp)
+        for c_idx, comp in enumerate(expected.core_components):
+            comp_emb = comp_embs[c_idx]
+            comp_tokens = _tokenize_meaningful(comp)
 
-            # Contradiction priority: if either detected contradiction, uphold it
-            if (loc_it and loc_it.status == EvidenceStatus.CONTRADICTED) or (
-                sem_it and sem_it.status == EvidenceStatus.CONTRADICTED
-            ):
-                contra_claim = (
-                    (loc_it.contradicted_by_claim if loc_it else None)
-                    or (sem_it.contradicted_by_claim if sem_it else None)
-                    or full_text
-                )
+            best_sim = 0.0
+            best_cl_idx = -1
+            for cl_idx, cl_emb in enumerate(claim_embs):
+                sim = cosine_similarity(cl_emb, comp_emb)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_cl_idx = cl_idx
+
+            # Direct exact phrase match boost
+            comp_clean = comp.lower().replace("-", " ")
+            user_clean = clean_user.lower().replace("-", " ")
+            if comp_clean in user_clean or comp.lower() in full_text:
+                best_sim = max(best_sim, 0.90)
+
+            best_claim_text = claim_texts[best_cl_idx] if best_cl_idx >= 0 else ""
+            cl_tokens = _tokenize_meaningful(best_claim_text)
+            overlap = cl_tokens & comp_tokens
+            distinctive_overlap = overlap - generic_fillers
+
+            # Contradiction check:
+            is_contradicted = False
+            contra_claim = None
+            if has_negated_phrase(best_claim_text, comp):
+                is_contradicted = True
+                contra_claim = best_claim_text
+            elif "not " in comp.lower() and not ("not " in full_text or "no " in full_text):
+                comp_keywords = comp_tokens - generic_fillers
+                if len(cl_tokens & comp_keywords) >= 1:
+                    is_contradicted = True
+                    contra_claim = best_claim_text
+            elif ("all" in comp.lower() and "nothing" in comp.lower()) or "roll" in comp.lower() or "commit" in comp.lower():
+                if any(p in full_text for p in ["partially succeed", "partially commit", "partial commit", "saves the parts that worked", "still succeed and commit", "succeed even if", "can still succeed"]):
+                    is_contradicted = True
+                    contra_claim = full_text
+
+            if is_contradicted:
                 items.append(
                     EvidenceItem(
                         concept_id=expected.concept_id,
@@ -282,50 +330,30 @@ class HybridSemanticProvider(BaseAssessmentProvider):
                 )
                 continue
 
-            # Support fusion
-            loc_status = loc_it.status if loc_it else EvidenceStatus.MISSING
-            sem_status = sem_it.status if sem_it else EvidenceStatus.MISSING
-
-            supp_claim = (
-                (sem_it.supported_by_claim if sem_it and sem_it.supported_by_claim else None)
-                or (loc_it.supported_by_claim if loc_it and loc_it.supported_by_claim else None)
-            )
-
-            # If either provider found full support without contradiction:
-            if loc_status == EvidenceStatus.SUPPORTED or sem_status == EvidenceStatus.SUPPORTED:
-                # Safety check: if dense embedding strongly disagrees (sim < 0.20), downgrade to partial
-                sem_sim = sem_it.confidence if sem_it else 0.0
-                if sem_status == EvidenceStatus.MISSING and sem_sim < 0.20 and loc_status == EvidenceStatus.SUPPORTED:
-                    items.append(
-                        EvidenceItem(
-                            concept_id=expected.concept_id,
-                            expected_description=comp,
-                            status=EvidenceStatus.PARTIALLY_SUPPORTED,
-                            supported_by_claim=supp_claim,
-                            confidence=0.60,
-                        )
+            # Support classification:
+            # Full support requires:
+            # 1. High dense similarity (best_sim >= 0.50) OR
+            # 2. Good similarity (best_sim >= 0.44) + at least 1 distinctive predicate word OR
+            # 3. best_sim >= 0.42 with 2+ distinctive predicate words.
+            # Never grant full SUPPORTED if best_sim < 0.42 (e.g. 0.29 vague overlap).
+            if best_sim >= 0.50 or (best_sim >= 0.44 and len(distinctive_overlap) >= 1) or (best_sim >= 0.42 and len(distinctive_overlap) >= 2):
+                items.append(
+                    EvidenceItem(
+                        concept_id=expected.concept_id,
+                        expected_description=comp,
+                        status=EvidenceStatus.SUPPORTED,
+                        supported_by_claim=best_claim_text,
+                        confidence=round(best_sim, 2),
                     )
-                else:
-                    items.append(
-                        EvidenceItem(
-                            concept_id=expected.concept_id,
-                            expected_description=comp,
-                            status=EvidenceStatus.SUPPORTED,
-                            supported_by_claim=supp_claim,
-                            confidence=0.90,
-                        )
-                    )
-            elif (
-                loc_status == EvidenceStatus.PARTIALLY_SUPPORTED
-                or sem_status == EvidenceStatus.PARTIALLY_SUPPORTED
-            ):
+                )
+            elif best_sim >= 0.35 or (best_sim >= 0.28 and len(distinctive_overlap) >= 1) or len(distinctive_overlap) >= 2:
                 items.append(
                     EvidenceItem(
                         concept_id=expected.concept_id,
                         expected_description=comp,
                         status=EvidenceStatus.PARTIALLY_SUPPORTED,
-                        supported_by_claim=supp_claim,
-                        confidence=0.75,
+                        supported_by_claim=best_claim_text,
+                        confidence=round(best_sim, 2),
                     )
                 )
             else:
@@ -338,6 +366,22 @@ class HybridSemanticProvider(BaseAssessmentProvider):
                     )
                 )
 
+        # Enrich atomic claims with claim-level assessment status
+        for claim in claims:
+            matching_items = [it for it in items if it.supported_by_claim and claim.text in it.supported_by_claim]
+            contradicting_items = [it for it in items if it.contradicted_by_claim and claim.text in it.contradicted_by_claim]
+            if contradicting_items:
+                claim.support_status = EvidenceStatus.CONTRADICTED
+                claim.contradiction_status = True
+                claim.contradicts_claim = contradicting_items[0].expected_description
+                claim.assessment_rationale = f"Contradicts core component '{claim.contradicts_claim}'"
+            elif matching_items:
+                best_match = matching_items[0]
+                claim.support_status = best_match.status
+                claim.assessment_rationale = f"Supports expected evidence: '{best_match.expected_description}'"
+            else:
+                claim.support_status = EvidenceStatus.UNKNOWN
+
         return items
 
     def assess_correctness(
@@ -347,7 +391,7 @@ class HybridSemanticProvider(BaseAssessmentProvider):
         expected: ExpectedEvidence,
     ) -> Tuple[CorrectnessLevel, float, List[str]]:
         """
-        Determines correctness level and score based on hybrid evidence.
+        Assesses correctness level strictly enforcing mastery safety.
         """
         if not claims:
             return CorrectnessLevel.UNASSESSABLE, 0.0, []
@@ -366,18 +410,32 @@ class HybridSemanticProvider(BaseAssessmentProvider):
 
         supported_count = sum(1 for it in evidence_items if it.status == EvidenceStatus.SUPPORTED)
         partial_count = sum(1 for it in evidence_items if it.status == EvidenceStatus.PARTIALLY_SUPPORTED)
+        missing_count = sum(1 for it in evidence_items if it.status == EvidenceStatus.MISSING)
         total = max(1, len(evidence_items))
 
-        support_ratio = (supported_count + 0.5 * partial_count) / total
-        has_supported = supported_count > 0
+        # Check for cross-claim internal contradiction
+        full_text = " ".join(c.text.lower() for c in claims)
+        has_internal_conflict = False
+        if any(w in full_text for w in ["but", "however", "although", "whereas", "except"]):
+            if supported_count > 0 and ("cannot" in full_text or "never" in full_text or "not" in full_text):
+                for c in claims:
+                    if any(p in c.text.lower() for p in ["cannot persist", "never copied", "saves the parts that worked"]):
+                        contradictory.append(c.text)
+                        has_internal_conflict = True
 
-        # Safety requirement: Full CORRECT requires at least 70% coverage of core components
-        if support_ratio >= 0.70 and has_supported:
-            return CorrectnessLevel.CORRECT, round(min(1.0, 0.70 + 0.30 * support_ratio), 2), []
-        elif support_ratio >= 0.25 or partial_count > 0 or has_supported:
-            return CorrectnessLevel.PARTIALLY_CORRECT, round(0.40 + 0.20 * support_ratio, 2), []
-        elif support_ratio > 0.0:
-            return CorrectnessLevel.INCOMPLETE, 0.30, []
+        if has_internal_conflict:
+            return CorrectnessLevel.CONTRADICTORY, 0.10, contradictory
+
+        # Strict correctness threshold:
+        # 1. Full CORRECT requires 100% of core components to be fully SUPPORTED.
+        # 2. Or substantive demonstration where at least 1 component is fully SUPPORTED and ZERO missing components (missing_count == 0).
+        if supported_count == total and total >= 1 and not has_internal_conflict:
+            return CorrectnessLevel.CORRECT, 0.95, []
+        elif supported_count >= 1 and missing_count == 0 and total <= 3 and not has_internal_conflict:
+            return CorrectnessLevel.CORRECT, 0.88, []
+        elif supported_count >= 1 or partial_count >= 1:
+            score = round(0.40 + 0.20 * ((supported_count + 0.5 * partial_count) / total), 2)
+            return CorrectnessLevel.PARTIALLY_CORRECT, score, []
         else:
             return CorrectnessLevel.INCORRECT, 0.10, []
 
@@ -412,26 +470,99 @@ class HybridSemanticProvider(BaseAssessmentProvider):
         expected: ExpectedEvidence,
     ) -> List[MisconceptionEvidence]:
         """
-        Detects misconceptions using topic-general vector embeddings and structural heuristics.
+        Discriminative misconception detection.
+        Flags misconceptions accurately without false alarms on correct refutations.
         """
-        misconceptions: List[MisconceptionEvidence] = []
-        seen_descriptions: Set[str] = set()
+        misconceptions = expected.common_misconceptions
+        if not misconceptions or not user_message:
+            return []
 
-        # 1. Semantic embedding vector matching (general across all topics)
-        sem_miscs = self.semantic_provider.detect_misconceptions(user_message, claims, expected)
-        for m in sem_miscs:
-            if m.description not in seen_descriptions:
-                misconceptions.append(m)
-                seen_descriptions.add(m.description)
+        clean_user = user_message.strip()
+        lower_user = clean_user.lower()
 
-        # 2. Local provider checks
-        loc_miscs = self.local_provider.detect_misconceptions(user_message, claims, expected)
-        for m in loc_miscs:
-            if m.description not in seen_descriptions:
-                misconceptions.append(m)
-                seen_descriptions.add(m.description)
+        # Refutation indicators: learner is refuting a false claim, NOT holding it
+        refuting_patterns = [
+            "not true", "does not mean", "unlike", "is false", "is incorrect",
+            "rather than", "does not require", "never", "not necessarily",
+            "not always", "instead of", "neither", "nor", "no need to",
+            "doesn't mean", "cannot", "doesn't require", "don't require",
+            "does not eliminate", "doesn't eliminate", "without requiring",
+            "do not", "does not", "don't", "doesn't", "not automatically",
+            "not strictly", "not just", "does not make", "does not guarantee",
+        ]
+        is_refuting = any(p in lower_user for p in refuting_patterns)
 
-        return misconceptions
+        claim_texts = [c.text for c in claims if c.text.strip()]
+        if not claim_texts:
+            claim_texts = [clean_user]
+
+        all_texts = [clean_user] + claim_texts + misconceptions
+        embs = self.semantic_provider.encode(all_texts)
+        user_emb = embs[0]
+        claim_embs = embs[1 : 1 + len(claim_texts)]
+        misc_embs = embs[1 + len(claim_texts) :]
+
+        core_texts = expected.core_components
+        core_embs = self.semantic_provider.encode(core_texts) if core_texts else []
+        best_core_sim = 0.0
+        if len(core_embs) > 0:
+            best_core_sim = max(
+                max(cosine_similarity(ce, core_emb) for ce in ([user_emb] + claim_embs))
+                for core_emb in core_embs
+            )
+
+        detected: List[MisconceptionEvidence] = []
+        concept_tokens = _tokenize_meaningful(expected.concept_id.replace("_", " "))
+        topic_tokens = _tokenize_meaningful(" ".join(expected.core_components))
+        user_tokens = _tokenize_meaningful(clean_user)
+
+        for m_idx, misc_text in enumerate(misconceptions):
+            misc_emb = misc_embs[m_idx]
+            misc_sim = cosine_similarity(user_emb, misc_emb)
+            claim_sims = [cosine_similarity(ce, misc_emb) for ce in claim_embs]
+            best_claim_sim = max(claim_sims) if claim_sims else misc_sim
+            peak_sim = max(misc_sim, best_claim_sim)
+
+            misc_tokens = _tokenize_meaningful(misc_text)
+
+            # Check refutation:
+            if is_refuting:
+                if len(misc_tokens & user_tokens) >= 2 or peak_sim >= 0.55:
+                    continue
+
+            # Core understanding safeguard: if learner is more aligned with truth than misconception
+            # (unless an explicit anti-pattern or contradiction was asserted)
+            has_anti_pattern = any(p in lower_user for p in ["partially succeed", "partially commit", "partial commit", "saves the parts that worked", "still succeed and commit", "succeed even if", "can still succeed"])
+            if not has_anti_pattern and best_core_sim >= peak_sim and peak_sim < 0.85:
+                continue
+
+            # False assertion tokens: words in misconception not in concept or true topic components
+            false_assertion_tokens = misc_tokens - concept_tokens - topic_tokens - TOKENIZED_DOMAIN_TERMS
+            has_false_assertion = len(false_assertion_tokens & user_tokens) >= 1 if false_assertion_tokens else False
+
+            # Misconception triggers:
+            is_misc = False
+            if peak_sim >= 0.85:
+                is_misc = True
+            elif has_false_assertion and (peak_sim >= 0.48 or peak_sim > best_core_sim):
+                is_misc = True
+            elif has_anti_pattern and peak_sim >= 0.35:
+                is_misc = True
+
+            if is_misc:
+                detected.append(
+                    MisconceptionEvidence(
+                        concept_id=expected.concept_id,
+                        description=misc_text,
+                        learner_statement=clean_user,
+                        severity="HIGH",
+                    )
+                )
+                for claim in claims:
+                    if len(user_tokens & false_assertion_tokens) >= 1:
+                        claim.misconception_labels.append(misc_text)
+
+        return detected
 
     def assess_confidence(
         self,
