@@ -1,66 +1,8 @@
 import { SessionSummary, PracticeQueueItem } from "@/types/history";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+import { SessionListResponse } from "@/types/progress";
+import { apiClient } from "./apiClient";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const mockHistory: SessionSummary[] = [
-  {
-    sessionId: "sess_bs_01",
-    topicName: "Binary Search",
-    topicId: "bs_1",
-    status: "COMPLETED",
-    understandingScore: 78,
-    masteryLevel: "Proficient",
-    turnCount: 14,
-    durationMinutes: 42,
-    unresolvedGaps: 2,
-    resolvedMisconceptions: 1,
-    createdAt: "2024-01-15T14:30:00Z",
-    completedAt: "2024-01-15T15:12:00Z",
-  },
-  {
-    sessionId: "sess_sort_02",
-    topicName: "QuickSort & Partitioning",
-    topicId: "qs_1",
-    status: "COMPLETED",
-    understandingScore: 92,
-    masteryLevel: "Mastery",
-    turnCount: 18,
-    durationMinutes: 55,
-    unresolvedGaps: 0,
-    resolvedMisconceptions: 2,
-    createdAt: "2024-01-12T10:15:00Z",
-    completedAt: "2024-01-12T11:10:00Z",
-  },
-  {
-    sessionId: "sess_tree_03",
-    topicName: "Binary Search Trees",
-    topicId: "bst_1",
-    status: "IN_PROGRESS",
-    understandingScore: 64,
-    masteryLevel: "Developing",
-    turnCount: 7,
-    durationMinutes: 20,
-    unresolvedGaps: 3,
-    resolvedMisconceptions: 0,
-    createdAt: "2024-01-16T09:00:00Z",
-  },
-  {
-    sessionId: "sess_graph_04",
-    topicName: "Dijkstra's Algorithm",
-    topicId: "dijk_1",
-    status: "COMPLETED",
-    understandingScore: 84,
-    masteryLevel: "Proficient",
-    turnCount: 16,
-    durationMinutes: 48,
-    unresolvedGaps: 1,
-    resolvedMisconceptions: 1,
-    createdAt: "2024-01-08T16:20:00Z",
-    completedAt: "2024-01-08T17:08:00Z",
-  },
-];
 
 let mockPracticeQueue: PracticeQueueItem[] = [
   {
@@ -89,21 +31,60 @@ let mockPracticeQueue: PracticeQueueItem[] = [
   },
 ];
 
-export async function getSessionHistory(): Promise<SessionSummary[]> {
+export async function getSessionHistory(page: number = 1, pageSize: number = 20): Promise<SessionSummary[]> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("curio_access_token") : null;
+
+  if (token) {
+    try {
+      const res = await apiClient<SessionListResponse>("/sessions", {
+        params: { page, page_size: pageSize },
+      });
+
+      if (res && Array.isArray(res.items)) {
+        return res.items.map((item) => {
+          const confidencePct = Math.round(item.confidence || 60);
+          return {
+            sessionId: item.session_id,
+            topicName: item.topic,
+            topicId: item.session_id,
+            status: item.status === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS",
+            understandingScore: confidencePct,
+            masteryLevel:
+              confidencePct >= 80 ? "Mastery" : confidencePct >= 60 ? "Proficient" : "Developing",
+            turnCount: item.difficulty * 3 || 3,
+            durationMinutes: Math.max(5, Math.round(item.difficulty * 7)),
+            unresolvedGaps: 0,
+            resolvedMisconceptions: 0,
+            createdAt: item.created_at,
+            completedAt: item.status === "COMPLETED" ? item.last_active_at : undefined,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn("[historyService] Failed to load sessions from API, trying local repository:", err);
+    }
+  }
+
+  // Fallback to local session repository for offline learners
   try {
     const { getSessionRepository } = await import("./sessionRepository");
     const repo = getSessionRepository();
     const repoSessions = await repo.listSessions();
 
     if (repoSessions && repoSessions.length > 0) {
-      // Map stored sessions to SessionSummary
-      const dynamicList: SessionSummary[] = repoSessions.map((s) => ({
+      return repoSessions.map((s) => ({
         sessionId: s.sessionId,
         topicName: s.topicName,
         topicId: s.topicId || s.sessionId,
         status: s.status === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS",
         understandingScore: s.understandingScore ?? Math.round((s.confidence || 0.25) * 100),
-        masteryLevel: s.masteryLevel || (s.confidence && s.confidence >= 80 ? "Mastery" : s.confidence && s.confidence >= 60 ? "Proficient" : "Developing"),
+        masteryLevel:
+          s.masteryLevel ||
+          (s.confidence && s.confidence >= 80
+            ? "Mastery"
+            : s.confidence && s.confidence >= 60
+            ? "Proficient"
+            : "Developing"),
         turnCount: s.turnCount || 1,
         durationMinutes: s.durationMinutes || 5,
         unresolvedGaps: s.unresolvedGaps || 0,
@@ -111,31 +92,21 @@ export async function getSessionHistory(): Promise<SessionSummary[]> {
         createdAt: s.createdAt,
         completedAt: s.completedAt,
       }));
-
-      // Combine with mock history if there are few sessions, avoiding duplicates
-      const seen = new Set(dynamicList.map((s) => s.sessionId));
-      const merged = [...dynamicList];
-      for (const m of mockHistory) {
-        if (!seen.has(m.sessionId)) {
-          merged.push(m);
-        }
-      }
-      return merged;
     }
   } catch (err) {
-    console.warn("Failed to retrieve sessions from repository, using fallback:", err);
+    console.warn("[historyService] Local repository fallback error:", err);
   }
 
-  return mockHistory;
+  return [];
 }
 
 export async function getPracticeQueue(): Promise<PracticeQueueItem[]> {
-  await delay(250);
+  await delay(150);
   return [...mockPracticeQueue];
 }
 
 export async function saveToPracticeQueue(item: Omit<PracticeQueueItem, "id" | "savedAt">): Promise<void> {
-  await delay(300);
+  await delay(200);
   const newItem: PracticeQueueItem = {
     ...item,
     id: "pq_" + Date.now(),
