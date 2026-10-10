@@ -175,10 +175,13 @@ class MasteryGate:
                 reason="Verified substantive evidence of understanding provided. Positive mastery update approved.",
             )
 
-        # 9. Partially correct or incomplete answer -> Bounded partial evidence only
+        # 9. Partially correct or incomplete answer -> Bounded partial evidence only if evidence verified
         if (
-            assessment.correctness in (CorrectnessLevel.PARTIALLY_CORRECT, CorrectnessLevel.INCOMPLETE)
-            or (assessment.correctness_score >= 0.40 and has_supported_evidence)
+            has_supported_evidence
+            and (
+                assessment.correctness in (CorrectnessLevel.PARTIALLY_CORRECT, CorrectnessLevel.INCOMPLETE)
+                or assessment.correctness_score >= 0.40
+            )
         ):
             return MasteryDecision(
                 supports_mastery=False,
