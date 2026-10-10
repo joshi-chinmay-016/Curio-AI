@@ -11,6 +11,9 @@ Safety Invariants:
 4. Fails clearly when TEST_DATABASE_URL is not configured.
 """
 
+import os
+os.environ.setdefault("EMBEDDING_API_KEY", "test-key")
+
 import pytest
 from typing import Generator
 

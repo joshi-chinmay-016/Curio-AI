@@ -39,6 +39,34 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
+    # Document Storage
+    DOCUMENT_STORAGE_ROOT: str = "./storage"
+    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10 MB
+    UPLOAD_CHUNK_SIZE: int = 64 * 1024  # 64 KB
+    ALLOWED_DOCUMENT_MIME_TYPES: List[str] = [
+        "application/pdf",
+        "text/plain",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]
+    ALLOWED_DOCUMENT_EXTENSIONS: List[str] = [".pdf", ".txt", ".docx"]
+
+    # Chunking Configuration
+    CHUNK_SIZE: int = 1000  # Target chunk size in characters
+    CHUNK_OVERLAP: int = 200  # Overlap between adjacent chunks in characters
+
+    # Embedding Configuration
+    EMBEDDING_PROVIDER: str = "openai"  # Options: "openai"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIMENSIONS: int = 1536
+    EMBEDDING_API_KEY: str = ""
+    EMBEDDING_TIMEOUT_SECONDS: float = 30.0
+    EMBEDDING_MAX_RETRIES: int = 2
+    EMBEDDING_BATCH_SIZE: int = 100  # Max chunks per API call
+
+    # Retrieval Configuration
+    RETRIEVAL_TOP_K: int = 5  # Default number of results to return
+    RETRIEVAL_SIMILARITY_THRESHOLD: float = 0.0  # Minimum cosine similarity (0-1)
+
     class Config:
         case_sensitive = True
         extra = "ignore"

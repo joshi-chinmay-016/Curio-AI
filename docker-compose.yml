@@ -26,6 +26,8 @@ services:
       - db
     volumes:
       - ./backend:/app/backend
+      - document_storage:/app/storage
 
 volumes:
   postgres_data:
+  document_storage:
