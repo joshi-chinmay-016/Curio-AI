@@ -361,6 +361,12 @@ export function LearningParadox3D() {
   const mirageDist = useTransform(smoothScroll, [0.1, 0.45], [5, 0]);
   const mirageOpacity = useTransform(smoothScroll, [0.1, 0.45], [0.4, 0]);
   const mirageBlur = useTransform(smoothScroll, [0.1, 0.45], [1.5, 0]);
+  const mirage1X = useTransform(mirageDist, (d) => -d);
+  const mirage1Y = useTransform(mirageDist, (d) => -d * 0.5);
+  const mirage1Filter = useTransform(mirageBlur, (b) => `blur(${b}px)`);
+  const mirage2X = useTransform(mirageDist, (d) => d * 1.3);
+  const mirage2Y = useTransform(mirageDist, (d) => d * 0.4);
+  const mirage2Filter = useTransform(mirageBlur, (b) => `blur(${b * 1.2}px)`);
 
   // 2. Traditional Card Decay Transformations (Left Card)
   const leftCardZ = useTransform(smoothScroll, [0.1, 0.55], [-70, -18]);
@@ -368,6 +374,10 @@ export function LearningParadox3D() {
   const leftBulletsOpacity = useTransform(smoothScroll, [0.4, 0.8], [0.95, 0.65]);
   const forgetBlur = useTransform(smoothScroll, [0.45, 0.8], [0, 1.5]);
   const forgetOpacity = useTransform(smoothScroll, [0.45, 0.8], [1, 0.5]);
+  const forgetFilter = useTransform(forgetBlur, (b) => `blur(${b}px)`);
+
+  // Center Divider Line Opacity
+  const dividerOpacity = useTransform(smoothScroll, [0.2, 0.7], [0.25, 0.7]);
 
   // 3. Curio Card Solid 3D Transformations (Right Card)
   const rightCardZ = useTransform(smoothScroll, [0.1, 0.55], [35, 28]);
@@ -437,10 +447,10 @@ export function LearningParadox3D() {
               <motion.span
                 aria-hidden="true"
                 style={{
-                  x: useTransform(mirageDist, (d) => -d),
-                  y: useTransform(mirageDist, (d) => -d * 0.5),
+                  x: mirage1X,
+                  y: mirage1Y,
                   opacity: mirageOpacity,
-                  filter: useTransform(mirageBlur, (b) => `blur(${b}px)`),
+                  filter: mirage1Filter,
                 }}
                 className={`absolute inset-0 text-cobalt pointer-events-none select-none -z-10 ${
                   reducedMotion ? "hidden" : ""
@@ -451,10 +461,10 @@ export function LearningParadox3D() {
               <motion.span
                 aria-hidden="true"
                 style={{
-                  x: useTransform(mirageDist, (d) => d * 1.3),
-                  y: useTransform(mirageDist, (d) => d * 0.4),
+                  x: mirage2X,
+                  y: mirage2Y,
                   opacity: mirageOpacity,
-                  filter: useTransform(mirageBlur, (b) => `blur(${b * 1.2}px)`),
+                  filter: mirage2Filter,
                 }}
                 className={`absolute inset-0 text-gap-orange pointer-events-none select-none -z-10 ${
                   reducedMotion ? "hidden" : ""
@@ -481,7 +491,7 @@ export function LearningParadox3D() {
             className="hidden md:block absolute left-1/2 top-6 bottom-6 w-px -translate-x-1/2 pointer-events-none z-0"
             style={{
               background: "linear-gradient(to bottom, #C4CDD6 0%, #3A63FF 50%, #C4CDD6 100%)",
-              opacity: useTransform(smoothScroll, [0.2, 0.7], [0.25, 0.7]),
+              opacity: dividerOpacity,
             }}
           />
 
@@ -561,7 +571,7 @@ export function LearningParadox3D() {
                       reducedMotion
                         ? {}
                         : {
-                          filter: useTransform(forgetBlur, (b) => `blur(${b}px)`),
+                          filter: forgetFilter,
                           opacity: forgetOpacity,
                         }
                     }
