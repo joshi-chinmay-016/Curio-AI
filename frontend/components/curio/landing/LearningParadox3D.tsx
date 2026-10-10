@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   motion,
   useScroll,
@@ -336,7 +336,14 @@ export function LearningParadox3D() {
   const sectionRef = useRef<HTMLElement>(null);
   const leftCardRef = useRef<HTMLDivElement>(null);
   const rightCardRef = useRef<HTMLDivElement>(null);
-  const reducedMotion = useReducedMotion();
+  const reducedMotionRaw = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const reducedMotion = mounted ? Boolean(reducedMotionRaw) : false;
 
   // Scroll tracking across section
   const { scrollYProgress } = useScroll({
@@ -354,6 +361,12 @@ export function LearningParadox3D() {
   const mirageDist = useTransform(smoothScroll, [0.1, 0.45], [5, 0]);
   const mirageOpacity = useTransform(smoothScroll, [0.1, 0.45], [0.4, 0]);
   const mirageBlur = useTransform(smoothScroll, [0.1, 0.45], [1.5, 0]);
+  const mirage1X = useTransform(mirageDist, (d) => -d);
+  const mirage1Y = useTransform(mirageDist, (d) => -d * 0.5);
+  const mirage1Filter = useTransform(mirageBlur, (b) => `blur(${b}px)`);
+  const mirage2X = useTransform(mirageDist, (d) => d * 1.3);
+  const mirage2Y = useTransform(mirageDist, (d) => d * 0.4);
+  const mirage2Filter = useTransform(mirageBlur, (b) => `blur(${b * 1.2}px)`);
 
   // 2. Traditional Card Decay Transformations (Left Card)
   const leftCardZ = useTransform(smoothScroll, [0.1, 0.55], [-70, -18]);
@@ -361,6 +374,10 @@ export function LearningParadox3D() {
   const leftBulletsOpacity = useTransform(smoothScroll, [0.4, 0.8], [0.95, 0.65]);
   const forgetBlur = useTransform(smoothScroll, [0.45, 0.8], [0, 1.5]);
   const forgetOpacity = useTransform(smoothScroll, [0.45, 0.8], [1, 0.5]);
+  const forgetFilter = useTransform(forgetBlur, (b) => `blur(${b}px)`);
+
+  // Center Divider Line Opacity
+  const dividerOpacity = useTransform(smoothScroll, [0.2, 0.7], [0.25, 0.7]);
 
   // 3. Curio Card Solid 3D Transformations (Right Card)
   const rightCardZ = useTransform(smoothScroll, [0.1, 0.55], [35, 28]);
@@ -427,34 +444,34 @@ export function LearningParadox3D() {
             <span className="relative inline-block whitespace-nowrap">
               <span className="relative z-10">Illusion</span>
 
-              {!reducedMotion && (
-                <>
-                  <motion.span
-                    aria-hidden="true"
-                    style={{
-                      x: useTransform(mirageDist, (d) => -d),
-                      y: useTransform(mirageDist, (d) => -d * 0.5),
-                      opacity: mirageOpacity,
-                      filter: useTransform(mirageBlur, (b) => `blur(${b}px)`),
-                    }}
-                    className="absolute inset-0 text-cobalt pointer-events-none select-none -z-10"
-                  >
-                    Illusion
-                  </motion.span>
-                  <motion.span
-                    aria-hidden="true"
-                    style={{
-                      x: useTransform(mirageDist, (d) => d * 1.3),
-                      y: useTransform(mirageDist, (d) => d * 0.4),
-                      opacity: mirageOpacity,
-                      filter: useTransform(mirageBlur, (b) => `blur(${b * 1.2}px)`),
-                    }}
-                    className="absolute inset-0 text-gap-orange pointer-events-none select-none -z-10"
-                  >
-                    Illusion
-                  </motion.span>
-                </>
-              )}
+              <motion.span
+                aria-hidden="true"
+                style={{
+                  x: mirage1X,
+                  y: mirage1Y,
+                  opacity: mirageOpacity,
+                  filter: mirage1Filter,
+                }}
+                className={`absolute inset-0 text-cobalt pointer-events-none select-none -z-10 ${
+                  reducedMotion ? "hidden" : ""
+                }`}
+              >
+                Illusion
+              </motion.span>
+              <motion.span
+                aria-hidden="true"
+                style={{
+                  x: mirage2X,
+                  y: mirage2Y,
+                  opacity: mirageOpacity,
+                  filter: mirage2Filter,
+                }}
+                className={`absolute inset-0 text-gap-orange pointer-events-none select-none -z-10 ${
+                  reducedMotion ? "hidden" : ""
+                }`}
+              >
+                Illusion
+              </motion.span>
             </span>
           </h2>
 
@@ -474,7 +491,7 @@ export function LearningParadox3D() {
             className="hidden md:block absolute left-1/2 top-6 bottom-6 w-px -translate-x-1/2 pointer-events-none z-0"
             style={{
               background: "linear-gradient(to bottom, #C4CDD6 0%, #3A63FF 50%, #C4CDD6 100%)",
-              opacity: useTransform(smoothScroll, [0.2, 0.7], [0.25, 0.7]),
+              opacity: dividerOpacity,
             }}
           />
 
@@ -483,30 +500,30 @@ export function LearningParadox3D() {
              ================================================================ */}
           <div className="relative group" style={{ transformStyle: "preserve-3d" }}>
             {/* Drifting Ghost "Paper" Layers Stacked Behind */}
-            {!reducedMotion && (
-              <>
-                <motion.div
-                  aria-hidden="true"
-                  className="absolute inset-0 rounded-[8px] border border-fog/50 bg-ice/40 -z-10 pointer-events-none shadow-sm"
-                  style={{
-                    x: leftTilt.isHovered ? -12 : -6,
-                    y: leftTilt.isHovered ? 10 : 5,
-                    rotateZ: leftTilt.isHovered ? -3 : -1.5,
-                    opacity: 0.6,
-                  }}
-                />
-                <motion.div
-                  aria-hidden="true"
-                  className="absolute inset-0 rounded-[8px] border border-fog/30 bg-ice/25 -z-20 pointer-events-none shadow-sm"
-                  style={{
-                    x: leftTilt.isHovered ? -22 : -11,
-                    y: leftTilt.isHovered ? 18 : 9,
-                    rotateZ: leftTilt.isHovered ? -5 : -2.8,
-                    opacity: 0.35,
-                  }}
-                />
-              </>
-            )}
+            <motion.div
+              aria-hidden="true"
+              className={`absolute inset-0 rounded-[8px] border border-fog/50 bg-ice/40 -z-10 pointer-events-none shadow-sm ${
+                reducedMotion ? "hidden" : ""
+              }`}
+              style={{
+                x: leftTilt.isHovered ? -12 : -6,
+                y: leftTilt.isHovered ? 10 : 5,
+                rotateZ: leftTilt.isHovered ? -3 : -1.5,
+                opacity: 0.6,
+              }}
+            />
+            <motion.div
+              aria-hidden="true"
+              className={`absolute inset-0 rounded-[8px] border border-fog/30 bg-ice/25 -z-20 pointer-events-none shadow-sm ${
+                reducedMotion ? "hidden" : ""
+              }`}
+              style={{
+                x: leftTilt.isHovered ? -22 : -11,
+                y: leftTilt.isHovered ? 18 : 9,
+                rotateZ: leftTilt.isHovered ? -5 : -2.8,
+                opacity: 0.35,
+              }}
+            />
 
             <motion.div
               ref={leftCardRef}
@@ -554,7 +571,7 @@ export function LearningParadox3D() {
                       reducedMotion
                         ? {}
                         : {
-                          filter: useTransform(forgetBlur, (b) => `blur(${b}px)`),
+                          filter: forgetFilter,
                           opacity: forgetOpacity,
                         }
                     }
@@ -592,40 +609,42 @@ export function LearningParadox3D() {
              ================================================================ */}
           <div className="relative group" style={{ transformStyle: "preserve-3d" }}>
             {/* Real 3D Layered Extrusion Stack Behind the Card */}
-            {!reducedMotion && (
-              <>
-                {/* Extrusion Layer 3 (deepest navy) */}
-                <motion.div
-                  aria-hidden="true"
-                  className="absolute inset-0 rounded-[8px] bg-navy pointer-events-none -z-30 shadow-xl"
-                  animate={{
-                    x: rightTilt.isHovered ? 12 : 6,
-                    y: rightTilt.isHovered ? 12 : 6,
-                  }}
-                  transition={{ type: "spring", stiffness: 280, damping: 22 }}
-                />
-                {/* Extrusion Layer 2 (mid navy) */}
-                <motion.div
-                  aria-hidden="true"
-                  className="absolute inset-0 rounded-[8px] bg-navy/90 pointer-events-none -z-20"
-                  animate={{
-                    x: rightTilt.isHovered ? 8 : 4,
-                    y: rightTilt.isHovered ? 8 : 4,
-                  }}
-                  transition={{ type: "spring", stiffness: 280, damping: 22 }}
-                />
-                {/* Extrusion Layer 1 (close navy) */}
-                <motion.div
-                  aria-hidden="true"
-                  className="absolute inset-0 rounded-[8px] bg-navy/80 pointer-events-none -z-10"
-                  animate={{
-                    x: rightTilt.isHovered ? 4 : 2,
-                    y: rightTilt.isHovered ? 4 : 2,
-                  }}
-                  transition={{ type: "spring", stiffness: 280, damping: 22 }}
-                />
-              </>
-            )}
+            {/* Extrusion Layer 3 (deepest navy) */}
+            <motion.div
+              aria-hidden="true"
+              className={`absolute inset-0 rounded-[8px] bg-navy pointer-events-none -z-30 shadow-xl ${
+                reducedMotion ? "hidden" : ""
+              }`}
+              animate={{
+                x: rightTilt.isHovered ? 12 : 6,
+                y: rightTilt.isHovered ? 12 : 6,
+              }}
+              transition={{ type: "spring", stiffness: 280, damping: 22 }}
+            />
+            {/* Extrusion Layer 2 (mid navy) */}
+            <motion.div
+              aria-hidden="true"
+              className={`absolute inset-0 rounded-[8px] bg-navy/90 pointer-events-none -z-20 ${
+                reducedMotion ? "hidden" : ""
+              }`}
+              animate={{
+                x: rightTilt.isHovered ? 8 : 4,
+                y: rightTilt.isHovered ? 8 : 4,
+              }}
+              transition={{ type: "spring", stiffness: 280, damping: 22 }}
+            />
+            {/* Extrusion Layer 1 (close navy) */}
+            <motion.div
+              aria-hidden="true"
+              className={`absolute inset-0 rounded-[8px] bg-navy/80 pointer-events-none -z-10 ${
+                reducedMotion ? "hidden" : ""
+              }`}
+              animate={{
+                x: rightTilt.isHovered ? 4 : 2,
+                y: rightTilt.isHovered ? 4 : 2,
+              }}
+              transition={{ type: "spring", stiffness: 280, damping: 22 }}
+            />
 
             <motion.div
               ref={rightCardRef}
