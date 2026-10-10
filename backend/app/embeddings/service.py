@@ -332,6 +332,7 @@ class EmbeddingService:
                 user_id=chunk.document.user_id if hasattr(chunk, 'document') and chunk.document else user_id,
                 embedding=embedding_json,
                 embedding_model=self._model,
+                embedding_vector=embedding_vector,
             )
             embedded_count += 1
         

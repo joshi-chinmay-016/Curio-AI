@@ -377,12 +377,12 @@ class TestEmbeddingPersistence:
         chunks = create_test_chunks(test_db_session, doc.id, ["Chunk 1", "Chunk 2", "Chunk 3"])
 
         # Create service with mocked generate_embeddings
-        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=4)
+        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8], [0.9, 1.0, 1.1, 1.2]],
+            embeddings=[[0.1]*1536, [0.2]*1536, [0.3]*1536],
             model="test-model",
-            dimensions=4,
+            dimensions=1536,
             total_tokens=30,
         ))
 
@@ -396,7 +396,7 @@ class TestEmbeddingPersistence:
             assert chunk.embedding is not None
             assert chunk.embedding_model == "test-model"
             embedding_vec = json.loads(chunk.embedding)
-            assert len(embedding_vec) == 4
+            assert len(embedding_vec) == 1536
 
     def test_skip_existing_embeddings(self, test_db_session, repo):
         """Test that chunks with existing embeddings are skipped by default."""
@@ -422,12 +422,12 @@ class TestEmbeddingPersistence:
         test_db_session.commit()
 
         # Create service with mocked generate_embeddings
-        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=4)
+        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.5, 0.6, 0.7, 0.8], [0.9, 1.0, 1.1, 1.2]],
+            embeddings=[[0.5]*1536, [0.6]*1536],
             model="test-model",
-            dimensions=4,
+            dimensions=1536,
             total_tokens=20,
         ))
 
@@ -453,13 +453,13 @@ class TestEmbeddingPersistence:
         test_db_session.commit()
         test_db_session.refresh(chunk)
 
-        # Create service with mocked generate_embeddings
-        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=4)
+# Create service with mocked generate_embeddings
+        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.5, 0.6, 0.7, 0.8]],
+            embeddings=[[0.1]*1536],
             model="test-model",
-            dimensions=4,
+            dimensions=1536,
             total_tokens=10,
         ))
 
@@ -471,7 +471,7 @@ class TestEmbeddingPersistence:
         test_db_session.refresh(chunk)
         assert chunk.embedding_model == "test-model"
         embedding_vec = json.loads(chunk.embedding)
-        assert embedding_vec == [0.5, 0.6, 0.7, 0.8]
+        assert embedding_vec == [0.5]*1536
 
     def test_cross_user_isolation(self, test_db_session, repo):
         """Test that users can only embed their own document's chunks."""
@@ -481,16 +481,16 @@ class TestEmbeddingPersistence:
         doc = create_test_document(test_db_session, user1.id)
         create_test_chunks(test_db_session, doc.id, ["Chunk 1"])
 
-        # Create service with mocked generate_embeddings
-        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=4)
+# Create service with mocked generate_embeddings
+        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.1, 0.2, 0.3, 0.4]],
+            embeddings=[[0.1]*1536],
             model="test-model",
-            dimensions=4,
+            dimensions=1536,
             total_tokens=10,
         ))
-
+        
         # User2 cannot embed user1's document
         count = service.generate_and_persist_embeddings(test_db_session, doc.id, user2.id)
         assert count == 0
@@ -500,12 +500,12 @@ class TestEmbeddingPersistence:
         user = create_test_user(test_db_session)
 
         # Create service with mocked generate_embeddings
-        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=4)
+        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.1, 0.2, 0.3, 0.4]],
+            embeddings=[[0.1]*1536],
             model="test-model",
-            dimensions=4,
+            dimensions=1536,
             total_tokens=10,
         ))
 
@@ -518,12 +518,12 @@ class TestEmbeddingPersistence:
         doc = create_test_document(test_db_session, user.id)
 
         # Create service with mocked generate_embeddings
-        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=4)
+        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.1, 0.2, 0.3, 0.4]],
+            embeddings=[[0.1]*1536],
             model="test-model",
-            dimensions=4,
+            dimensions=1536,
             total_tokens=10,
         ))
 
@@ -542,12 +542,12 @@ class TestEmbeddingPersistence:
         test_db_session.commit()
 
         # Create service with mocked generate_embeddings
-        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=4)
+        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.5, 0.6, 0.7, 0.8]],  # Only one embedding for valid chunk
+            embeddings=[[0.5]*1536],  # Only one embedding for valid chunk
             model="test-model",
-            dimensions=4,
+            dimensions=1536,
             total_tokens=10,
         ))
 
@@ -569,12 +569,12 @@ class TestEmbeddingIdempotency:
         repo = DocumentChunkRepository()
         
         # Create service with mocked generate_embeddings
-        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=4)
+        service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.1, 0.2, 0.3, 0.4]],
+            embeddings=[[0.1]*1536],
             model="test-model",
-            dimensions=4,
+            dimensions=1536,
             total_tokens=10,
         ))
 

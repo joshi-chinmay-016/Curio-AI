@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.repositories.session_repository import SessionRepository
@@ -42,6 +42,7 @@ from backend.app.ai.schemas import (
     TeacherIntervention,
     TurnEvaluation as AITurnEvaluation,
 )
+from backend.app.retrieval import RetrievalService, create_retrieval_service, RetrievalError
 
 
 class ChatService:
@@ -52,6 +53,7 @@ class ChatService:
         turn_assessment_repo: Optional[TurnAssessmentRepository] = None,
         teacher_intervention_repo: Optional[TeacherInterventionRepository] = None,
         concept_progress_repo: Optional[ConceptProgressRepository] = None,
+        retrieval_service: Optional[RetrievalService] = None,
     ):
         self.session_repo = SessionRepository()
         self.message_repo = MessageRepository()
@@ -61,6 +63,8 @@ class ChatService:
         self.ai_provider = ai_provider or GroqLLMProvider()
         # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
         self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
+        # Retrieval service for RAG
+        self.retrieval_service = retrieval_service or create_retrieval_service()
 
     @staticmethod
     def _normalize_input_type(raw_val: Any) -> InputType:
@@ -406,6 +410,17 @@ class ChatService:
             conversation=conversation,
             learning_context=learning_context
         )
+
+        # 3b. Retrieve document context for RAG (if session is document-backed)
+        source_context = self._retrieve_source_context(
+            db=db,
+            user_id=user_id,
+            session_id=session_id,
+            query=message_in.content,
+            db_session=db_session,
+        )
+        if source_context:
+            context.source_context = source_context
 
         # 4. Invoke AI Engine
         ai_result: AIResult = self.ai_engine.process(context)
@@ -828,8 +843,117 @@ class ChatService:
             # If persistence fails, rollback this specific operation
             # but don't fail the entire turn (consistent with current architecture)
             db.rollback()
-            # Log error in production; here we silently continue
+# Log error in production; here we silently continue
             pass
+
+    def _retrieve_source_context(
+        self,
+        db: SQLAlchemySession,
+        user_id: Optional[UUID],
+        session_id: UUID,
+        query: str,
+        db_session: Any,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve relevant document chunks for RAG context.
+        
+        Returns serializable source context dict with retrieved passages,
+        or None if retrieval is not applicable or fails.
+        
+        Retrieval is performed when:
+        - Session has a document_id (single document mode)
+        - Session source_type is DOCUMENT
+        - User is authenticated
+        - Query is non-empty
+        
+        Does NOT perform retrieval for GENERAL source mode unless explicitly
+        configured to do so (which is not the current product contract).
+        """
+        if not user_id:
+            return None
+        
+        # Check if session is document-backed
+        session_doc_id = getattr(db_session, "document_id", None)
+        session_source_type = getattr(db_session, "source_type", "GENERAL")
+        
+        # Only retrieve for DOCUMENT source mode with a valid document_id
+        if session_source_type != "DOCUMENT" or not session_doc_id:
+            return None
+        
+        # Skip empty queries
+        if not query or not query.strip():
+            return None
+        
+        try:
+            # Perform retrieval restricted to the session's document
+            result = self.retrieval_service.retrieve(
+                db=db,
+                user_id=user_id,
+                query=query.strip(),
+                document_ids=[session_doc_id],
+            )
+            
+            if not result.chunks:
+                # No relevant chunks found - return empty context indicator
+                return {
+                    "chunks": [],
+                    "total_matches": 0,
+                    "query_text": query.strip(),
+                    "retrieval_status": "no_results",
+                }
+            
+            # Convert retrieved chunks to serializable format
+            serializable_chunks = []
+            for chunk in result.chunks:
+                serializable_chunks.append({
+                    "chunk_id": str(chunk.chunk_id),
+                    "document_id": str(chunk.document_id),
+                    "chunk_index": chunk.chunk_index,
+                    "text": chunk.text,
+                    "start_char": chunk.start_char,
+                    "end_char": chunk.end_char,
+                    "chunk_metadata": chunk.chunk_metadata,
+                    "similarity_score": chunk.similarity_score,
+                })
+            
+            return {
+                "chunks": serializable_chunks,
+                "total_matches": result.total_matches,
+                "query_text": result.query_text,
+                "top_k": result.top_k,
+                "retrieval_status": "success",
+            }
+            
+        except RetrievalError as e:
+            # Retrieval-specific error (embedding failure, vector search failure, etc.)
+            # Log and return error context so AI knows retrieval was attempted but failed
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Retrieval failed for session {session_id}: {e.message} (details: {e.details})")
+            
+            return {
+                "chunks": [],
+                "total_matches": 0,
+                "query_text": query.strip(),
+                "retrieval_status": "error",
+                "error_message": e.message,
+                "error_retryable": e.retryable,
+            }
+            
+        except Exception as e:
+            # Unexpected error - log and return error context
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception(f"Unexpected retrieval error for session {session_id}")
+            
+            return {
+                "chunks": [],
+                "total_matches": 0,
+                "query_text": query.strip(),
+                "retrieval_status": "error",
+                "error_message": "Internal retrieval error",
+                "error_retryable": False,
+            }
 
     def _sync_user_concept_progress(
         self,

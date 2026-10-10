@@ -20,7 +20,7 @@ class DocumentChunkRepository:
         Args:
             db: Database session
             document_id: Parent document UUID
-            chunks: List of DocumentChunk objects to insert
+            chunks: List of DocumentChunk objects to insert (may include embedding_vector)
             
         Returns:
             List of created DocumentChunk objects
@@ -170,6 +170,7 @@ class DocumentChunkRepository:
         user_id: UUID,
         embedding: str,
         embedding_model: str,
+        embedding_vector: Optional[List[float]] = None,
     ) -> Optional[DocumentChunk]:
         """
         Update an existing chunk's embedding.
@@ -178,8 +179,9 @@ class DocumentChunkRepository:
             db: Database session
             chunk_id: Chunk UUID
             user_id: User ID for ownership verification
-            embedding: Embedding vector as string
+            embedding: Embedding vector as JSON string
             embedding_model: Embedding model name
+            embedding_vector: Optional native vector for pgvector column
             
         Returns:
             Updated DocumentChunk if found and owned, None otherwise
@@ -190,6 +192,8 @@ class DocumentChunkRepository:
         
         chunk.embedding = embedding
         chunk.embedding_model = embedding_model
+        if embedding_vector is not None:
+            chunk.embedding_vector = embedding_vector
         db.commit()
         db.refresh(chunk)
         return chunk
