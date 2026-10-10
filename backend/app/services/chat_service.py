@@ -64,7 +64,15 @@ class ChatService:
         # Canonical AI Engine: ensure configured provider is passed if engine is not supplied
         self.ai_engine = ai_engine or CurioEngine(provider=self.ai_provider)
         # Retrieval service for RAG
-        self.retrieval_service = retrieval_service or create_retrieval_service()
+        if retrieval_service is not None:
+            self.retrieval_service = retrieval_service
+        else:
+            try:
+                self.retrieval_service = create_retrieval_service()
+            except Exception as e:
+                import logging
+                logging.getLogger("curio_chat").warning(f"RetrievalService disabled: {e}")
+                self.retrieval_service = None
 
     @staticmethod
     def _normalize_input_type(raw_val: Any) -> InputType:

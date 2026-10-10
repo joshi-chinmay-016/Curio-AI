@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     EMBEDDING_PROVIDER: str = "openai"  # Options: "openai"
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIMENSIONS: int = 1536
-    EMBEDDING_API_KEY: str = ""
+    EMBEDDING_API_KEY: str = "curio-dev-mock-key"
     EMBEDDING_TIMEOUT_SECONDS: float = 30.0
     EMBEDDING_MAX_RETRIES: int = 2
     EMBEDDING_BATCH_SIZE: int = 100  # Max chunks per API call
