@@ -31,6 +31,16 @@ class DocumentChunkRepository:
         db.commit()
         for chunk in chunks:
             db.refresh(chunk)
+        
+        # Update document chunk_count
+        from backend.app.repositories.document_repository import DocumentRepository
+        from backend.app.models.document import Document
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        if doc:
+            doc.chunk_count = len(chunks)
+            db.commit()
+            db.refresh(doc)
+        
         return chunks
 
     def get_chunks_by_document(
@@ -161,6 +171,12 @@ class DocumentChunkRepository:
         db.commit()
         for chunk in new_chunks:
             db.refresh(chunk)
+        
+        # Update document chunk_count
+        doc.chunk_count = len(new_chunks)
+        db.commit()
+        db.refresh(doc)
+        
         return new_chunks
 
     def update_chunk_embedding(

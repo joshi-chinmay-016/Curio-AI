@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session as SQLAlchemySession
 from backend.app.models.document import Document
@@ -86,6 +86,60 @@ class DocumentRepository:
         elif status == "PROCESSED":
             # Clear error on successful processing
             db_doc.processing_error = None
+        db.commit()
+        db.refresh(db_doc)
+        return db_doc
+
+    def update_chunk_count(
+        self,
+        db: SQLAlchemySession,
+        document_id: UUID,
+        user_id: UUID,
+        chunk_count: int,
+    ) -> Optional[Document]:
+        """
+        Update document chunk_count after chunking.
+        
+        Args:
+            db: Database session
+            document_id: Document UUID
+            user_id: User ID for ownership verification
+            chunk_count: Number of chunks created
+            
+        Returns:
+            Updated Document if found and owned, None otherwise
+        """
+        db_doc = db.query(Document).filter(Document.id == document_id, Document.user_id == user_id).first()
+        if not db_doc:
+            return None
+        db_doc.chunk_count = chunk_count
+        db.commit()
+        db.refresh(db_doc)
+        return db_doc
+
+    def update_embedding_model(
+        self,
+        db: SQLAlchemySession,
+        document_id: UUID,
+        user_id: UUID,
+        embedding_model: str,
+    ) -> Optional[Document]:
+        """
+        Update document embedding_model after embedding generation.
+        
+        Args:
+            db: Database session
+            document_id: Document UUID
+            user_id: User ID for ownership verification
+            embedding_model: Name of the embedding model used
+            
+        Returns:
+            Updated Document if found and owned, None otherwise
+        """
+        db_doc = db.query(Document).filter(Document.id == document_id, Document.user_id == user_id).first()
+        if not db_doc:
+            return None
+        db_doc.embedding_model = embedding_model
         db.commit()
         db.refresh(db_doc)
         return db_doc

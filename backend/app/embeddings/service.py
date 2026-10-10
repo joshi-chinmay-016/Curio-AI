@@ -337,6 +337,13 @@ class EmbeddingService:
             embedded_count += 1
         
         logger.info(f"Persisted embeddings for {embedded_count} chunks of document {document_id}")
+        
+        # Update document embedding_model if any embeddings were persisted
+        if embedded_count > 0:
+            from backend.app.repositories.document_repository import DocumentRepository
+            doc_repo = DocumentRepository()
+            doc_repo.update_embedding_model(db, document_id, user_id, self._model)
+        
         return embedded_count
 
 

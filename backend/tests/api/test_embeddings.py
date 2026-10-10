@@ -457,7 +457,7 @@ class TestEmbeddingPersistence:
         service = EmbeddingService(api_key="test-key", model="test-model", dimensions=1536)
         service._repo = repo
         service.generate_embeddings = Mock(return_value=EmbeddingResult(
-            embeddings=[[0.1]*1536],
+            embeddings=[[0.5]*1536],
             model="test-model",
             dimensions=1536,
             total_tokens=10,
