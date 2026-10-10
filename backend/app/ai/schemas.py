@@ -1,5 +1,5 @@
 from enum import Enum, IntEnum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -120,20 +120,201 @@ class TurnInterpretation(BaseModel):
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
+# =====================================================================
+# MILESTONE D: CONCEPT MODEL & LEARNING OBJECTIVES ENUMS
+# =====================================================================
+
+class CognitiveAction(str, Enum):
+    """Pedagogical cognitive actions for observable learning objectives."""
+    DEFINE = "DEFINE"
+    EXPLAIN = "EXPLAIN"
+    COMPARE = "COMPARE"
+    APPLY = "APPLY"
+    DERIVE = "DERIVE"
+    ANALYZE = "ANALYZE"
+    PREDICT = "PREDICT"
+    JUSTIFY = "JUSTIFY"
+    EVALUATE = "EVALUATE"
+    SYNTHESIZE = "SYNTHESIZE"
+
+
+class RelationshipType(str, Enum):
+    """Semantic relationship types between concepts."""
+    PREREQUISITE_OF = "PREREQUISITE_OF"
+    DEPENDS_ON = "DEPENDS_ON"
+    PART_OF = "PART_OF"
+    RELATED_TO = "RELATED_TO"
+    CONTRASTS_WITH = "CONTRASTS_WITH"
+    GENERALIZES_TO = "GENERALIZES_TO"
+    SPECIALIZES_TO = "SPECIALIZES_TO"
+    CAUSES = "CAUSES"
+    REQUIRES = "REQUIRES"
+    EXAMPLE_OF = "EXAMPLE_OF"
+
+
+class EvidenceType(str, Enum):
+    """Categorization of expected evidence types demonstrating understanding."""
+    DEFINITION = "DEFINITION"
+    MECHANISM = "MECHANISM"
+    REASONING = "REASONING"
+    EXAMPLE = "EXAMPLE"
+    APPLICATION = "APPLICATION"
+    COMPARISON = "COMPARISON"
+    JUSTIFICATION = "JUSTIFICATION"
+    DERIVATION = "DERIVATION"
+    PREDICTION = "PREDICTION"
+
+
+class ValidationStatus(str, Enum):
+    """Integrity and consistency status of a ConceptModel / TopicModel."""
+    VALID = "VALID"
+    VALID_INCOMPLETE = "VALID_INCOMPLETE"
+    INVALID = "INVALID"
+    NEEDS_REGENERATION = "NEEDS_REGENERATION"
+
+
+class ConstraintType(str, Enum):
+    """Types of rules, invariants, or conditions governing a concept."""
+    INVARIANT = "INVARIANT"
+    PREREQUISITE_CONDITION = "PREREQUISITE_CONDITION"
+    BOUNDARY_LIMIT = "BOUNDARY_LIMIT"
+    ASSUMPTION = "ASSUMPTION"
+
+
+# =====================================================================
+# MILESTONE D: EVIDENCE, OBJECTIVE, AND CONSTRAINT CONTRACTS
+# =====================================================================
+
+class ExpectedEvidenceRequirement(BaseModel):
+    """Essential or supporting evidence requirement for assessing a concept/objective."""
+    evidence_id: str
+    concept_id: str = ""
+    description: str = ""
+    objective_id: Optional[str] = None
+    evidence_type: EvidenceType = EvidenceType.MECHANISM
+    essential: bool = True
+    acceptance_criteria: Optional[str] = None
+    constraints: List[str] = Field(default_factory=list)
+    common_failure_modes: List[str] = Field(default_factory=list)
+
+
+class ConceptConstraint(BaseModel):
+    """A condition, invariant, rule, or limitation that must hold."""
+    constraint_id: str
+    concept_id: str = ""
+    description: str = ""
+    rule: Optional[str] = None
+    constraint_type: ConstraintType = ConstraintType.INVARIANT
+    essential: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_rule_and_desc(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            desc = data.get("description") or data.get("rule") or ""
+            data["description"] = desc
+            if not data.get("rule"):
+                data["rule"] = desc
+        return data
+
+
+class MisconceptionDefinition(BaseModel):
+    """Detailed domain misconception with corrective evidence and causal flaw."""
+    misconception_id: str
+    concept_id: str
+    description: str
+    incorrect_claim_pattern: Optional[str] = None
+    why_it_is_incorrect: Optional[str] = None
+    corrective_evidence: Optional[str] = None
+    related_objective_ids: List[str] = Field(default_factory=list)
+
+
+class ObjectiveType(str, Enum):
+    UNDERSTAND_DEFINITION = "UNDERSTAND_DEFINITION"
+    UNDERSTAND_MECHANISM = "UNDERSTAND_MECHANISM"
+    UNDERSTAND_CAUSAL_RELATION = "UNDERSTAND_CAUSAL_RELATION"
+    EXPLAIN_IN_OWN_WORDS = "EXPLAIN_IN_OWN_WORDS"
+    APPLY_CONCEPT = "APPLY_CONCEPT"
+    DISTINGUISH_CONCEPTS = "DISTINGUISH_CONCEPTS"
+    RESOLVE_MISCONCEPTION = "RESOLVE_MISCONCEPTION"
+    VERIFY_GAP = "VERIFY_GAP"
+    HANDLE_EDGE_CASE = "HANDLE_EDGE_CASE"
+    SYNTHESIZE_CONCEPTS = "SYNTHESIZE_CONCEPTS"
+    INCREASE_DIFFICULTY = "INCREASE_DIFFICULTY"
+    REINFORCE_WEAK_CONCEPT = "REINFORCE_WEAK_CONCEPT"
+
+
+class LearningObjective(BaseModel):
+    """Observable learning objective describing what a learner should demonstrate."""
+    objective_id: str = ""
+    concept_id: str = ""
+    description: str = ""
+    cognitive_action: CognitiveAction = CognitiveAction.EXPLAIN
+    objective_type: ObjectiveType = ObjectiveType.UNDERSTAND_MECHANISM
+    target_concept: str = ""
+    difficulty: int = Field(default=1, ge=1, le=5)
+    essential: bool = True
+    reason: str = ""
+    evidence_expected: str = ""
+    prerequisite_objective_ids: List[str] = Field(default_factory=list)
+    expected_evidence: List[ExpectedEvidenceRequirement] = Field(default_factory=list)
+    success_criteria: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _harmonize_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            cid = data.get("concept_id") or data.get("target_concept") or "general_concept"
+            data.setdefault("concept_id", cid)
+            data.setdefault("target_concept", cid)
+
+            desc = data.get("description") or data.get("reason") or f"Demonstrate understanding of {cid}"
+            data.setdefault("description", desc)
+            data.setdefault("reason", desc)
+
+            if not data.get("objective_id"):
+                obj_type = str(data.get("objective_type") or "obj").lower()
+                data["objective_id"] = f"{cid}_{obj_type}"
+
+            if not data.get("cognitive_action"):
+                data["cognitive_action"] = CognitiveAction.EXPLAIN
+            if not data.get("objective_type"):
+                data["objective_type"] = ObjectiveType.UNDERSTAND_MECHANISM
+
+            if not data.get("evidence_expected"):
+                ev_reqs = data.get("expected_evidence") or []
+                if ev_reqs and isinstance(ev_reqs, list) and isinstance(ev_reqs[0], (dict, ExpectedEvidenceRequirement)):
+                    if isinstance(ev_reqs[0], dict):
+                        data["evidence_expected"] = ev_reqs[0].get("description", desc)
+                    else:
+                        data["evidence_expected"] = ev_reqs[0].description
+                else:
+                    data["evidence_expected"] = desc
+        return data
+
+
 class ConceptNode(BaseModel):
+    """Node in the concept graph representing a single unit of understanding."""
     id: str
     name: str
     definition: str = ""
+    importance: str = "CORE"
     prerequisites: List[str] = Field(default_factory=list)
     sub_concepts: List[str] = Field(default_factory=list)
     applications: List[str] = Field(default_factory=list)
     constraints: List[str] = Field(default_factory=list)
     common_misconceptions: List[str] = Field(default_factory=list)
+    misconception_definitions: List[MisconceptionDefinition] = Field(default_factory=list)
+    learning_objectives: List[LearningObjective] = Field(default_factory=list)
+    expected_evidence: List[ExpectedEvidenceRequirement] = Field(default_factory=list)
+    concept_constraints: List[ConceptConstraint] = Field(default_factory=list)
     edge_cases: List[str] = Field(default_factory=list)
     difficulty_level: int = Field(default=1, ge=1, le=5)
+    generation_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class ConceptRelationship(BaseModel):
+    """Directed relationship edge between two concepts."""
     source_concept_id: str
     target_concept_id: str
     relation_type: str = "PREREQUISITE_OF"
@@ -141,9 +322,23 @@ class ConceptRelationship(BaseModel):
 
 
 class ConceptModel(BaseModel):
+    """
+    Top-level validated concept representation for a topic.
+    Serves as TopicModel describing knowledge decomposition, prerequisites, and learning objectives.
+    """
     topic: str
+    topic_id: str = ""
+    topic_title: str = ""
+    topic_description: str = ""
+    subject_area: Optional[str] = None
+    learner_level: Optional[str] = None
     concepts: List[ConceptNode] = Field(default_factory=list)
     relationships: List[ConceptRelationship] = Field(default_factory=list)
+    learning_objectives: List[LearningObjective] = Field(default_factory=list)
+    validation_status: ValidationStatus = ValidationStatus.VALID
+    limitations: List[str] = Field(default_factory=list)
+    model_version: str = "1.0.0"
+    generation_metadata: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def get_concept(self, concept_id: str) -> Optional[ConceptNode]:
@@ -155,11 +350,67 @@ class ConceptModel(BaseModel):
                 return c
         return None
 
+    def has_concept(self, concept_id: str) -> bool:
+        return self.get_concept(concept_id) is not None
+
     def get_prerequisites(self, concept_id: str) -> List[str]:
         node = self.get_concept(concept_id)
         if node:
             return list(node.prerequisites)
         return []
+
+    def get_objectives_for_concept(self, concept_id: str) -> List[LearningObjective]:
+        node = self.get_concept(concept_id)
+        if node and node.learning_objectives:
+            return list(node.learning_objectives)
+        cid_norm = (concept_id or "").strip().lower().replace(" ", "_")
+        return [
+            obj for obj in self.learning_objectives
+            if obj.concept_id == concept_id or obj.concept_id.strip().lower().replace(" ", "_") == cid_norm
+        ]
+
+    def get_expected_evidence_for_concept(self, concept_id: str) -> List[ExpectedEvidenceRequirement]:
+        node = self.get_concept(concept_id)
+        if node and node.expected_evidence:
+            return list(node.expected_evidence)
+        # Check from objectives
+        objs = self.get_objectives_for_concept(concept_id)
+        ev_list: List[ExpectedEvidenceRequirement] = []
+        for obj in objs:
+            ev_list.extend(obj.expected_evidence)
+        return ev_list
+
+    def get_essential_objectives(self) -> List[LearningObjective]:
+        all_objs = list(self.learning_objectives)
+        for c in self.concepts:
+            all_objs.extend(c.learning_objectives)
+        # Deduplicate by objective_id
+        seen: Set[str] = set()
+        essential: List[LearningObjective] = []
+        for obj in all_objs:
+            if obj.objective_id not in seen and obj.essential:
+                seen.add(obj.objective_id)
+                essential.append(obj)
+        return essential
+
+    def get_all_prerequisite_edges(self) -> List[tuple]:
+        """Returns directed prerequisite edges as (prerequisite_id, dependent_id)."""
+        edges = []
+        # From node.prerequisites
+        for c in self.concepts:
+            for p in c.prerequisites:
+                edges.append((p, c.id))
+        # From relationships with relation_type == PREREQUISITE_OF
+        for r in self.relationships:
+            if r.relation_type in (RelationshipType.PREREQUISITE_OF.value, "PREREQUISITE_OF", RelationshipType.REQUIRES.value, "REQUIRES"):
+                edge = (r.source_concept_id, r.target_concept_id)
+                if edge not in edges:
+                    edges.append(edge)
+        return edges
+
+
+# Canonical Milestone D Alias: TopicModel is ConceptModel
+TopicModel = ConceptModel
 
 
 class ConceptState(BaseModel):
@@ -188,27 +439,6 @@ class LearnerModel(BaseModel):
         return self.concepts[concept_id]
 
 
-class ObjectiveType(str, Enum):
-    UNDERSTAND_DEFINITION = "UNDERSTAND_DEFINITION"
-    UNDERSTAND_MECHANISM = "UNDERSTAND_MECHANISM"
-    UNDERSTAND_CAUSAL_RELATION = "UNDERSTAND_CAUSAL_RELATION"
-    EXPLAIN_IN_OWN_WORDS = "EXPLAIN_IN_OWN_WORDS"
-    APPLY_CONCEPT = "APPLY_CONCEPT"
-    DISTINGUISH_CONCEPTS = "DISTINGUISH_CONCEPTS"
-    RESOLVE_MISCONCEPTION = "RESOLVE_MISCONCEPTION"
-    VERIFY_GAP = "VERIFY_GAP"
-    HANDLE_EDGE_CASE = "HANDLE_EDGE_CASE"
-    SYNTHESIZE_CONCEPTS = "SYNTHESIZE_CONCEPTS"
-    INCREASE_DIFFICULTY = "INCREASE_DIFFICULTY"
-    REINFORCE_WEAK_CONCEPT = "REINFORCE_WEAK_CONCEPT"
-
-
-class LearningObjective(BaseModel):
-    objective_type: ObjectiveType
-    target_concept: str
-    difficulty: int = Field(ge=1, le=5)
-    reason: str
-    evidence_expected: str
 
 
 class QuestionSpecification(BaseModel):
@@ -218,6 +448,10 @@ class QuestionSpecification(BaseModel):
     reason: str
     evidence_expected: str
     generation_constraints: List[str] = Field(default_factory=list)
+    expected_evidence_requirements: List[ExpectedEvidenceRequirement] = Field(default_factory=list)
+    concept_constraints: List[ConceptConstraint] = Field(default_factory=list)
+    prerequisite_context: List[str] = Field(default_factory=list)
+    cognitive_action: Optional[CognitiveAction] = None
 
 
 class QuestionCandidate(BaseModel):
@@ -677,15 +911,17 @@ class AIContext(BaseModel):
 
         teacher_int = data.get("teacher_intervention")
 
-        current_state = SessionState(
-            session_id=session_id,
-            current_mode=current_mode,
-            current_difficulty=difficulty,
-            active_concept=active_concept,
-            current_question=curr_q,
-            interrupted_question=interrupted_q,
-            teacher_intervention=teacher_int,
-        )
+        current_state = data.get("current_state")
+        if not current_state:
+            current_state = SessionState(
+                session_id=session_id,
+                current_mode=current_mode,
+                current_difficulty=difficulty,
+                active_concept=active_concept,
+                current_question=curr_q,
+                interrupted_question=interrupted_q,
+                teacher_intervention=teacher_int,
+            )
 
         raw_history = data.get("history", data.get("recent_messages", data.get("messages", [])))
         messages: List[ChatMessage] = []

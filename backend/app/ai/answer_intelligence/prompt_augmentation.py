@@ -39,6 +39,8 @@ class DynamicPromptContext(BaseModel):
     difficulty: int = 1
     teacher_intervention_gap: Optional[str] = None
     prompt_instruction: str = ""
+    active_objective_description: Optional[str] = None
+    concept_subgraph_summary: Optional[str] = None
 
     def to_prompt_section(self) -> str:
         """Renders cleanly formatted structured context for LLM prompt templates."""
@@ -56,6 +58,10 @@ class DynamicPromptContext(BaseModel):
             f"- Active Misconceptions: {misc_str}",
             f"- Assessment Confidence: {self.confidence:.2f}",
         ]
+        if self.active_objective_description:
+            lines.append(f"- Active Learning Objective: {self.active_objective_description}")
+        if self.concept_subgraph_summary:
+            lines.append(f"- Concept Context: {self.concept_subgraph_summary}")
         if self.teacher_intervention_gap:
             lines.append(f"- Active Teacher Gap: {self.teacher_intervention_gap}")
         if self.prompt_instruction:
@@ -158,6 +164,17 @@ def build_dynamic_prompt_context(
 
     strat = decision.strategy.value if decision and hasattr(decision.strategy, "value") else assessment.recommended_learning_action
 
+    active_obj_desc = None
+    subgraph_summary = None
+    if context and hasattr(context, "current_state"):
+        curr_obj = getattr(context.current_state, "current_objective", None)
+        if curr_obj and getattr(curr_obj, "description", None):
+            active_obj_desc = curr_obj.description
+        c_model = getattr(context.current_state, "concept_model", None)
+        if c_model:
+            from backend.app.ai.concept_model import summarize_for_prompt
+            subgraph_summary = summarize_for_prompt(c_model, active_concept_id=target_concept, max_chars=350)
+
     return DynamicPromptContext(
         active_concept=target_concept,
         learner_intent=assessment.intent.value,
@@ -174,4 +191,6 @@ def build_dynamic_prompt_context(
         difficulty=difficulty,
         teacher_intervention_gap=intervention_gap,
         prompt_instruction=instruction,
+        active_objective_description=active_obj_desc,
+        concept_subgraph_summary=subgraph_summary,
     )
