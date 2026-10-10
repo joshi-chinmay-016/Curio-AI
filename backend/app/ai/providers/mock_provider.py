@@ -29,6 +29,21 @@ class MockLLMProvider(BaseLLMProvider):
     def generate_structured(self, prompt: str, response_model: Type[BaseModel]) -> BaseModel:
         prompt_lower = prompt.lower()
 
+        if response_model.__name__ in ("ConceptModel", "TopicModel"):
+            import re
+            topic_str = "General Topic"
+            match = re.search(r"^TOPIC:\s*(.+)$", prompt, re.MULTILINE)
+            if match and match.group(1).strip():
+                topic_str = match.group(1).strip()
+            elif "for topic: '" in prompt:
+                topic_str = prompt.split("for topic: '")[1].split("'")[0]
+            elif "topic '" in prompt_lower:
+                topic_str = prompt_lower.split("topic '")[1].split("'")[0]
+
+            from backend.app.ai.concept_model import ConceptModelBuilder
+            builder = ConceptModelBuilder(self)
+            return builder._construct_fallback_model(topic_str)
+
         if "evaluate" in prompt_lower or "turnevaluation" in response_model.__name__.lower():
             # Carefully isolate the user input from the prompt without matching prompt instructions
             user_input = ""

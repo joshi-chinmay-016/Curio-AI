@@ -106,6 +106,11 @@ class EvidenceExtractor:
         core_components: List[str] = []
         misconceptions: List[str] = []
 
+        cid_lower = (concept_id or "").lower().replace(" ", "_")
+        gap_lower = (gap or "").lower().replace(" ", "_")
+        q_lower = (question_text or "").lower()
+        topic_lower = (topic or "").lower()
+
         # 1. Evidence directly from QuestionSpecification
         if spec:
             if isinstance(spec.evidence_expected, list):
@@ -126,24 +131,57 @@ class EvidenceExtractor:
                 if desc and desc not in core_components:
                     core_components.append(desc)
 
-        # 3. Evidence and constraints from ConceptNode
-        if concept_node:
+        # 3. Explicit constraints directly on ConceptNode (e.g. benchmark case author expected_evidence)
+        if concept_node and concept_node.constraints:
+            for c in concept_node.constraints:
+                rule = c.rule if hasattr(c, "rule") else (c.description if hasattr(c, "description") else str(c))
+                if rule and rule not in core_components:
+                    core_components.append(rule)
+
+        # 4. Canonical CS domain knowledge check (for known CS domains and targeted teacher questions)
+        if not core_components:
+            for key, data in CANONICAL_CONCEPT_EVIDENCE.items():
+                if (gap_lower and key in gap_lower) or (key in q_lower and key != topic_lower) or (key in cid_lower and key != topic_lower):
+                    for comp in data["components"]:
+                        if comp not in core_components:
+                            core_components.append(comp)
+                    for misc in data["misconceptions"]:
+                        if misc not in misconceptions:
+                            misconceptions.append(misc)
+                    break
+
+        if not core_components:
+            for key, data in CANONICAL_CONCEPT_EVIDENCE.items():
+                if key in cid_lower or (gap_lower and key in gap_lower) or key in topic_lower or (key in q_lower):
+                    for comp in data["components"]:
+                        if comp not in core_components:
+                            core_components.append(comp)
+                    for misc in data["misconceptions"]:
+                        if misc not in misconceptions:
+                            misconceptions.append(misc)
+                    break
+
+        # 5. Evidence and constraints from dynamic ConceptNode (for arbitrary topic models)
+        if not core_components and concept_node:
             for req in getattr(concept_node, "expected_evidence", []):
                 desc = req.description if hasattr(req, "description") else str(req)
                 if desc and desc not in core_components:
                     core_components.append(desc)
 
-            for obj_item in getattr(concept_node, "learning_objectives", []):
-                for req in getattr(obj_item, "expected_evidence", []):
-                    desc = req.description if hasattr(req, "description") else str(req)
-                    if desc and desc not in core_components:
-                        core_components.append(desc)
+            if not core_components:
+                for obj_item in getattr(concept_node, "learning_objectives", []):
+                    for req in getattr(obj_item, "expected_evidence", []):
+                        desc = req.description if hasattr(req, "description") else str(req)
+                        if desc and desc not in core_components:
+                            core_components.append(desc)
 
-            for c in (concept_node.concept_constraints or concept_node.constraints):
+            for c in (concept_node.concept_constraints or []):
                 rule = c.rule if hasattr(c, "rule") else (c.description if hasattr(c, "description") else str(c))
                 if rule and rule not in core_components:
                     core_components.append(rule)
 
+        # Misconceptions from ConceptNode
+        if concept_node:
             if concept_node.common_misconceptions:
                 for m in concept_node.common_misconceptions:
                     if m not in misconceptions:
@@ -155,42 +193,9 @@ class EvidenceExtractor:
                 if m_def.incorrect_claim_pattern and m_def.incorrect_claim_pattern not in misconceptions:
                     misconceptions.append(m_def.incorrect_claim_pattern)
 
-        # If constraints are not provided, check canonical CS knowledge
-        if not core_components:
-            cid_lower = (concept_id or "").lower().replace(" ", "_")
-            gap_lower = (gap or "").lower().replace(" ", "_")
-            q_lower = (question_text or "").lower()
-            topic_lower = (topic or "").lower()
-
-            canonical_found = False
-            for key, data in CANONICAL_CONCEPT_EVIDENCE.items():
-                if (gap_lower and key in gap_lower) or (key in q_lower and key != topic_lower) or (key in cid_lower and key != topic_lower):
-                    for comp in data["components"]:
-                        if comp not in core_components:
-                            core_components.append(comp)
-                    for misc in data["misconceptions"]:
-                        if misc not in misconceptions:
-                            misconceptions.append(misc)
-                    canonical_found = True
-                    break
-
-            if not canonical_found:
-                for key, data in CANONICAL_CONCEPT_EVIDENCE.items():
-                    if key in cid_lower or (gap_lower and key in gap_lower):
-                        for comp in data["components"]:
-                            if comp not in core_components:
-                                core_components.append(comp)
-                        for misc in data["misconceptions"]:
-                            if misc not in misconceptions:
-                                misconceptions.append(misc)
-                        canonical_found = True
-                        break
-
-            if not canonical_found and concept_node:
-                if concept_node.definition and not concept_node.definition.lower().startswith("foundational"):
-                    core_components.append(concept_node.definition)
-                if concept_node.common_misconceptions:
-                    misconceptions.extend(concept_node.common_misconceptions)
+        if not core_components and concept_node:
+            if concept_node.definition and not concept_node.definition.lower().startswith("foundational"):
+                core_components.append(concept_node.definition)
 
         # Fallback if concept_node or spec is empty
         clean_name = concept_id.replace("_", " ").title()
