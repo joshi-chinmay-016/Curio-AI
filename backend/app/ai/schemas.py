@@ -188,8 +188,8 @@ class ConstraintType(str, Enum):
 class ExpectedEvidenceRequirement(BaseModel):
     """Essential or supporting evidence requirement for assessing a concept/objective."""
     evidence_id: str
-    concept_id: str
-    description: str
+    concept_id: str = ""
+    description: str = ""
     objective_id: Optional[str] = None
     evidence_type: EvidenceType = EvidenceType.MECHANISM
     essential: bool = True
@@ -201,9 +201,21 @@ class ExpectedEvidenceRequirement(BaseModel):
 class ConceptConstraint(BaseModel):
     """A condition, invariant, rule, or limitation that must hold."""
     constraint_id: str
-    concept_id: str
-    description: str
+    concept_id: str = ""
+    description: str = ""
+    rule: Optional[str] = None
     constraint_type: ConstraintType = ConstraintType.INVARIANT
+    essential: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_rule_and_desc(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            desc = data.get("description") or data.get("rule") or ""
+            data["description"] = desc
+            if not data.get("rule"):
+                data["rule"] = desc
+        return data
 
 
 class MisconceptionDefinition(BaseModel):
