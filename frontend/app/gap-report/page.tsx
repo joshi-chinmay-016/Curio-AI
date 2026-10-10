@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { GapReportPage } from "./(components)/GapReportPage";
+import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
 
 export const metadata = {
   title: "Gap Report | Curio AI",
@@ -8,9 +9,11 @@ export const metadata = {
 
 export default function Page() {
   return (
-    <Suspense fallback={<GapReportLoading />}>
-      <GapReportPage />
-    </Suspense>
+    <ProtectedRoute>
+      <Suspense fallback={<GapReportLoading />}>
+        <GapReportPage />
+      </Suspense>
+    </ProtectedRoute>
   );
 }
 

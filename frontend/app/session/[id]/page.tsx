@@ -14,6 +14,7 @@ import { EvaluatingOverlay } from "@/components/curio/session/EvaluatingOverlay"
 import { FinishDialog } from "@/components/curio/session/FinishDialog";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { KeycapButton } from "@/components/curio/KeycapButton";
+import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
 
 export default function LearningSessionPage() {
   const params = useParams();
@@ -52,7 +53,8 @@ export default function LearningSessionPage() {
   const isEvaluating = mode === "EVALUATING";
 
   return (
-    <div className="h-screen flex bg-ice text-navy overflow-hidden select-none selection:bg-cobalt selection:text-white">
+    <ProtectedRoute>
+      <div className="h-screen flex bg-ice text-navy overflow-hidden select-none selection:bg-cobalt selection:text-white">
       <DiagonalSweepTransition />
 
       {/* Collapsible Session Sidebar */}
@@ -168,5 +170,6 @@ export default function LearningSessionPage() {
         />
       </main>
     </div>
+    </ProtectedRoute>
   );
 }
