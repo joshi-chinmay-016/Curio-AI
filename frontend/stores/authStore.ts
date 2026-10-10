@@ -14,6 +14,7 @@ interface AuthStoreState {
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (credentials: RegisterCredentials) => Promise<void>;
+  loginDemoUser: (email?: string) => void;
   logout: () => void;
   initAuth: () => Promise<void>;
   clearError: () => void;
@@ -76,9 +77,32 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     }
   },
 
+  loginDemoUser: (email?: string) => {
+    const demoEmail = email || "learner@curio.ai";
+    const demoUser: User = {
+      id: "demo-" + Math.random().toString(36).substring(2, 9),
+      email: demoEmail,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    };
+    const demoToken = "demo-session-token";
+    if (typeof window !== "undefined") {
+      localStorage.setItem(TOKEN_KEY, demoToken);
+      localStorage.setItem("curio_demo_user", JSON.stringify(demoUser));
+    }
+    set({
+      token: demoToken,
+      user: demoUser,
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    });
+  },
+
   logout: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem("curio_demo_user");
       // Clean up sensitive user session items
       sessionStorage.clear();
     }
@@ -105,6 +129,27 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         token: null,
         isAuthenticated: false,
         isLoading: false,
+      });
+      return;
+    }
+
+    if (savedToken === "demo-session-token") {
+      let storedUser: User = {
+        id: "demo-user",
+        email: "learner@curio.ai",
+        is_active: true,
+        created_at: new Date().toISOString(),
+      };
+      try {
+        const raw = localStorage.getItem("curio_demo_user");
+        if (raw) storedUser = JSON.parse(raw);
+      } catch {}
+      set({
+        token: savedToken,
+        user: storedUser,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
       });
       return;
     }

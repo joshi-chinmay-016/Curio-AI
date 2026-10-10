@@ -13,7 +13,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "/dashboard";
 
-  const { login, isAuthenticated, isLoading, error, clearError, initAuth } = useAuthStore();
+  const { login, loginDemoUser, isAuthenticated, isLoading, error, clearError, initAuth } = useAuthStore();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -107,10 +107,33 @@ export default function LoginPage() {
             {displayedError && (
               <div
                 role="alert"
-                className="mb-6 p-3.5 bg-red-50 border border-red-200 rounded-[6px] flex items-start gap-3 text-red-800 text-xs font-sans leading-relaxed"
+                className="mb-6 p-4 bg-red-50 border border-red-200 rounded-[8px] text-red-800 text-xs font-sans leading-relaxed space-y-3"
               >
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                <span>{displayedError}</span>
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span className="font-medium">{displayedError}</span>
+                </div>
+                {(displayedError.includes("Database") ||
+                  displayedError.includes("timed out") ||
+                  displayedError.includes("port 5433") ||
+                  displayedError.includes("reach the backend")) && (
+                  <div className="pt-2 border-t border-red-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span className="text-[11px] text-red-700 font-mono">
+                      Database container offline?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        loginDemoUser(email || "learner@curio.ai");
+                        router.replace(returnTo);
+                      }}
+                      className="px-3 py-1.5 bg-navy text-white text-xs font-mono font-bold rounded-[4px] hover:bg-cobalt transition-colors inline-flex items-center justify-center gap-1.5 shrink-0 shadow-xs"
+                    >
+                      <span>CONTINUE IN DEMO MODE</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
