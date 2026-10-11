@@ -4,7 +4,12 @@ import { getSession, registerSessionTopic } from "@/services/sessionService";
 
 interface SessionStoreState extends SessionState {
   setSessionId: (id: string) => void;
-  setTopic: (name: string, id?: string) => void;
+  setTopic: (
+    name: string,
+    id?: string,
+    sourceType?: "GENERAL" | "DOCUMENT",
+    documentId?: string
+  ) => void;
   setMode: (mode: SessionMode) => void;
   addMessage: (message: ChatMessage) => void;
   setMessages: (messages: ChatMessage[]) => void;
@@ -33,12 +38,17 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   ...initialState,
 
   setSessionId: (sessionId) => set({ sessionId }),
-  setTopic: (topicName, id) => {
+  setTopic: (topicName, id, sourceType, documentId) => {
     const currentId = id || get().sessionId;
     if (currentId) {
       registerSessionTopic(currentId, topicName);
     }
-    set({ topicName, topicId: currentId || topicName });
+    set({
+      topicName,
+      topicId: currentId || topicName,
+      ...(sourceType ? { sourceType } : {}),
+      ...(documentId ? { documentId } : {}),
+    });
   },
   setMode: (mode) => set({ mode }),
   addMessage: (message) =>

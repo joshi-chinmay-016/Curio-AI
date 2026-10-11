@@ -11,6 +11,7 @@ export interface InputAreaProps {
   onSendMessage: (content: string) => void;
   onStuck: () => void;
   onFinishSession: () => void;
+  onAttachmentClick?: () => void;
   disabled?: boolean;
 }
 
@@ -19,6 +20,7 @@ export function InputArea({
   onSendMessage,
   onStuck,
   onFinishSession,
+  onAttachmentClick,
   disabled = false,
 }: InputAreaProps) {
   const [content, setContent] = useState("");
@@ -52,7 +54,11 @@ export function InputArea({
   };
 
   const handleAttachmentClick = () => {
-    curioToast.info("DOCUMENT INGESTION READY", "Document upload will be available in the next release.");
+    if (onAttachmentClick) {
+      onAttachmentClick();
+    } else {
+      window.location.href = "/documents";
+    }
   };
 
   const handleVoiceClick = () => {
@@ -68,12 +74,12 @@ export function InputArea({
       {/* Composer Box */}
       <div className="bg-white border-2 border-navy rounded-[8px] shadow-[0_4px_0_0_#0F2B4A] p-3 transition-all duration-150 focus-within:border-cobalt focus-within:shadow-[0_4px_0_0_#3A63FF]">
         <div className="flex items-end gap-2.5">
-          {/* Attachment placeholder button */}
+          {/* Attachment button */}
           <button
             type="button"
             onClick={handleAttachmentClick}
-            className="p-2 text-navy/40 hover:text-navy hover:bg-ice rounded-[4px] transition-colors shrink-0 mb-0.5"
-            title="Attach document or code file (Coming soon)"
+            className="p-2 text-navy/40 hover:text-cobalt hover:bg-ice rounded-[4px] transition-colors shrink-0 mb-0.5"
+            title="Attach or inspect grounding document"
           >
             <Plus className="w-4 h-4" />
           </button>

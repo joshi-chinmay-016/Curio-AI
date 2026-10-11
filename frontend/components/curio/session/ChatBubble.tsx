@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatMessage } from "@/types/session";
 import { ModeChip } from "@/components/curio/ModeChip";
@@ -111,6 +111,36 @@ export function ChatBubble({ message }: ChatBubbleProps) {
         >
           <MarkdownContent content={message.content} />
         </div>
+
+        {/* Source Citations (Rendered only when real citation metadata is returned) */}
+        {message.citations && message.citations.length > 0 && (
+          <div className="mt-2 w-full space-y-1.5 pl-1">
+            <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+              <BookOpen className="w-3 h-3 text-cobalt" />
+              <span>Grounding Sources ({message.citations.length})</span>
+            </div>
+            <div className="space-y-1">
+              {message.citations.map((cite, idx) => (
+                <div
+                  key={idx}
+                  className="p-2 rounded bg-white/80 border border-slate-200 text-xs font-sans text-navy"
+                >
+                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-600 font-medium mb-0.5">
+                    <span className="truncate">{cite.documentName || "Document Source"}</span>
+                    {cite.pageNumber !== null && cite.pageNumber !== undefined && (
+                      <span className="shrink-0 text-slate-400">p. {cite.pageNumber}</span>
+                    )}
+                  </div>
+                  {cite.snippet && (
+                    <p className="text-[11px] text-slate-500 italic line-clamp-2">
+                      &ldquo;{cite.snippet}&rdquo;
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Footer info & copy on hover */}
         <div className="flex items-center gap-2 mt-1 px-1">

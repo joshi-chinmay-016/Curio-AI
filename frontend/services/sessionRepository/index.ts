@@ -11,13 +11,15 @@ class ResilientSessionRepository implements SessionRepository {
   private apiRepo = new ApiSessionRepository();
 
   private shouldUseApi(): boolean {
-    return process.env.NEXT_PUBLIC_USE_API === "true";
+    if (process.env.NEXT_PUBLIC_USE_API === "true") return true;
+    if (typeof window !== "undefined" && window.localStorage?.getItem("curio_access_token")) return true;
+    return false;
   }
 
-  async createSession(topic: string, sourceType?: string) {
+  async createSession(topic: string, sourceType?: string, documentId?: string) {
     if (this.shouldUseApi()) {
       try {
-        const session = await this.apiRepo.createSession(topic, sourceType);
+        const session = await this.apiRepo.createSession(topic, sourceType, documentId);
         // Sync locally as well for offline safety
         await this.localRepo.updateSession(session.sessionId, session).catch(() => {});
         return session;
@@ -25,7 +27,7 @@ class ResilientSessionRepository implements SessionRepository {
         console.warn("[SessionRepository] API createSession failed, falling back to local:", err);
       }
     }
-    return this.localRepo.createSession(topic, sourceType);
+    return this.localRepo.createSession(topic, sourceType, documentId);
   }
 
   async getSession(sessionId: string) {
