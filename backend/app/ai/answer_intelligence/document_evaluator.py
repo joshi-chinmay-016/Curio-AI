@@ -30,14 +30,14 @@ GENERIC_STOP_WORDS = STOP_WORDS | {
 }
 
 
-def _has_general_negation(text: str) -> bool:
-    """Checks whether the text contains general negation markers."""
-    return bool(
-        re.search(
-            r"\b(no|not|never|neither|nor|without|cannot|can't|does not|doesn't|isn't|aren't)\b",
-            text,
-            re.IGNORECASE,
-        )
+def _is_token_negated_in(token: str, text: str) -> bool:
+    """Checks if a specific token or concept is directly negated in the text."""
+    pat = (
+        r"\b(?:no|not|never|neither|nor|without|regardless of|does not|doesn't|cannot|can't|impossible to)\s+(?:\w+\s+){0,3}"
+        + re.escape(token)
+    )
+    return bool(re.search(pat, text, re.IGNORECASE)) or bool(
+        re.search(r"\bnon[\s-]" + re.escape(token), text, re.IGNORECASE)
     )
 
 
@@ -59,17 +59,26 @@ def _check_conflicting_chunks(chunks: List[DocumentChunkEvidence]) -> bool:
     for i in range(len(chunks)):
         text_i = chunks[i].text.lower()
         tokens_i = _extract_content_tokens(text_i)
-        neg_i = _has_general_negation(text_i)
 
         for j in range(i + 1, len(chunks)):
             text_j = chunks[j].text.lower()
             tokens_j = _extract_content_tokens(text_j)
-            neg_j = _has_general_negation(text_j)
-
-            # High lexical overlap but opposite polarity indicates conflicting evidence
             overlap = tokens_i & tokens_j
-            if len(overlap) >= 3 and (neg_i != neg_j):
-                return True
+
+            if len(overlap) >= 2:
+                # Token-specific polarity check
+                for t in overlap:
+                    if _is_token_negated_in(t, text_i) != _is_token_negated_in(t, text_j):
+                        return True
+
+                # Explicit contradictory phrases
+                if (
+                    ("impossible" in text_i and "possible" in text_j)
+                    or ("impossible" in text_j and "possible" in text_i)
+                    or ("never" in text_i and "always" in text_j)
+                    or ("never" in text_j and "always" in text_i)
+                ):
+                    return True
 
     return False
 
@@ -89,6 +98,7 @@ class DocumentEvidenceEvaluator:
         self,
         claims: List[LearnerClaim],
         doc_context: Optional[DocumentSourceContext],
+        target_concept: Optional[str] = None,
     ) -> Tuple[List[LearnerClaim], Dict[str, Any]]:
         """
         Evaluates a list of atomic claims against the document context.
@@ -125,7 +135,7 @@ class DocumentEvidenceEvaluator:
                 conflicting_count += 1
                 continue
 
-            status, rationale = self._classify_claim(claim, doc_context.chunks)
+            status, rationale = self._classify_claim(claim, doc_context.chunks, target_concept=target_concept)
             claim.document_evidence_status = status
             claim.document_rationale = rationale
 
@@ -154,13 +164,14 @@ class DocumentEvidenceEvaluator:
         self,
         claim: LearnerClaim,
         chunks: List[DocumentChunkEvidence],
+        target_concept: Optional[str] = None,
     ) -> Tuple[DocumentEvidenceClassification, str]:
         """
         Classifies an individual claim against retrieved chunks.
         """
         claim_text = claim.text.strip().lower()
         claim_tokens = _extract_content_tokens(claim_text)
-        claim_is_negated = _has_general_negation(claim_text)
+        concept_tokens = _extract_content_tokens(target_concept) if target_concept else set()
 
         if not claim_tokens:
             return (
@@ -169,6 +180,7 @@ class DocumentEvidenceEvaluator:
             )
 
         best_overlap_count = 0
+        best_substantive_overlap_count = 0
         best_chunk: Optional[DocumentChunkEvidence] = None
         contradiction_found = False
         contradiction_chunk: Optional[DocumentChunkEvidence] = None
@@ -176,33 +188,42 @@ class DocumentEvidenceEvaluator:
         for chunk in chunks:
             chunk_text = chunk.text.strip().lower()
             chunk_tokens = _extract_content_tokens(chunk_text)
-            chunk_is_negated = _has_general_negation(chunk_text)
 
             overlap = claim_tokens & chunk_tokens
             overlap_count = len(overlap)
+            substantive_overlap = overlap - concept_tokens
+            substantive_count = len(substantive_overlap)
 
             # Check for contradiction:
-            # High conceptual overlap (e.g. >= 2 meaningful domain tokens) but opposite assertion/polarity
+            # High conceptual overlap (e.g. >= 2 meaningful domain tokens)
             if overlap_count >= 2:
-                # Polarity mismatch check
-                if claim_is_negated != chunk_is_negated:
-                    contradiction_found = True
-                    contradiction_chunk = chunk
+                # Token-specific polarity check
+                for t in overlap:
+                    if _is_token_negated_in(t, claim_text) != _is_token_negated_in(t, chunk_text):
+                        contradiction_found = True
+                        contradiction_chunk = chunk
+                        break
+                if contradiction_found:
                     break
 
                 # Explicit contradictory phrases check
-                # e.g., claim: "unsorted array", chunk: "must be sorted"
                 if (
                     ("unsorted" in claim_text and "must be sorted" in chunk_text)
+                    or ("unsorted" in chunk_text and "must be sorted" in claim_text)
                     or ("constant time" in claim_text and "logarithmic" in chunk_text)
                     or ("o(n)" in claim_text and "o(log n)" in chunk_text)
                     or ("always" in claim_text and "never" in chunk_text)
+                    or ("impossible" in claim_text and "possible" in chunk_text)
                 ):
                     contradiction_found = True
                     contradiction_chunk = chunk
                     break
 
-            if overlap_count > best_overlap_count:
+            if substantive_count > best_substantive_overlap_count:
+                best_overlap_count = overlap_count
+                best_substantive_overlap_count = substantive_count
+                best_chunk = chunk
+            elif overlap_count > best_overlap_count and best_chunk is None:
                 best_overlap_count = overlap_count
                 best_chunk = chunk
 
@@ -213,13 +234,18 @@ class DocumentEvidenceEvaluator:
             )
 
         # To be SUPPORTED, require substantive semantic overlap:
-        # 1. At least 2 meaningful tokens or > 50% of the claim's content tokens
-        # 2. Matching polarity (verified above)
-        # 3. Not merely a generic single keyword match!
+        # 1. At least 2 substantive domain tokens beyond the mere topic/concept name
+        # 2. Substantive overlap coverage of the non-concept tokens
+        # 3. Matching polarity (verified above)
+        # 4. Not merely a generic single keyword match!
+        claim_substantive_tokens = claim_tokens - concept_tokens
         if (
             best_chunk is not None
-            and best_overlap_count >= 2
-            and (best_overlap_count / max(1, len(claim_tokens))) >= 0.40
+            and best_substantive_overlap_count >= 2
+            and (
+                best_substantive_overlap_count >= 3
+                or (best_substantive_overlap_count / max(1, len(claim_substantive_tokens))) >= 0.25
+            )
         ):
             return (
                 DocumentEvidenceClassification.SUPPORTED,

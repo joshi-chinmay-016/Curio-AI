@@ -286,7 +286,9 @@ class AssessmentAggregator:
         # -------------------------------------------------------------
         claims = self.claim_extractor.extract(raw_msg, target_concept)
         doc_ctx = getattr(context, "document_context", None) if context else None
-        claims, doc_summary = self.document_evaluator.evaluate_claims(claims, doc_ctx)
+        claims, doc_summary = self.document_evaluator.evaluate_claims(
+            claims, doc_ctx, target_concept=target_concept
+        )
 
         # -------------------------------------------------------------
         # 5. Concept Alignment
