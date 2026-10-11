@@ -53,14 +53,25 @@ export function generateInitialQuestion(topicName: string): ChatMessage {
   };
 }
 
-export async function startSession(topicName: string): Promise<{ sessionId: string; topicName: string }> {
+export async function startSession(
+  topicName: string,
+  options?: { sourceType?: "GENERAL" | "DOCUMENT"; documentId?: string }
+): Promise<{ sessionId: string; topicName: string; documentId?: string }> {
   const cleanTopic = topicName.trim() || "General Concept";
   const repo = getSessionRepository();
 
   try {
-    const session = await repo.createSession(cleanTopic);
+    const session = await repo.createSession(
+      cleanTopic,
+      options?.sourceType || "GENERAL",
+      options?.documentId
+    );
     registerSessionTopic(session.sessionId, cleanTopic);
-    return { sessionId: session.sessionId, topicName: cleanTopic };
+    return {
+      sessionId: session.sessionId,
+      topicName: cleanTopic,
+      documentId: session.documentId || undefined,
+    };
   } catch (err) {
     console.warn("Failed to create session via repository, using fallback:", err);
     const fallbackId = "sess_" + Date.now();
@@ -110,6 +121,8 @@ export async function getSession(sessionId: string, topicHint?: string): Promise
     messages: chatMessages,
     currentTurnNumber: learnerCount + 1,
     confidence: Math.round(session.confidence || 25),
+    documentId: session.documentId || undefined,
+    sourceType: (session.sourceType as "GENERAL" | "DOCUMENT") || "GENERAL",
     isConnected: true,
     isThinking: false,
     interruptedQuestion: session.interruptedQuestion

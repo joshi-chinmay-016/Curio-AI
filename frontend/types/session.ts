@@ -38,6 +38,8 @@ export interface SessionState {
     severity: "LOW" | "MEDIUM" | "HIGH";
   };
   interruptedQuestion?: ChatMessage;
+  documentId?: string;
+  sourceType?: "GENERAL" | "DOCUMENT";
   isConnected: boolean;
   isThinking: boolean;
 }

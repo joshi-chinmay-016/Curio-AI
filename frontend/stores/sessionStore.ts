@@ -66,6 +66,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       confidence: data.confidence,
       interruptedQuestion: data.interruptedQuestion,
       activeGap: data.activeGap,
+      documentId: data.documentId,
+      sourceType: data.sourceType,
       isConnected: true,
       isThinking: false,
     });

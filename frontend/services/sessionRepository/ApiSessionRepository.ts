@@ -9,13 +9,18 @@ import { SessionMode } from "@/types/session";
 import { apiClient } from "@/services/apiClient";
 
 export class ApiSessionRepository implements SessionRepository {
-  async createSession(topic: string, sourceType: string = "GENERAL"): Promise<StoredSession> {
+  async createSession(topic: string, sourceType: string = "GENERAL", documentId?: string): Promise<StoredSession> {
+    const payload: Record<string, any> = {
+      topic: topic.trim(),
+      source_type: sourceType,
+    };
+    if (documentId) {
+      payload.document_id = documentId;
+    }
+
     const data = await apiClient<any>("/sessions", {
       method: "POST",
-      body: JSON.stringify({
-        topic: topic.trim(),
-        source_type: sourceType,
-      }),
+      body: JSON.stringify(payload),
     });
 
     return this.mapBackendSessionToStored(data);
