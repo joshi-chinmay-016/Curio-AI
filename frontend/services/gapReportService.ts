@@ -9,6 +9,8 @@ import {
   MasteryLevel,
   EvidenceItem,
 } from "@/types/gapReport";
+import { apiClient } from "./apiClient";
+import { getRegisteredSessionTopic } from "./sessionService";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -48,24 +50,28 @@ export interface BackendReportResponse {
 }
 
 /**
- * Fetch all available sessions from the backend.
+ * Fetch all available sessions from the backend using authenticated client.
  */
 export async function getSessions(): Promise<SessionSummary[]> {
+  const isDemo = typeof window !== "undefined" && localStorage.getItem("curio_access_token") === "demo-session-token";
   try {
-    const res = await fetch(`${API_BASE}/sessions`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      console.warn(`Failed to fetch sessions: status ${res.status}`);
-      return [];
+    const data = await apiClient<any>("/sessions");
+    const items = Array.isArray(data) ? data : (data?.items || []);
+    return items.map((item: any) => ({
+      session_id: item.session_id || item.id,
+      topic: item.topic,
+      status: item.status,
+      current_mode: item.current_mode,
+      difficulty: item.difficulty,
+      confidence: item.confidence,
+      created_at: item.created_at,
+      last_active_at: item.last_active_at || item.created_at,
+    }));
+  } catch (err: any) {
+    if (err.status === 401 || err.status === 403) {
+      if (isDemo) return [];
+      throw err;
     }
-
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
     console.warn("Backend sessions endpoint unavailable:", err);
     return [];
   }
@@ -76,19 +82,11 @@ export async function getSessions(): Promise<SessionSummary[]> {
  */
 export async function evaluateSession(sessionId: string): Promise<GapReport | null> {
   try {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/evaluate`, {
+    const reportData = await apiClient<BackendReportResponse>(`/sessions/${sessionId}/evaluate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
     });
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error(`Evaluation failed (${res.status}):`, errorText);
-      return null;
-    }
-
-    const reportData: BackendReportResponse = await res.json();
-    const sessions = await getSessions();
+    const sessions = await getSessions().catch(() => []);
     const currentSession = sessions.find((s) => s.session_id === sessionId);
     const topicName = currentSession?.topic || "Learning Session";
     const availableTopics: TopicOption[] = sessions.map((s) => ({
@@ -97,22 +95,68 @@ export async function evaluateSession(sessionId: string): Promise<GapReport | nu
     }));
 
     return mapBackendReportToGapReport(reportData, topicName, availableTopics);
-  } catch (err) {
+  } catch (err: any) {
+    if (err.status === 401 || err.status === 403) {
+      throw err;
+    }
     console.error("Failed to trigger session evaluation:", err);
     return null;
   }
 }
 
 /**
- * Fetch Gap Report strictly from backend.
- * Returns null if no report exists for the session or if no sessions exist.
+ * Regenerate an existing report for a session creating a new version.
  */
-import { getRegisteredSessionTopic } from "./sessionService";
+export async function regenerateReport(sessionId: string): Promise<GapReport | null> {
+  try {
+    const reportData = await apiClient<BackendReportResponse>(`/sessions/${sessionId}/report/regenerate`, {
+      method: "POST",
+    });
 
+    const sessions = await getSessions().catch(() => []);
+    const currentSession = sessions.find((s) => s.session_id === sessionId);
+    const topicName = currentSession?.topic || "Learning Session";
+    const availableTopics: TopicOption[] = sessions.map((s) => ({
+      id: s.session_id,
+      name: s.topic,
+    }));
+
+    return mapBackendReportToGapReport(reportData, topicName, availableTopics);
+  } catch (err: any) {
+    if (err.status === 401 || err.status === 403) {
+      throw err;
+    }
+    console.error("Failed to regenerate session report:", err);
+    return null;
+  }
+}
+
+/**
+ * Fetch Gap Report from backend using authenticated client.
+ * Returns null if no report exists for the session or if uncompleted.
+ * Preserves mock report only for explicit demo/offline mode.
+ */
 export async function getGapReport(
   sessionId?: string
 ): Promise<GapReport | null> {
-  const sessions = await getSessions();
+  const isDemo = typeof window !== "undefined" && localStorage.getItem("curio_access_token") === "demo-session-token";
+  const hasToken = typeof window !== "undefined" && !!localStorage.getItem("curio_access_token");
+
+  // In intentional offline/demo mode, return realistic mock report
+  if (isDemo) {
+    const topicName = (sessionId && getRegisteredSessionTopic(sessionId)) || "Learning Concept";
+    return getMockGapReport(sessionId || "session_mock_active", topicName);
+  }
+
+  let sessions: SessionSummary[] = [];
+  try {
+    sessions = await getSessions();
+  } catch (err: any) {
+    if (err.status === 401 || err.status === 403) {
+      throw err;
+    }
+    sessions = [];
+  }
 
   if (!sessionId) {
     if (sessions.length > 0) {
@@ -139,22 +183,24 @@ export async function getGapReport(
         ];
 
   try {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/report`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-    });
-
-    if (res.ok) {
-      const reportData: BackendReportResponse = await res.json();
-      return mapBackendReportToGapReport(reportData, topicName, availableTopics);
+    const reportData = await apiClient<BackendReportResponse>(`/sessions/${sessionId}/report`);
+    return mapBackendReportToGapReport(reportData, topicName, availableTopics);
+  } catch (err: any) {
+    // Authentication failures must NEVER silently return mock report data as if it were real
+    if (err.status === 401 || err.status === 403) {
+      throw err;
     }
-  } catch (err) {
-    console.warn(`Backend report unavailable, using mock report for session ${sessionId}:`, err);
+    // Genuine missing report (e.g. session not completed yet)
+    if (err.status === 404 || (err.message && err.message.toLowerCase().includes("not found"))) {
+      return null;
+    }
+    console.warn(`Backend report unavailable for session ${sessionId}:`, err);
+    // Offline unauthenticated fallback for visitors without a token
+    if (!hasToken) {
+      return getMockGapReport(sessionId, topicName, availableTopics);
+    }
+    return null;
   }
-
-  // Realistic mock report for demonstration & standalone testing
-  return getMockGapReport(sessionId, topicName, availableTopics);
 }
 
 export function getMockGapReport(
