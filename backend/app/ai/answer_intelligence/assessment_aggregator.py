@@ -30,12 +30,14 @@ from backend.app.ai.answer_intelligence.misconception_detector import Misconcept
 from backend.app.ai.answer_intelligence.providers.base import BaseAssessmentProvider
 from backend.app.ai.answer_intelligence.providers.local_model import LocalAssessmentProvider
 from backend.app.ai.answer_intelligence.relevance_model import SemanticRelevanceModel
+from backend.app.ai.answer_intelligence.document_evaluator import DocumentEvidenceEvaluator
 from backend.app.ai.answer_intelligence.schemas import (
     AssessmentClassification,
     AssessmentIntent,
     AssessmentStatus,
     CompletenessLevel,
     CorrectnessLevel,
+    DocumentEvidenceClassification,
     LearningAssessment,
     RelevanceLevel,
 )
@@ -79,6 +81,7 @@ class AssessmentAggregator:
         self.misconception_detector = MisconceptionDetector(self.provider)
         self.confidence_engine = ConfidenceEngine(self.provider)
         self.mastery_gate = mastery_gate or MasteryGate()
+        self.document_evaluator = DocumentEvidenceEvaluator()
 
     def assess(
         self,
@@ -103,9 +106,13 @@ class AssessmentAggregator:
         )
         intervention_gap = intervention.gap if (intervention and getattr(intervention, "active", False)) else None
 
+        is_teacher = (
+            curr_mode == "TEACHER"
+            or (hasattr(curr_mode, "value") and curr_mode.value == "TEACHER")
+        )
         target_concept = (
             target_concept_override
-            or (intervention_gap if curr_mode == Mode.TEACHER and intervention_gap else None)
+            or (intervention_gap if is_teacher and intervention_gap else None)
             or (curr_q.concept if curr_q else None)
             or (context.active_concept if context else None)
             or topic
@@ -275,9 +282,11 @@ class AssessmentAggregator:
             )
 
         # -------------------------------------------------------------
-        # 4. Claim Extraction
+        # 4. Claim Extraction & Document Evidence Evaluation
         # -------------------------------------------------------------
         claims = self.claim_extractor.extract(raw_msg, target_concept)
+        doc_ctx = getattr(context, "document_context", None) if context else None
+        claims, doc_summary = self.document_evaluator.evaluate_claims(claims, doc_ctx)
 
         # -------------------------------------------------------------
         # 5. Concept Alignment
@@ -303,6 +312,14 @@ class AssessmentAggregator:
             expected=expected,
             relevance_level=relevance_level,
         )
+
+        # Include document-level claim contradictions
+        doc_contradictions = [
+            c.text for c in claims
+            if getattr(c, "document_evidence_status", None) == DocumentEvidenceClassification.CONTRADICTED
+        ]
+        if doc_contradictions:
+            contradictory = list(set(contradictory + doc_contradictions))
 
         # -------------------------------------------------------------
         # 8. Completeness Evaluation
@@ -364,6 +381,7 @@ class AssessmentAggregator:
             action = "TEACH_GAP"
 
         # Construct candidate assessment
+        meta = {"document_grounding": doc_summary} if doc_summary else {}
         assessment = LearningAssessment(
             intent=intent,
             is_answer_attempt=True,
@@ -385,6 +403,8 @@ class AssessmentAggregator:
             supports_mastery=False,  # Evaluated by MasteryGate below
             assessment_status=status,
             recommended_learning_action=action,
+            document_grounding_status=doc_summary.get("status") if doc_summary else None,
+            metadata=meta,
         )
 
         # -------------------------------------------------------------

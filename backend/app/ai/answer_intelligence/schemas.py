@@ -47,6 +47,14 @@ class EvidenceStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class DocumentEvidenceClassification(str, Enum):
+    SUPPORTED = "supported"
+    CONTRADICTED = "contradicted"
+    UNESTABLISHED = "unestablished"
+    CONFLICTING = "conflicting"
+    NOT_APPLICABLE = "not_applicable"
+
+
 class LearnerClaim(BaseModel):
     """Structured atomic claim extracted from the learner's response."""
     text: str = Field(description="The exact or paraphrased claim made by the learner.")
@@ -60,6 +68,14 @@ class LearnerClaim(BaseModel):
     misconception_labels: List[str] = Field(default_factory=list, description="Any detected misconception anti-patterns.")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence in this claim-level evaluation.")
     assessment_rationale: Optional[str] = Field(default=None, description="Short rationale for the claim assessment.")
+    document_evidence_status: DocumentEvidenceClassification = Field(
+        default=DocumentEvidenceClassification.NOT_APPLICABLE,
+        description="Claim support status against retrieved document evidence."
+    )
+    document_rationale: Optional[str] = Field(
+        default=None,
+        description="Reasoning connecting the claim to document evidence or lack thereof."
+    )
 
 
 class EvidenceItem(BaseModel):
@@ -171,4 +187,5 @@ class LearningAssessment(BaseModel):
     supports_mastery: bool = False
     assessment_status: AssessmentStatus = AssessmentStatus.HIGH_CONFIDENCE
     recommended_learning_action: str = ""
+    document_grounding_status: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
