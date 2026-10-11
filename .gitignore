@@ -40,6 +40,8 @@ var/
 .env/*
 backend/.env
 backend/.env/*
+backend/storage/
+
 
 
 # Virtual environments
