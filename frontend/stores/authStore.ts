@@ -104,7 +104,9 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem("curio_demo_user");
       // Clean up sensitive user session items
-      sessionStorage.clear();
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.clear();
+      }
     }
     set({
       user: null,
