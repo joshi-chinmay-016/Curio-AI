@@ -105,6 +105,10 @@ def build_student_question_prompt(
         from backend.app.ai.answer_intelligence.prompt_augmentation import build_dynamic_prompt_context
         dyn_ctx = build_dynamic_prompt_context(assessment, context=context, decision=decision, difficulty=decision.difficulty)
         structured_assessment_section = f"\n{dyn_ctx.to_prompt_section()}\n"
+    elif context is not None:
+        from backend.app.ai.answer_intelligence.prompt_augmentation import build_dynamic_prompt_context
+        dyn_ctx = build_dynamic_prompt_context(None, context=context, decision=decision, difficulty=decision.difficulty)
+        structured_assessment_section = f"\n{dyn_ctx.to_prompt_section()}\n"
 
     return f"""{STUDENT_PERSONA_GUIDELINES}
 Topic: '{context.topic}'
