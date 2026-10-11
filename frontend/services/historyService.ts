@@ -31,6 +31,19 @@ let mockPracticeQueue: PracticeQueueItem[] = [
   },
 ];
 
+export const DEFAULT_CONFIDENCE = 0.6;
+
+export function formatConfidenceScore(
+  confidence?: number | null,
+  defaultConfidence: number = DEFAULT_CONFIDENCE
+): number {
+  const effective = confidence ?? defaultConfidence;
+  if (effective > 1) {
+    return Math.round(effective);
+  }
+  return Math.round(effective * 100);
+}
+
 export async function getSessionHistory(page: number = 1, pageSize: number = 20): Promise<SessionSummary[]> {
   const token = typeof window !== "undefined" ? localStorage.getItem("curio_access_token") : null;
 
@@ -42,7 +55,19 @@ export async function getSessionHistory(page: number = 1, pageSize: number = 20)
 
       if (res && Array.isArray(res.items)) {
         return res.items.map((item) => {
-          const confidencePct = Math.round(item.confidence || 60);
+          const confidencePct = formatConfidenceScore(item.confidence);
+          const rawItem = item as unknown as { turn_count?: number; turnCount?: number };
+          const turnCount = rawItem.turn_count ?? rawItem.turnCount ?? 0;
+
+          let durationMinutes = 0;
+          if (item.created_at && item.last_active_at) {
+            const start = new Date(item.created_at).getTime();
+            const end = new Date(item.last_active_at).getTime();
+            if (!isNaN(start) && !isNaN(end) && end >= start) {
+              durationMinutes = Math.round((end - start) / 60000);
+            }
+          }
+
           return {
             sessionId: item.session_id,
             topicName: item.topic,
@@ -51,8 +76,8 @@ export async function getSessionHistory(page: number = 1, pageSize: number = 20)
             understandingScore: confidencePct,
             masteryLevel:
               confidencePct >= 80 ? "Mastery" : confidencePct >= 60 ? "Proficient" : "Developing",
-            turnCount: item.difficulty * 3 || 3,
-            durationMinutes: Math.max(5, Math.round(item.difficulty * 7)),
+            turnCount,
+            durationMinutes,
             unresolvedGaps: 0,
             resolvedMisconceptions: 0,
             createdAt: item.created_at,
@@ -72,26 +97,29 @@ export async function getSessionHistory(page: number = 1, pageSize: number = 20)
     const repoSessions = await repo.listSessions();
 
     if (repoSessions && repoSessions.length > 0) {
-      return repoSessions.map((s) => ({
-        sessionId: s.sessionId,
-        topicName: s.topicName,
-        topicId: s.topicId || s.sessionId,
-        status: s.status === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS",
-        understandingScore: s.understandingScore ?? Math.round((s.confidence || 0.25) * 100),
-        masteryLevel:
-          s.masteryLevel ||
-          (s.confidence && s.confidence >= 80
-            ? "Mastery"
-            : s.confidence && s.confidence >= 60
-            ? "Proficient"
-            : "Developing"),
-        turnCount: s.turnCount || 1,
-        durationMinutes: s.durationMinutes || 5,
-        unresolvedGaps: s.unresolvedGaps || 0,
-        resolvedMisconceptions: s.resolvedMisconceptions || 0,
-        createdAt: s.createdAt,
-        completedAt: s.completedAt,
-      }));
+      return repoSessions.map((s) => {
+        const confidencePct = formatConfidenceScore(s.understandingScore ?? s.confidence, 0.25);
+        return {
+          sessionId: s.sessionId,
+          topicName: s.topicName,
+          topicId: s.topicId || s.sessionId,
+          status: s.status === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS",
+          understandingScore: confidencePct,
+          masteryLevel:
+            s.masteryLevel ||
+            (confidencePct >= 80
+              ? "Mastery"
+              : confidencePct >= 60
+              ? "Proficient"
+              : "Developing"),
+          turnCount: s.turnCount ?? 0,
+          durationMinutes: s.durationMinutes ?? 0,
+          unresolvedGaps: s.unresolvedGaps || 0,
+          resolvedMisconceptions: s.resolvedMisconceptions || 0,
+          createdAt: s.createdAt,
+          completedAt: s.completedAt,
+        };
+      });
     }
   } catch (err) {
     console.warn("[historyService] Local repository fallback error:", err);
