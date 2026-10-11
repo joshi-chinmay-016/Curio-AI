@@ -197,7 +197,8 @@ function DashboardContent() {
                     {activeSession.topicName}
                   </h3>
                   <p className="font-sans text-xs text-navy/70">
-                    Confidence: {activeSession.understandingScore}% · {activeSession.turnCount} turns completed
+                    Confidence: {activeSession.understandingScore}%
+                    {activeSession.turnCount > 0 ? ` · ${activeSession.turnCount} turns completed` : ""}
                   </p>
                 </div>
               </div>

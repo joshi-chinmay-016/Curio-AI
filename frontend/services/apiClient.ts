@@ -43,7 +43,9 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     if (typeof window !== "undefined") {
       useAuthStore.getState().logout();
     }
-    throw new Error("Unauthorized. Please sign in again.");
+    const err = new Error("Unauthorized. Please sign in again.");
+    (err as any).status = 401;
+    throw err;
   }
 
   if (!response.ok) {
@@ -54,7 +56,9 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
         : Array.isArray(errorData.detail)
         ? errorData.detail.map((e: any) => e.msg || e.message).join(", ")
         : `Request failed with status ${response.status}`;
-    throw new Error(message);
+    const err = new Error(message);
+    (err as any).status = response.status;
+    throw err;
   }
 
   if (response.status === 204) {

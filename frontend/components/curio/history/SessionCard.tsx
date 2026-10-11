@@ -39,10 +39,18 @@ export function SessionCard({ session }: SessionCardProps) {
           <span className="font-semibold text-navy">{session.masteryLevel}</span>
           <span className="text-fog">·</span>
           <span className="font-semibold text-cobalt">{session.understandingScore}/100</span>
-          <span className="text-fog">·</span>
-          <span>{session.turnCount} turns</span>
-          <span className="text-fog">·</span>
-          <span>{session.durationMinutes} min</span>
+          {session.turnCount > 0 && (
+            <>
+              <span className="text-fog">·</span>
+              <span>{session.turnCount} turns</span>
+            </>
+          )}
+          {session.durationMinutes > 0 && (
+            <>
+              <span className="text-fog">·</span>
+              <span>{session.durationMinutes} min</span>
+            </>
+          )}
         </div>
 
         <div className="py-2.5 my-2 border-y border-fog/60 font-sans text-xs text-navy/80 flex items-center justify-between">
