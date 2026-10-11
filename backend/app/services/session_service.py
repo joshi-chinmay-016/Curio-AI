@@ -24,6 +24,11 @@ class SessionService:
         user_id: UUID,
     ) -> SessionResponse:
         """Create a new session associated with the authenticated user."""
+        if session_in.document_id:
+            from backend.app.repositories.document_repository import DocumentRepository
+            doc = DocumentRepository().get_by_id_and_user(db, session_in.document_id, user_id)
+            if not doc:
+                raise ValueError("Document not found or access denied")
         db_session = self.repo.create(db, user_id=user_id, obj_in=session_in)
         return SessionResponse.model_validate(db_session)
 
@@ -146,6 +151,11 @@ class SessionService:
         user_id: UUID,
     ) -> Optional[SessionResponse]:
         """Update a session ensuring ownership by the authenticated user."""
+        if session_in.document_id:
+            from backend.app.repositories.document_repository import DocumentRepository
+            doc = DocumentRepository().get_by_id_and_user(db, session_in.document_id, user_id)
+            if not doc:
+                raise ValueError("Document not found or access denied")
         updated = self.repo.update_by_id_and_user(db, session_id, user_id, session_in)
         if not updated:
             return None
