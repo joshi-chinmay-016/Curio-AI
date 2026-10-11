@@ -32,6 +32,10 @@ def build_candidate_generation_prompt(
         from backend.app.ai.answer_intelligence.prompt_augmentation import build_dynamic_prompt_context
         dyn_ctx = build_dynamic_prompt_context(assessment, context=context, difficulty=spec.difficulty)
         structured_assessment_section = f"\n{dyn_ctx.to_prompt_section()}\n"
+    elif context is not None:
+        from backend.app.ai.answer_intelligence.prompt_augmentation import build_dynamic_prompt_context
+        dyn_ctx = build_dynamic_prompt_context(None, context=context, difficulty=spec.difficulty)
+        structured_assessment_section = f"\n{dyn_ctx.to_prompt_section()}\n"
 
     return f"""You are the Question Generator for Curio AI, an inquisitive student learning through the Feynman Technique.
 Your goal is to generate 3 diverse candidate questions that probe the learner's understanding based strictly on the following specification.

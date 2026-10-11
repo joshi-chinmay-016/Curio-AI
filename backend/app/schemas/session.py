@@ -36,6 +36,8 @@ class SessionCreate(BaseModel):
 class SessionUpdate(BaseModel):
     topic: Optional[str] = None
     status: Optional[SessionStatus] = None
+    source_type: Optional[SourceType] = None
+    document_id: Optional[UUID] = None
 
 class SessionResponse(BaseModel):
     id: UUID

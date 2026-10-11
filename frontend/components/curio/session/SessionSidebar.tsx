@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Settings,
   BookOpen,
+  FileText,
   X,
 } from "lucide-react";
 import { KeycapButton } from "@/components/curio/KeycapButton";
@@ -202,6 +203,13 @@ export function SessionSidebar({
             {/* Bottom Actions */}
             <div className="pt-3 border-t border-fog mt-auto space-y-1">
               <Link
+                href="/documents"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
+              >
+                <FileText className="w-3.5 h-3.5 text-cobalt" />
+                <span>MY DOCUMENTS</span>
+              </Link>
+              <Link
                 href="/history"
                 className="flex items-center gap-2.5 px-3 py-2 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
               >
@@ -228,6 +236,13 @@ export function SessionSidebar({
               title="New Session"
             >
               <Plus className="w-5 h-5" />
+            </Link>
+            <Link
+              href="/documents"
+              className="p-2 text-navy/70 hover:text-navy hover:bg-ice rounded-[4px] transition-colors"
+              title="My Documents"
+            >
+              <FileText className="w-5 h-5 text-cobalt" />
             </Link>
             <Link
               href="/history"

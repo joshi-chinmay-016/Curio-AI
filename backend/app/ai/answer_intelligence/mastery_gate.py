@@ -11,6 +11,7 @@ from backend.app.ai.answer_intelligence.schemas import (
     AssessmentStatus,
     CompletenessLevel,
     CorrectnessLevel,
+    DocumentEvidenceClassification,
     EvidenceStatus,
     LearningAssessment,
     MasteryDecision,
@@ -124,6 +125,38 @@ class MasteryGate:
                 record_as_misconception=False,
                 concept_id=cid,
                 reason="Learner made contradictory claims regarding target concept. Mastery blocked.",
+            )
+
+        # 5b. Document Contradiction blocks mastery and records gap
+        if any(
+            getattr(c, "document_evidence_status", None) == DocumentEvidenceClassification.CONTRADICTED
+            for c in assessment.claims
+        ):
+            return MasteryDecision(
+                supports_mastery=False,
+                mastery_delta_allowed=False,
+                allowed_delta=0.0,
+                evidence_count_increment=0,
+                record_as_gap=True,
+                record_as_misconception=False,
+                concept_id=cid,
+                reason="Learner claim directly contradicts retrieved document evidence. Mastery update blocked and gap recorded.",
+            )
+
+        # 5c. Conflicting Document Evidence preserves uncertainty and blocks positive mastery
+        if any(
+            getattr(c, "document_evidence_status", None) == DocumentEvidenceClassification.CONFLICTING
+            for c in assessment.claims
+        ):
+            return MasteryDecision(
+                supports_mastery=False,
+                mastery_delta_allowed=False,
+                allowed_delta=0.0,
+                evidence_count_increment=0,
+                record_as_gap=False,
+                record_as_misconception=False,
+                concept_id=cid,
+                reason="Retrieved document evidence contains conflicting statements. Uncertainty preserved; mastery update held.",
             )
 
         # 6. Completely incorrect answers

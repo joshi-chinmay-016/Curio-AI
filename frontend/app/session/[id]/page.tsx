@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Menu, BookOpen, ChevronLeft } from "lucide-react";
+import { Menu, BookOpen, ChevronLeft, FileText } from "lucide-react";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useSessionWebSocket } from "@/hooks/useSessionWebSocket";
 import { SessionSidebar } from "@/components/curio/session/SessionSidebar";
@@ -12,8 +12,10 @@ import { InputArea } from "@/components/curio/session/InputArea";
 import { StatusBar } from "@/components/curio/StatusBar";
 import { EvaluatingOverlay } from "@/components/curio/session/EvaluatingOverlay";
 import { FinishDialog } from "@/components/curio/session/FinishDialog";
+import { DocumentContextPanel } from "@/components/curio/session/DocumentContextPanel";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { KeycapButton } from "@/components/curio/KeycapButton";
+import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
 
 export default function LearningSessionPage() {
   const params = useParams();
@@ -30,6 +32,8 @@ export default function LearningSessionPage() {
     currentTurnNumber,
     confidence,
     activeGap,
+    documentId,
+    detachDocument,
     initSession,
   } = useSessionStore();
 
@@ -39,6 +43,7 @@ export default function LearningSessionPage() {
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [docPanelOpen, setDocPanelOpen] = useState(true);
 
   useEffect(() => {
     initSession(sessionId, topicParam);
@@ -52,7 +57,8 @@ export default function LearningSessionPage() {
   const isEvaluating = mode === "EVALUATING";
 
   return (
-    <div className="h-screen flex bg-ice text-navy overflow-hidden select-none selection:bg-cobalt selection:text-white">
+    <ProtectedRoute>
+      <div className="h-screen flex bg-ice text-navy overflow-hidden select-none selection:bg-cobalt selection:text-white">
       <DiagonalSweepTransition />
 
       {/* Collapsible Session Sidebar */}
@@ -87,6 +93,18 @@ export default function LearningSessionPage() {
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
+            {/* Grounding Status Indicator / Panel Toggle */}
+            {documentId && (
+              <button
+                onClick={() => setDocPanelOpen((prev) => !prev)}
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                title="Toggle document context panel"
+              >
+                <FileText className="w-3 h-3 text-emerald-700" />
+                <span className="hidden md:inline">Document Grounded</span>
+              </button>
+            )}
+
             {/* Mode status indicator */}
             {mode === "STUDENT" && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-cobalt/10 text-cobalt border border-cobalt/20">
@@ -153,6 +171,7 @@ export default function LearningSessionPage() {
             onSendMessage={sendMessage}
             onStuck={triggerStuck}
             onFinishSession={() => setFinishDialogOpen(true)}
+            onAttachmentClick={() => setDocPanelOpen((prev) => !prev)}
             disabled={isEvaluating}
           />
         </div>
@@ -167,6 +186,17 @@ export default function LearningSessionPage() {
           onConfirm={handleConfirmEnd}
         />
       </main>
+
+      {/* Document Grounding Context Panel */}
+      {documentId && (
+        <DocumentContextPanel
+          documentId={documentId}
+          isOpen={docPanelOpen}
+          onToggle={() => setDocPanelOpen((prev) => !prev)}
+          onDeselect={detachDocument}
+        />
+      )}
     </div>
+    </ProtectedRoute>
   );
 }

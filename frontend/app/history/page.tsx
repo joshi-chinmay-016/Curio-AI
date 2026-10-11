@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BookOpen, Layers } from "lucide-react";
+import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { SessionFilter, HistoryFilterType } from "@/components/curio/history/SessionFilter";
@@ -12,19 +13,33 @@ import { getSessionHistory, getPracticeQueue } from "@/services/historyService";
 import { SessionSummary, PracticeQueueItem } from "@/types/history";
 
 export default function SessionHistoryPage() {
+  return (
+    <ProtectedRoute>
+      <SessionHistoryContent />
+    </ProtectedRoute>
+  );
+}
+
+function SessionHistoryContent() {
   const [filter, setFilter] = useState<HistoryFilterType>("ALL");
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [practiceQueue, setPracticeQueue] = useState<PracticeQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     Promise.all([getSessionHistory(), getPracticeQueue()]).then(
       ([hist, queue]) => {
-        setSessions(hist);
-        setPracticeQueue(queue);
-        setLoading(false);
+        if (mounted) {
+          setSessions(hist);
+          setPracticeQueue(queue);
+          setLoading(false);
+        }
       }
     );
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const filteredSessions = sessions.filter((s) => {
@@ -39,19 +54,19 @@ export default function SessionHistoryPage() {
       <DiagonalSweepTransition />
 
       {/* Header */}
-      <header className="w-full bg-white border-b border-fog px-6 py-4">
+      <header className="w-full bg-white border-b border-fog px-6 py-4 sticky top-0 z-20 shadow-xs">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href="/dashboard"
               className="inline-flex items-center gap-1.5 font-mono text-xs uppercase font-semibold text-navy/70 hover:text-navy transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>HOME</span>
+              <span>DASHBOARD</span>
             </Link>
             <span className="text-fog">/</span>
             <span className="font-mono text-xs uppercase tracking-wider text-navy/50 font-bold">
-              CURIO / SESSION HISTORY
+              LEARNING HISTORY
             </span>
           </div>
 
@@ -84,7 +99,7 @@ export default function SessionHistoryPage() {
         {/* Content List */}
         {loading ? (
           <div className="py-20 text-center font-mono text-xs uppercase tracking-widest text-navy/50 flex items-center justify-center gap-2">
-            <span className="animate-spin text-cobalt">◈</span>
+            <span className="w-4 h-4 border-2 border-cobalt border-t-transparent rounded-full animate-spin" />
             LOADING SESSIONS...
           </div>
         ) : filter === "PRACTICE_QUEUE" ? (
@@ -96,12 +111,12 @@ export default function SessionHistoryPage() {
               ))}
             </div>
           ) : (
-            <div className="bg-white border border-fog rounded-[6px] p-12 text-center">
+            <div className="bg-white border border-fog rounded-[8px] p-12 text-center shadow-xs">
               <h3 className="font-heading text-lg font-bold text-navy mb-2">
                 Practice Queue Empty
               </h3>
               <p className="font-sans text-sm text-navy/60 max-w-md mx-auto mb-6">
-                You have no gaps saved for later. When exploring a Gap Report, click "Save for Later" to queue specific concepts for targeted practice.
+                You have no gaps saved for later. When exploring a Gap Report, click &quot;Save for Later&quot; to queue specific concepts for targeted practice.
               </p>
               <Link href="/topics">
                 <KeycapButton variant="navy" size="md">
@@ -119,12 +134,12 @@ export default function SessionHistoryPage() {
           </div>
         ) : (
           /* Empty State */
-          <div className="bg-white border border-fog rounded-[6px] p-12 text-center">
+          <div className="bg-white border border-fog rounded-[8px] p-12 text-center shadow-xs">
             <h3 className="font-heading text-lg font-bold text-navy mb-2">
               No sessions found
             </h3>
             <p className="font-sans text-sm text-navy/60 max-w-md mx-auto mb-6">
-              You haven't completed any sessions under this filter yet. Teach Curio any concept to identify your understanding gaps.
+              You haven&apos;t recorded any sessions under this filter yet. Teach Curio any concept to identify your understanding gaps.
             </p>
             <Link href="/topics">
               <KeycapButton variant="navy" size="md">

@@ -6,7 +6,9 @@ from backend.app.core.config import settings
 
 engine = create_engine(
     settings.get_database_url(),
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    pool_recycle=300,
+    connect_args={"connect_timeout": 15}
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

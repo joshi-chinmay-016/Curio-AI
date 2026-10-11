@@ -102,6 +102,10 @@ class SessionRepository:
             if obj_in.status.value == "COMPLETED" and db_session.ended_at is None:
                 from datetime import datetime, timezone
                 db_session.ended_at = datetime.now(timezone.utc)
+        if obj_in.source_type is not None:
+            db_session.source_type = obj_in.source_type.value if hasattr(obj_in.source_type, "value") else str(obj_in.source_type)
+        if "document_id" in obj_in.model_fields_set:
+            db_session.document_id = obj_in.document_id
         db.add(db_session)
         db.commit()
         db.refresh(db_session)

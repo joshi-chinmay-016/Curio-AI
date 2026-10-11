@@ -11,6 +11,13 @@ export type MessageType =
   | "verification"
   | "separator";
 
+export interface SourceCitation {
+  documentId?: string;
+  documentName?: string;
+  pageNumber?: number | null;
+  snippet?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
@@ -22,6 +29,7 @@ export interface ChatMessage {
   gapReference?: string; // conceptId if gap-related
   isRestored?: boolean;
   isVerified?: boolean;
+  citations?: SourceCitation[];
 }
 
 export interface SessionState {
@@ -38,6 +46,8 @@ export interface SessionState {
     severity: "LOW" | "MEDIUM" | "HIGH";
   };
   interruptedQuestion?: ChatMessage;
+  documentId?: string;
+  sourceType?: "GENERAL" | "DOCUMENT";
   isConnected: boolean;
   isThinking: boolean;
 }

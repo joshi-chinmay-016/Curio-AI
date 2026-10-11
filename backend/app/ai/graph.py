@@ -49,6 +49,7 @@ class CurioGraphState(TypedDict, total=False):
     question_specification: Optional[QuestionSpecification]
     selection_result: Optional[QuestionSelectionResult]
     assessment: Optional[LearningAssessment]
+    document_context: Optional[Any]
 
 
 def build_curio_graph(provider: Optional[BaseAIProvider] = None):
