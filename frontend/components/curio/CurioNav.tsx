@@ -26,12 +26,20 @@ export function CurioNav() {
 
           <nav className="hidden md:flex items-center gap-4 text-xs font-mono font-semibold uppercase">
             {isAuthenticated && (
-              <Link
-                href="/dashboard"
-                className="text-cobalt hover:text-navy transition-colors px-2 py-1 font-bold"
-              >
-                DASHBOARD
-              </Link>
+              <>
+                <Link
+                  href="/dashboard"
+                  className="text-cobalt hover:text-navy transition-colors px-2 py-1 font-bold"
+                >
+                  DASHBOARD
+                </Link>
+                <Link
+                  href="/documents"
+                  className="text-navy/70 hover:text-navy transition-colors px-2 py-1"
+                >
+                  DOCUMENTS
+                </Link>
+              </>
             )}
             <Link
               href="/topics"
