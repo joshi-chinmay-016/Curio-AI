@@ -323,9 +323,14 @@ export function useSessionWebSocket(sessionId: string) {
           turnNumber: currentTurnNumber + 2,
           mode: "STUDENT",
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to process message:", err);
         setThinking(false);
+        curioToast.error(
+          "SUBMISSION FAILED",
+          err?.message || "Could not deliver message to Curio. Your draft has been preserved."
+        );
+        throw err;
       }
     },
     [

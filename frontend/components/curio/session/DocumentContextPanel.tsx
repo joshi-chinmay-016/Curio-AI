@@ -272,7 +272,22 @@ export function DocumentContextPanel({
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
               </Link>
+
+              {onDeselect && (
+                <button
+                  type="button"
+                  onClick={onDeselect}
+                  className="w-full inline-flex items-center justify-between p-2.5 rounded-lg border border-rose-200 hover:border-rose-300 text-xs font-mono text-rose-700 bg-rose-50/50 hover:bg-rose-50 transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <X className="w-3.5 h-3.5 text-rose-500" />
+                    Detach from Session
+                  </span>
+                  <span className="text-[10px] text-rose-400 font-sans">Keep in library</span>
+                </button>
+              )}
             </div>
+
           </>
         )}
 

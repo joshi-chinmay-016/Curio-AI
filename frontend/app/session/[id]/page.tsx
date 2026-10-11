@@ -33,6 +33,7 @@ export default function LearningSessionPage() {
     confidence,
     activeGap,
     documentId,
+    detachDocument,
     initSession,
   } = useSessionStore();
 
@@ -192,6 +193,7 @@ export default function LearningSessionPage() {
           documentId={documentId}
           isOpen={docPanelOpen}
           onToggle={() => setDocPanelOpen((prev) => !prev)}
+          onDeselect={detachDocument}
         />
       )}
     </div>

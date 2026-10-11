@@ -154,3 +154,17 @@ export async function endSession(sessionId: string): Promise<void> {
     console.warn("Error ending session:", err);
   }
 }
+
+export async function updateSessionDocument(
+  sessionId: string,
+  documentId: string | null
+): Promise<{ sourceType: "GENERAL" | "DOCUMENT"; documentId?: string }> {
+  const repo = getSessionRepository();
+  const sourceType = documentId ? "DOCUMENT" : "GENERAL";
+  await repo.updateSession(sessionId, {
+    sourceType,
+    documentId: documentId || null,
+  });
+  return { sourceType, documentId: documentId || undefined };
+}
+

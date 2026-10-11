@@ -86,12 +86,15 @@ export class ApiSessionRepository implements SessionRepository {
   }
 
   async updateSession(sessionId: string, updates: Partial<StoredSession>): Promise<StoredSession> {
+    const payload: Record<string, any> = {};
+    if (updates.topic !== undefined) payload.topic = updates.topic;
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.sourceType !== undefined) payload.source_type = updates.sourceType;
+    if (updates.documentId !== undefined) payload.document_id = updates.documentId;
+
     const data = await apiClient<any>(`/sessions/${sessionId}`, {
       method: "PATCH",
-      body: JSON.stringify({
-        topic: updates.topic,
-        status: updates.status,
-      }),
+      body: JSON.stringify(payload),
     });
 
     return this.mapBackendSessionToStored(data);
