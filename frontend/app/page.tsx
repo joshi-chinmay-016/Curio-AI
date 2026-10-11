@@ -16,8 +16,12 @@ import { ReportPreviewSection } from "@/components/curio/landing/ReportPreviewSe
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { CurioFooter } from "@/components/curio/CurioFooter";
 import { ScrollJourneyLayer } from "@/components/curio/journey/ScrollJourneyLayer";
+import { useAuthStore } from "@/stores/authStore";
 
 export default function LandingPage() {
+  const { isAuthenticated } = useAuthStore();
+  const ctaDestination = isAuthenticated ? "/dashboard" : "/register";
+
   const scrollToHowItWorks = () => {
     document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
   };
@@ -63,7 +67,7 @@ export default function LandingPage() {
               transition={{ duration: 0.4, delay: 0.5 }}
               className="flex items-center gap-4 flex-wrap"
             >
-              <Link href="/topics">
+              <Link href={ctaDestination}>
                 <KeycapButton variant="navy" size="lg">
                   START LEARNING →
                 </KeycapButton>
@@ -120,7 +124,7 @@ export default function LandingPage() {
           <p className="font-sans text-lg text-navy/75 max-w-xl mx-auto mb-8">
             Pick any algorithm, physical process, or architectural concept. Discover what you truly understand.
           </p>
-          <Link href="/topics">
+          <Link href={ctaDestination}>
             <KeycapButton variant="navy" size="lg">
               START WITH CURIO →
             </KeycapButton>

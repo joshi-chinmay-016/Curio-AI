@@ -33,10 +33,21 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
+        exc_str = str(exc).lower()
+        if "operationalerror" in type(exc).__name__.lower() or "connection to server" in exc_str or "connection refused" in exc_str:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "code": "DATABASE_UNAVAILABLE",
+                    "detail": "Database is unavailable. Please ensure the PostgreSQL container is running on port 5433.",
+                    "message": "Database is unavailable. Please ensure the PostgreSQL container is running on port 5433."
+                }
+            )
         return JSONResponse(
             status_code=500,
             content={
                 "code": "INTERNAL_ERROR",
+                "detail": str(exc),
                 "message": "An unexpected error occurred."
             }
         )
