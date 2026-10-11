@@ -121,7 +121,7 @@ export interface SessionRepositorySummary {
 }
 
 export interface SessionRepository {
-  createSession(topic: string, sourceType?: string): Promise<StoredSession>;
+  createSession(topic: string, sourceType?: string, documentId?: string): Promise<StoredSession>;
   getSession(sessionId: string): Promise<StoredSession | null>;
   listSessions(): Promise<SessionRepositorySummary[]>;
   updateSession(sessionId: string, updates: Partial<StoredSession>): Promise<StoredSession>;

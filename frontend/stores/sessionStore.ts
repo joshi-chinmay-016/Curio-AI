@@ -1,10 +1,15 @@
 import { create } from "zustand";
 import { ChatMessage, SessionMode, SessionState } from "@/types/session";
-import { getSession, registerSessionTopic } from "@/services/sessionService";
+import { getSession, registerSessionTopic, updateSessionDocument } from "@/services/sessionService";
 
 interface SessionStoreState extends SessionState {
   setSessionId: (id: string) => void;
-  setTopic: (name: string, id?: string) => void;
+  setTopic: (
+    name: string,
+    id?: string,
+    sourceType?: "GENERAL" | "DOCUMENT",
+    documentId?: string
+  ) => void;
   setMode: (mode: SessionMode) => void;
   addMessage: (message: ChatMessage) => void;
   setMessages: (messages: ChatMessage[]) => void;
@@ -14,6 +19,8 @@ interface SessionStoreState extends SessionState {
   setActiveGap: (gap?: SessionState["activeGap"]) => void;
   setInterruptedQuestion: (question?: ChatMessage) => void;
   initSession: (sessionId: string, topicHint?: string) => Promise<void>;
+  attachDocument: (documentId: string) => Promise<void>;
+  detachDocument: () => Promise<void>;
   reset: () => void;
 }
 
@@ -33,12 +40,17 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   ...initialState,
 
   setSessionId: (sessionId) => set({ sessionId }),
-  setTopic: (topicName, id) => {
+  setTopic: (topicName, id, sourceType, documentId) => {
     const currentId = id || get().sessionId;
     if (currentId) {
       registerSessionTopic(currentId, topicName);
     }
-    set({ topicName, topicId: currentId || topicName });
+    set({
+      topicName,
+      topicId: currentId || topicName,
+      ...(sourceType ? { sourceType } : {}),
+      ...(documentId ? { documentId } : {}),
+    });
   },
   setMode: (mode) => set({ mode }),
   addMessage: (message) =>
@@ -66,10 +78,37 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       confidence: data.confidence,
       interruptedQuestion: data.interruptedQuestion,
       activeGap: data.activeGap,
+      documentId: data.documentId,
+      sourceType: data.sourceType,
       isConnected: true,
       isThinking: false,
     });
   },
 
+  attachDocument: async (documentId: string) => {
+    const sessionId = get().sessionId;
+    if (sessionId) {
+      try {
+        await updateSessionDocument(sessionId, documentId);
+      } catch (err) {
+        console.warn("Failed to attach document to session:", err);
+      }
+    }
+    set({ documentId, sourceType: "DOCUMENT" });
+  },
+
+  detachDocument: async () => {
+    const sessionId = get().sessionId;
+    if (sessionId) {
+      try {
+        await updateSessionDocument(sessionId, null);
+      } catch (err) {
+        console.warn("Failed to detach document from session:", err);
+      }
+    }
+    set({ documentId: undefined, sourceType: "GENERAL" });
+  },
+
   reset: () => set({ ...initialState }),
 }));
+

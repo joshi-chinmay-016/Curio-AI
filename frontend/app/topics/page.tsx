@@ -3,13 +3,15 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Search, FileText, Layers, Sparkles } from "lucide-react";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { curioToast } from "@/components/curio/CurioToast";
 import { startSession } from "@/services/sessionService";
 import { getSessionHistory } from "@/services/historyService";
+import { listDocuments } from "@/services/documentService";
 import { SessionSummary } from "@/types/history";
+import { DocumentItem } from "@/types/document";
 import { useSessionStore } from "@/stores/sessionStore";
 
 export default function TopicSelectionPage() {
@@ -17,6 +19,7 @@ export default function TopicSelectionPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([]);
+  const [readyDocs, setReadyDocs] = useState<DocumentItem[]>([]);
 
   const suggestedTopics = [
     "Binary Search",
@@ -33,6 +36,12 @@ export default function TopicSelectionPage() {
     getSessionHistory().then((data) => {
       setRecentSessions(data.slice(0, 3));
     });
+    listDocuments(1, 4)
+      .then((res) => {
+        const ready = (res.documents || []).filter((d) => d.status === "PROCESSED");
+        setReadyDocs(ready);
+      })
+      .catch(() => {});
   }, []);
 
   const { setTopic } = useSessionStore();
@@ -49,6 +58,23 @@ export default function TopicSelectionPage() {
       router.push(`/session/${res.sessionId}?topic=${encodeURIComponent(topic)}`);
     } catch {
       curioToast.error("COULDN'T START SESSION. TRY AGAIN.");
+      setLoading(false);
+    }
+  };
+
+  const handleStartFromDocument = async (doc: DocumentItem) => {
+    const cleanTopic = doc.filename.replace(/\.[^/.]+$/, "").trim() || "Document Learning";
+    setLoading(true);
+    try {
+      const res = await startSession(cleanTopic, {
+        sourceType: "DOCUMENT",
+        documentId: doc.document_id,
+      });
+      setTopic(cleanTopic, res.sessionId, "DOCUMENT", doc.document_id);
+      curioToast.success("GROUNDED SESSION CREATED", `Learning from ${doc.filename}`);
+      router.push(`/session/${res.sessionId}?topic=${encodeURIComponent(cleanTopic)}`);
+    } catch {
+      curioToast.error("COULDN'T START DOCUMENT SESSION.");
       setLoading(false);
     }
   };
@@ -136,6 +162,54 @@ export default function TopicSelectionPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Document Grounding Option */}
+        <div className="mb-14 bg-white/70 border border-slate-200/90 rounded-[8px] p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-navy/70 font-bold">
+              <FileText className="w-4 h-4 text-cobalt" />
+              <span>OR GROUND IN YOUR UPLOADED DOCUMENTS</span>
+            </div>
+            <Link
+              href="/documents"
+              className="font-mono text-xs text-cobalt hover:underline uppercase font-semibold"
+            >
+              MY DOCUMENTS →
+            </Link>
+          </div>
+
+          {readyDocs.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              {readyDocs.map((doc) => (
+                <div
+                  key={doc.document_id}
+                  onClick={() => !loading && handleStartFromDocument(doc)}
+                  className="group flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white hover:border-cobalt hover:shadow-xs transition-all cursor-pointer"
+                >
+                  <div className="truncate pr-2">
+                    <div className="font-heading text-xs font-bold text-navy truncate group-hover:text-cobalt transition-colors">
+                      {doc.filename}
+                    </div>
+                    <div className="font-mono text-[10px] text-slate-500 mt-0.5 flex items-center gap-2">
+                      <span>{doc.chunk_count} chunks</span>
+                      <span>·</span>
+                      <span className="text-emerald-700">Ready</span>
+                    </div>
+                  </div>
+                  <Sparkles className="w-3.5 h-3.5 text-slate-300 group-hover:text-cobalt shrink-0 transition-colors" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="font-sans text-xs text-slate-500 mt-1">
+              Upload your lecture notes, textbook chapters, or papers in{" "}
+              <Link href="/documents" className="text-cobalt font-medium underline">
+                My Documents
+              </Link>{" "}
+              to enable source-grounded Feynman inquiries.
+            </p>
+          )}
         </div>
 
         {/* Recent Sessions */}

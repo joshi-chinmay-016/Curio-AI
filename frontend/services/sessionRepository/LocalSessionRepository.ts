@@ -126,7 +126,11 @@ export function generateInitialStudentQuestion(topic: string): string {
 }
 
 export class LocalSessionRepository implements SessionRepository {
-  async createSession(topic: string, sourceType: string = "GENERAL"): Promise<StoredSession> {
+  async createSession(
+    topic: string,
+    sourceType: string = "GENERAL",
+    documentId?: string
+  ): Promise<StoredSession> {
     const cleanTopic = topic.trim() || "General Concept";
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
@@ -155,6 +159,7 @@ export class LocalSessionRepository implements SessionRepository {
       topic: cleanTopic,
       title: cleanTopic,
       sourceType,
+      documentId: documentId || null,
       status: "ACTIVE",
       createdAt: now,
       lastActiveAt: now,

@@ -17,6 +17,7 @@ import {
   Award,
   AlertTriangle,
   History,
+  FileText,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
 import { KeycapButton } from "@/components/curio/KeycapButton";
@@ -102,6 +103,12 @@ function DashboardContent() {
                 DASHBOARD
               </Link>
               <Link
+                href="/documents"
+                className="text-navy/70 hover:text-navy transition-colors pb-0.5"
+              >
+                DOCUMENTS
+              </Link>
+              <Link
                 href="/history"
                 className="text-navy/70 hover:text-navy transition-colors pb-0.5"
               >
@@ -168,8 +175,17 @@ function DashboardContent() {
                   </KeycapButton>
                 </Link>
 
-                <Link href="/history">
+                <Link href="/documents">
                   <KeycapButton variant="default" size="md">
+                    <span className="inline-flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-cobalt" />
+                      MY DOCUMENTS
+                    </span>
+                  </KeycapButton>
+                </Link>
+
+                <Link href="/history">
+                  <KeycapButton variant="ghost" size="md">
                     <span className="inline-flex items-center gap-2">
                       <History className="w-4 h-4" />
                       VIEW FULL HISTORY

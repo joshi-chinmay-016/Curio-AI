@@ -29,7 +29,10 @@ def create_session(
     db: SQLAlchemySession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    return session_service.create_session(db, session_in, user_id=current_user.id)
+    try:
+        return session_service.create_session(db, session_in, user_id=current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/sessions", response_model=SessionListResponse)
@@ -118,7 +121,10 @@ def update_session(
     db: SQLAlchemySession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    session = session_service.update_session(db, session_id, session_in, user_id=current_user.id)
+    try:
+        session = session_service.update_session(db, session_id, session_in, user_id=current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
