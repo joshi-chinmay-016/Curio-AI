@@ -985,3 +985,8 @@ class AIContext(BaseModel):
     @property
     def teacher_intervention(self) -> Optional[TeacherIntervention]:
         return self.current_state.teacher_intervention or self.learning_context.teacher_intervention
+
+    @property
+    def document_context(self) -> Any:
+        from backend.app.ai.rag.models import parse_document_source_context
+        return parse_document_source_context(self.source_context)

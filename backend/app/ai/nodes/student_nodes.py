@@ -59,6 +59,7 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     context: AIContext = state["context"]
     provider = state.get("provider") or MockLLMProvider()
+    doc_context = state.get("document_context") or context.document_context
 
     # 1. Hydrate or dynamically build ConceptModel
     concept_model: Optional[ConceptModel] = context.current_state.concept_model
@@ -115,6 +116,7 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "concept_model": concept_model,
             "learner_model": learner_mgr.model,
             "interpretation": TurnInterpretation(intent=TurnIntent.UNKNOWN),
+            "document_context": doc_context,
         }
 
     # 4. Check if there are user messages in conversation
@@ -312,6 +314,7 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "concept_model": concept_model,
         "learner_model": learner_mgr.model,
         "assessment": assessment if user_msgs else None,
+        "document_context": doc_context,
     }
 
 
