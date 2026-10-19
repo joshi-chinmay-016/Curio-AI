@@ -398,6 +398,11 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 Strategy.PROBE_MISSING_CONCEPT,
                 Strategy.CLARIFY_TERM,
                 Strategy.CHALLENGE_MISCONCEPTION,
+                Strategy.REQUEST_EXAMPLE,
+                Strategy.TEST_EDGE_CASE,
+                Strategy.CHALLENGE_ASSUMPTION,
+                Strategy.CONNECT_CONCEPTS,
+                Strategy.DEPTH_EXPANSION,
             )
             or (decision.strategy == Strategy.VERIFY_UNDERSTANDING and not is_already_mastered)
         ) and bool(cand_concept)

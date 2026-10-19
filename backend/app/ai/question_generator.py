@@ -207,14 +207,22 @@ class QuestionGenerator:
             q_text = f"How would you explain the core purpose and definition of {c_name} in your own words?"
         elif obj_type == ObjectiveType.UNDERSTAND_MECHANISM:
             q_text = f"What is the step-by-step mechanism that makes {c_name} work under the hood?"
+        elif obj_type == ObjectiveType.UNDERSTAND_CAUSAL_RELATION:
+            q_text = f"Why is {c_name} structured this way, and what fundamental reason justifies that design choice?"
         elif obj_type == ObjectiveType.APPLY_CONCEPT:
-            q_text = f"How does {c_name} behave when applied to a concrete real-world problem?"
+            q_text = f"How does {c_name} behave when applied to a concrete real-world problem or example?"
         elif obj_type == ObjectiveType.RESOLVE_MISCONCEPTION:
             q_text = f"Why would it be a mistake to assume {c_name} operates without enforcing its core invariants?"
         elif obj_type == ObjectiveType.HANDLE_EDGE_CASE:
-            q_text = f"What happens to {c_name} when boundary conditions or extreme inputs occur?"
+            q_text = f"What happens to {c_name} when boundary conditions, unexpected inputs, or failure states occur?"
         elif obj_type == ObjectiveType.SYNTHESIZE_CONCEPTS:
-            q_text = f"How does {c_name} coordinate with the rest of the system to balance performance trade-offs?"
+            q_text = f"How does {c_name} coordinate with related concepts to balance system trade-offs?"
+        elif obj_type == ObjectiveType.EXPLAIN_IN_OWN_WORDS:
+            q_text = f"Could you verify how you think about {c_name} by summarizing its key intuition in your own words?"
+        elif obj_type == ObjectiveType.REINFORCE_WEAK_CONCEPT:
+            q_text = f"Could we step back and clarify the core foundation of {c_name} so I can see where it fits?"
+        elif obj_type == ObjectiveType.VERIFY_GAP:
+            q_text = f"What essential piece of {c_name} are we missing here, and how does it connect to the rest?"
         else:
             q_text = f"Could you walk me through how {c_name} functions in this context?"
 

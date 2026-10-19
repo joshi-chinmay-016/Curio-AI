@@ -335,18 +335,42 @@ class QuestionSelector:
         Difficulty transitions bounded between 1 and 5.
         Maximum delta of +-1 per turn.
         Depends strictly on demonstrated evidence, not conversation length.
+        
+        Section 4 requirements:
+        - A correct but incomplete answer (completeness < 0.70) must not automatically count as a fully correct answer.
+        - A vague explanation (depth < 0.60) must not be treated as mastery simply because it contains relevant terminology.
+        - A single strong answer must not automatically trigger a jump to advanced synthesis (bounded +-1).
+        - Active misconceptions or low correctness block progression and trigger regression/focused clarification.
+        - Unresolved gaps or misconceptions on the concept state prevent increase.
         """
         node_diff = concept_node.difficulty_level
 
         if latest_evaluation is not None:
-            if latest_evaluation.correctness >= 0.80:
-                # Strong evidence: can increase difficulty by 1
+            has_misc = bool(latest_evaluation.misconceptions and len(latest_evaluation.misconceptions) > 0)
+            is_strong = (
+                latest_evaluation.correctness >= 0.80
+                and latest_evaluation.completeness >= 0.70
+                and latest_evaluation.depth >= 0.60
+                and latest_evaluation.stuck_probability < 0.30
+                and not has_misc
+            )
+            is_weak = (
+                latest_evaluation.correctness < 0.40
+                or latest_evaluation.stuck_probability >= 0.50
+                or (has_misc and latest_evaluation.correctness < 0.50)
+            )
+
+            if is_strong:
                 proposed = current_difficulty + 1
-            elif latest_evaluation.correctness < 0.40 or latest_evaluation.stuck_probability >= 0.5:
-                # Weak evidence: decrease difficulty by 1
+            elif is_weak:
                 proposed = current_difficulty - 1
             else:
                 proposed = current_difficulty
+
+            # Block progression if concept state still has active misconceptions or unresolved gap
+            if concept_state and (concept_state.active_misconceptions or concept_state.unresolved_gap):
+                if proposed > current_difficulty:
+                    proposed = current_difficulty
         else:
             # Initial or default: align towards concept node difficulty
             if current_difficulty < node_diff:
@@ -471,5 +495,40 @@ class QuestionSelector:
                 f"Learner verifies understanding of {node_name} by explaining key concepts in their own words or with a concrete application.",
             )
 
-        # 7. Fallback to difficulty-based objective resolution
+        # 7. Request Example (Level 3 - Application)
+        if strategy == Strategy.REQUEST_EXAMPLE:
+            return (
+                ObjectiveType.APPLY_CONCEPT,
+                f"Learner illustrates understanding of {node_name} with a concrete, realistic example or scenario.",
+            )
+
+        # 8. Test Edge Case (Level 4 - Assumptions and edge cases)
+        if strategy == Strategy.TEST_EDGE_CASE:
+            return (
+                ObjectiveType.HANDLE_EDGE_CASE,
+                f"Learner analyzes boundary conditions, failure modes, or edge-case behavior of {node_name}.",
+            )
+
+        # 9. Challenge Assumption (Level 4 - Assumptions and edge cases)
+        if strategy == Strategy.CHALLENGE_ASSUMPTION:
+            return (
+                ObjectiveType.HANDLE_EDGE_CASE,
+                f"Learner identifies implicit premises or tests assumptions underpinning {node_name}.",
+            )
+
+        # 10. Connect Concepts (Level 5 - Synthesis and trade-offs)
+        if strategy == Strategy.CONNECT_CONCEPTS:
+            return (
+                ObjectiveType.SYNTHESIZE_CONCEPTS,
+                f"Learner synthesizes {node_name} with related system components and analyzes trade-offs.",
+            )
+
+        # 11. Depth Expansion (Deepen incomplete explanation)
+        if strategy == Strategy.DEPTH_EXPANSION:
+            return (
+                ObjectiveType.UNDERSTAND_MECHANISM,
+                f"Learner expands the depth, detail, and completeness of the explanation for {node_name}.",
+            )
+
+        # 12. Fallback to difficulty-based objective resolution
         return self._determine_objective_type(concept_node, concept_state, target_difficulty)

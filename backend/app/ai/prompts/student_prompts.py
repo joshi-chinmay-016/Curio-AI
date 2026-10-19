@@ -84,6 +84,31 @@ STRATEGY_TEMPLATES: Dict[str, List[str]] = {
         "Open with a basic, grounding question about '{concept}'.",
         "Ask a simple starting question to begin exploring '{concept}'.",
     ],
+    "REQUEST_EXAMPLE": [
+        "The learner explained '{concept}' theoretically. Ask them for a concrete real-world example or use case illustrating how it operates.",
+        "Ask the learner to give a specific scenario or practical example showing '{concept}' in action.",
+        "The explanation of '{concept}' is abstract. Ask for a realistic example demonstrating it.",
+    ],
+    "TEST_EDGE_CASE": [
+        "Probe boundary conditions, extreme inputs, or failure modes for '{concept}'. Ask what happens when limits are pushed.",
+        "Ask what happens to '{concept}' in an unusual edge case or unexpected scenario.",
+        "Test the limits of '{concept}': ask how it behaves under failure or edge-case conditions.",
+    ],
+    "CHALLENGE_ASSUMPTION": [
+        "Challenge an implicit premise or assumption in the explanation of '{concept}'. Ask whether that assumption always holds true.",
+        "Ask the learner to justify a key assumption behind '{concept}' and what happens if that assumption breaks.",
+        "The explanation makes an unstated assumption regarding '{concept}'. Probe whether that assumption is valid in all cases.",
+    ],
+    "CONNECT_CONCEPTS": [
+        "Ask the learner to connect '{concept}' to related concepts or architectural components, analyzing trade-offs.",
+        "Explore how '{concept}' interacts with other parts of the system, asking about trade-offs or design decisions.",
+        "Ask how '{concept}' compares or integrates with related approaches, probing the architectural trade-offs.",
+    ],
+    "DEPTH_EXPANSION": [
+        "The learner's answer on '{concept}' is correct but incomplete. Ask them to expand into the deeper mechanisms or missing dimensions.",
+        "Deepen the explanation of '{concept}' by asking what happens beneath the surface.",
+        "The core idea of '{concept}' is right, but lacks depth. Ask a follow-up that pushes into the underlying specifics.",
+    ],
 }
 DEFAULT_STRATEGY_TEMPLATES: List[str] = [
     "Ask a thoughtful question to explore '{concept}'.",
