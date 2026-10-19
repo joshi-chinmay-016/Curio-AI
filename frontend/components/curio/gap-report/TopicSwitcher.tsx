@@ -33,7 +33,7 @@ export function TopicSwitcher({
     <div className="flex items-center gap-2 mb-4 overflow-x-auto py-1 select-none">
       <button
         onClick={handlePrev}
-        className="p-1.5 rounded-[4px] border border-fog bg-white text-navy hover:bg-ice transition-colors"
+        className="p-1.5 rounded-[3px] border border-navy/20 bg-white text-navy hover:text-cobalt hover:border-cobalt/40 transition-colors shadow-sm cursor-pointer"
         aria-label="Previous topic"
       >
         <ChevronLeft className="w-4 h-4" />
@@ -46,10 +46,10 @@ export function TopicSwitcher({
             <button
               key={t.id}
               onClick={() => onSelectTopic(t.id)}
-              className={`px-3 py-1.5 rounded-[4px] font-mono text-xs font-semibold uppercase tracking-wider transition-all duration-150 whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-[3px] font-mono text-[11px] font-semibold uppercase tracking-wider transition-all duration-150 whitespace-nowrap cursor-pointer ${
                 isActive
-                  ? "bg-navy text-white shadow-sm border border-navy"
-                  : "bg-ice text-navy/60 hover:text-navy hover:bg-fog/50 border border-fog"
+                  ? "bg-navy text-white border border-navy shadow-[0_2px_0_0_#091D33]"
+                  : "bg-white text-navy/70 hover:text-navy hover:bg-ice border border-fog/60"
               }`}
             >
               {t.name}
@@ -60,7 +60,7 @@ export function TopicSwitcher({
 
       <button
         onClick={handleNext}
-        className="p-1.5 rounded-[4px] border border-fog bg-white text-navy hover:bg-ice transition-colors"
+        className="p-1.5 rounded-[3px] border border-navy/20 bg-white text-navy hover:text-cobalt hover:border-cobalt/40 transition-colors shadow-sm cursor-pointer"
         aria-label="Next topic"
       >
         <ChevronRight className="w-4 h-4" />
@@ -68,3 +68,5 @@ export function TopicSwitcher({
     </div>
   );
 }
+
+export default TopicSwitcher;

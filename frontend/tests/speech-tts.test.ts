@@ -111,8 +111,8 @@ describe("Phase 4: Text-to-Speech (TTS) for AI Responses", () => {
 
       // Wait for simulated async onstart
       await new Promise((r) => setTimeout(r, 20));
-      assert.strictEqual(lastState?.activeMessageId, "msg_1");
-      assert.strictEqual(lastState?.isPlaying, true);
+      assert.strictEqual((lastState as any)?.activeMessageId, "msg_1");
+      assert.strictEqual((lastState as any)?.isPlaying, true);
 
       unsubscribe();
     });
