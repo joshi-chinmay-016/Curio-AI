@@ -384,15 +384,23 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         ]
         recent_c = [context.active_concept] if context.active_concept else []
 
-        # If probing current concept, preserve active_concept; otherwise let selector advance
-        is_probing_active = decision.strategy in (
-            Strategy.PROBE_WHY,
-            Strategy.PROBE_HOW,
-            Strategy.PROBE_MISSING_CONCEPT,
-            Strategy.CLARIFY_TERM,
-            Strategy.CHALLENGE_MISCONCEPTION,
-        ) and bool(context.active_concept or decision.active_concept)
-        concept_target = (decision.active_concept or context.active_concept) if is_probing_active else None
+        # If probing current concept or verifying understanding, preserve active_concept
+        # For VERIFY_UNDERSTANDING, avoid infinite loop by checking if concept has already reached strong mastery
+        cand_concept = decision.active_concept or context.active_concept
+        cand_state = learner_model.concepts.get(cand_concept) if cand_concept else None
+        is_already_mastered = cand_state is not None and cand_state.mastery >= 0.80 and cand_state.attempt_count >= 2
+
+        is_probing_active = (
+            decision.strategy in (
+                Strategy.PROBE_WHY,
+                Strategy.PROBE_HOW,
+                Strategy.PROBE_MISSING_CONCEPT,
+                Strategy.CLARIFY_TERM,
+                Strategy.CHALLENGE_MISCONCEPTION,
+            )
+            or (decision.strategy == Strategy.VERIFY_UNDERSTANDING and not is_already_mastered)
+        ) and bool(cand_concept)
+        concept_target = cand_concept if is_probing_active else None
 
         spec = selector.select_question_specification(
             concept_model=concept_model,
@@ -400,11 +408,13 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
             current_difficulty=decision.difficulty,
             current_objective=context.current_state.current_objective,
             latest_interpretation=interpretation,
-            latest_evaluation=None,
+            latest_evaluation=evaluation if has_user_message else None,
             recent_question_history=recent_q,
             recent_concept_history=recent_c,
             interrupted_question=context.interrupted_question,
             target_concept_override=concept_target,
+            strategy=decision.strategy,
+            strategy_reason=decision.reason,
         )
 
         # Synchronize decision with specification

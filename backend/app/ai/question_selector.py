@@ -18,6 +18,7 @@ from backend.app.ai.schemas import (
     LearningObjective,
     ObjectiveType,
     QuestionSpecification,
+    Strategy,
     TurnEvaluation,
     TurnInterpretation,
 )
@@ -44,6 +45,8 @@ class QuestionSelector:
         recent_concept_history: Optional[List[str]] = None,
         interrupted_question: Optional[CurrentQuestion] = None,
         target_concept_override: Optional[str] = None,
+        strategy: Optional[Strategy] = None,
+        strategy_reason: Optional[str] = None,
     ) -> QuestionSpecification:
         recent_concepts = recent_concept_history or []
         recent_questions = recent_question_history or []
@@ -66,8 +69,21 @@ class QuestionSelector:
                 if latest_evaluation is not None
                 else current_difficulty
             )
-            obj_type, evidence_exp = self._determine_objective_type(c_node, c_state, target_diff)
-            reason = f"Probing understanding of '{c_node.name}' at difficulty {target_diff}."
+
+            # Centralized pedagogical strategy-to-objective resolution
+            obj_type, evidence_exp = self._resolve_strategy_objective(
+                strategy=strategy,
+                concept_node=c_node,
+                concept_state=c_state,
+                target_difficulty=target_diff,
+                latest_evaluation=latest_evaluation,
+            )
+
+            reason = (
+                strategy_reason.strip()
+                if strategy_reason and strategy_reason.strip()
+                else f"Probing understanding of '{c_node.name}' at difficulty {target_diff}."
+            )
             obj = LearningObjective(
                 objective_type=obj_type,
                 target_concept=target_concept_override,
@@ -176,9 +192,23 @@ class QuestionSelector:
         else:
             target_diff = current_difficulty
 
-        # Determine pedagogical objective based on difficulty and mastery
-        obj_type, evidence_exp = self._determine_objective_type(target_concept_node, c_state, target_diff)
-        reason = f"Progressing understanding of '{node_name}' at difficulty {target_diff} based on demonstrated mastery ({c_state.mastery:.2f})."
+        # Determine pedagogical objective based on strategy (if provided) or difficulty and mastery
+        if strategy is not None:
+            obj_type, evidence_exp = self._resolve_strategy_objective(
+                strategy=strategy,
+                concept_node=target_concept_node,
+                concept_state=c_state,
+                target_difficulty=target_diff,
+                latest_evaluation=latest_evaluation,
+            )
+        else:
+            obj_type, evidence_exp = self._determine_objective_type(target_concept_node, c_state, target_diff)
+
+        reason = (
+            strategy_reason.strip()
+            if strategy_reason and strategy_reason.strip()
+            else f"Progressing understanding of '{node_name}' at difficulty {target_diff} based on demonstrated mastery ({c_state.mastery:.2f})."
+        )
 
         obj = LearningObjective(
             objective_type=obj_type,
@@ -364,3 +394,82 @@ class QuestionSelector:
                 ObjectiveType.SYNTHESIZE_CONCEPTS,
                 f"Learner synthesizes {node.name} with related system components and analyzes trade-offs.",
             )
+
+    def _resolve_strategy_objective(
+        self,
+        strategy: Optional[Strategy],
+        concept_node: ConceptNode,
+        concept_state,
+        target_difficulty: int,
+        latest_evaluation: Optional[TurnEvaluation] = None,
+    ) -> tuple[ObjectiveType, str]:
+        """
+        Explicitly map pedagogical strategies to their corresponding ObjectiveType and expected evidence.
+        Falls back to _determine_objective_type if strategy is absent or not explicitly mapped.
+        """
+        node_name = concept_node.name
+
+        # 1. Active misconception signal check:
+        # If strategy is CHALLENGE_MISCONCEPTION or learner has active misconceptions on this concept
+        if strategy == Strategy.CHALLENGE_MISCONCEPTION or (concept_state and concept_state.active_misconceptions):
+            misc_text = ""
+            if concept_state and concept_state.active_misconceptions:
+                misc_text = f" ({concept_state.active_misconceptions[0]})"
+            elif latest_evaluation and latest_evaluation.misconceptions:
+                misc_text = f" ({latest_evaluation.misconceptions[0]})"
+            return (
+                ObjectiveType.RESOLVE_MISCONCEPTION,
+                f"Learner correctly identifies and resolves the misconception regarding {node_name}{misc_text}.",
+            )
+
+        # 2. Term clarification
+        if strategy == Strategy.CLARIFY_TERM:
+            return (
+                ObjectiveType.UNDERSTAND_DEFINITION,
+                f"Learner provides a precise definition and clarifying explanation for {node_name}.",
+            )
+
+        # 3. Probing causal relationships (Why)
+        if strategy == Strategy.PROBE_WHY:
+            return (
+                ObjectiveType.UNDERSTAND_CAUSAL_RELATION,
+                f"Learner explains the underlying rationale, causality, and theoretical justification for {node_name}.",
+            )
+
+        # 4. Probing mechanism (How)
+        if strategy == Strategy.PROBE_HOW:
+            return (
+                ObjectiveType.UNDERSTAND_MECHANISM,
+                f"Learner details the step-by-step mechanism, process flow, and operations of {node_name}.",
+            )
+
+        # 5. Missing concept / gap probing:
+        # Distinguish genuinely unassessed concept from a concept with demonstrated weakness
+        if strategy == Strategy.PROBE_MISSING_CONCEPT:
+            has_weakness = (
+                concept_state is not None
+                and (
+                    concept_state.unresolved_gap
+                    or (concept_state.attempt_count > 0 and concept_state.mastery < 0.50)
+                )
+            ) or (latest_evaluation is not None and latest_evaluation.knowledge_gap)
+            if has_weakness:
+                return (
+                    ObjectiveType.REINFORCE_WEAK_CONCEPT,
+                    f"Learner addresses the identified weakness and reinforces foundational understanding of {node_name}.",
+                )
+            else:
+                return (
+                    ObjectiveType.VERIFY_GAP,
+                    f"Learner supplies the missing conceptual component of {node_name} and explains how it connects.",
+                )
+
+        # 6. Verify understanding
+        if strategy == Strategy.VERIFY_UNDERSTANDING:
+            return (
+                ObjectiveType.EXPLAIN_IN_OWN_WORDS,
+                f"Learner verifies understanding of {node_name} by explaining key concepts in their own words or with a concrete application.",
+            )
+
+        # 7. Fallback to difficulty-based objective resolution
+        return self._determine_objective_type(concept_node, concept_state, target_difficulty)
