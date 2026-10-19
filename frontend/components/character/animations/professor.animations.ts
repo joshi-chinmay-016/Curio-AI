@@ -33,14 +33,15 @@ export const professorIdle: AnimationDefinition = {
   loop: true,
   interruptible: true,
   bodyAnimation: {
-    translateY: [0, -2, 0],
-    rotate: [0, 0.2, 0],
+    translateY: [0, -6, 0],
+    rotate: [0, 0.6, 0],
+    scale: [1, 1.018, 1],
     times: [0, 0.5, 1],
     transition: {
       type: "tween",
       ease: "easeInOut",
       repeat: Infinity,
-      duration: 4.5,
+      duration: 3.8,
     },
   },
   props: [
@@ -154,15 +155,15 @@ export const professorSpeaking: AnimationDefinition = {
   loop: true,
   interruptible: true,
   bodyAnimation: {
-    translateY: [-1, -3, -1],
-    rotate: [-0.5, 0.5, -0.5],
-    scale: [1, 1.015, 1],
+    translateY: [-1, -9, -1],
+    rotate: [-0.8, 0.8, -0.8],
+    scale: [1.01, 1.035, 1.01],
     times: [0, 0.5, 1],
     transition: {
       type: "tween",
       ease: "easeInOut",
       repeat: Infinity,
-      duration: 1.4,
+      duration: 1.3,
     },
   },
   props: [

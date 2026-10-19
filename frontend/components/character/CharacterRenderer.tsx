@@ -66,10 +66,13 @@ export const CharacterRenderer = memo(function CharacterRenderer({
 
   const transitionConfig = prefersReducedMotion
     ? { duration: 0 }
-    : bodyAnim.transition || {
-        type: "tween",
-        ease: "easeInOut",
-        duration: 0.4,
+    : {
+        ...(bodyAnim.transition || {
+          type: "tween",
+          ease: "easeInOut",
+          duration: 0.4,
+        }),
+        ...(bodyAnim.times ? { times: bodyAnim.times } : {}),
       };
 
   // State checks for props & overlays

@@ -109,10 +109,10 @@ export const CharacterStage = memo(function CharacterStage({
     >
       {/* 1. Stage Card Container */}
       <div
-        className={`relative w-full h-[360px] md:h-[400px] rounded-3xl bg-gradient-to-b ${ambientBg} bg-navy-surface/90 border ${ringBorder} flex flex-col items-center justify-between p-4 overflow-hidden transition-all duration-700 backdrop-blur-md`}
+        className={`relative w-full h-[380px] md:h-[420px] rounded-3xl bg-gradient-to-b ${ambientBg} bg-[#0A1A2F]/95 border ${ringBorder} flex flex-col items-center justify-between p-4 overflow-hidden transition-all duration-700 backdrop-blur-md`}
       >
         {/* Subtle radial floor spotlight under character feet */}
-        <div className="absolute bottom-6 w-[240px] h-[36px] rounded-full bg-black/25 blur-md pointer-events-none" />
+        <div className="absolute bottom-6 w-[260px] h-[36px] rounded-full bg-black/40 blur-md pointer-events-none" />
 
         {/* Top Header Strip: Character Name + Live Status Pill */}
         <div className="w-full flex items-center justify-between z-10">
@@ -144,6 +144,41 @@ export const CharacterStage = memo(function CharacterStage({
             prefersReducedMotion={prefersReducedMotion}
             clipboardMark={clipboardMark}
           />
+
+          {/* Speaking Voice Equalizer Waveform Pill */}
+          {isPlayingSpeech && (
+            <div className="absolute bottom-4 z-20 flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-[#0F2B4A]/95 border border-emerald-400/60 backdrop-blur-md shadow-[0_0_24px_rgba(16,185,129,0.4)]">
+              <span className="w-1.5 h-3.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+              <span className="w-1.5 h-6 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.1s]" />
+              <span className="w-1.5 h-4 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.4s]" />
+              <span className="w-1.5 h-7 bg-emerald-400 rounded-full animate-bounce" />
+              <span className="w-1.5 h-5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.2s]" />
+              <span className="w-1.5 h-3.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.5s]" />
+              <span className="font-mono text-xs text-emerald-300 font-bold ml-1.5 tracking-wider">
+                SPEAKING...
+              </span>
+            </div>
+          )}
+
+          {/* Listening Active Pulse Pill */}
+          {performanceState === "LISTENING_ACTIVE" && !isPlayingSpeech && (
+            <div className="absolute bottom-4 z-20 flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-[#0F2B4A]/95 border border-rose-500/60 backdrop-blur-md shadow-[0_0_24px_rgba(225,29,72,0.45)] animate-pulse">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+              <span className="font-mono text-xs text-rose-300 font-bold tracking-wider">
+                LISTENING TO YOU...
+              </span>
+            </div>
+          )}
+
+          {/* Thinking Pulse Pill */}
+          {performanceState === "THINKING" && !isPlayingSpeech && (
+            <div className="absolute bottom-4 z-20 flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-[#0F2B4A]/95 border border-amber-400/60 backdrop-blur-md shadow-[0_0_24px_rgba(245,158,11,0.4)]">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="font-mono text-xs text-amber-300 font-bold tracking-wider">
+                PROCESSING THOUGHTS...
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Bottom Audio Helper Bar (Stop / Replay) */}

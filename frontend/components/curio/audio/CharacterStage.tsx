@@ -111,6 +111,11 @@ export const CharacterStage = memo(function CharacterStage({
       break;
   }
 
+  // If speech is currently playing, character is actively speaking aloud
+  if (isPlayingSpeech) {
+    performanceState = characterId === "TEACHER" ? "EXPLAINING" : "SPEAKING";
+  }
+
   // Determine clipboard marking for Professor
   let clipboardMark: "none" | "check" | "cross" | "in-progress" = "none";
   if (stateStr === "marking") {

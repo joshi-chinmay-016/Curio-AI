@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Mic,
   Square,
@@ -8,6 +8,7 @@ import {
   Loader2,
   FastForward,
   AlertTriangle,
+  Volume2,
 } from "lucide-react";
 import {
   transcribeAudio,
@@ -43,29 +44,72 @@ export function AudioControls({
   const [isSupported, setIsSupported] = useState(true);
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
+  // VAD / Automatic Silence Detection State
+  const [speechDetected, setSpeechDetected] = useState(false);
+  const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
+  const [volumeLevel, setVolumeLevel] = useState(0);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const vadIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const liveTranscriptRef = useRef<string>("");
+  const hasSpokenRef = useRef<boolean>(false);
+  const silenceStartRef = useRef<number | null>(null);
 
   useEffect(() => {
     setIsSupported(isVoiceRecordingSupported());
     return () => {
-      stopTracks();
-      if (timerRef.current) clearInterval(timerRef.current);
+      cleanupResources();
     };
   }, []);
 
-  const stopTracks = () => {
+  const cleanupResources = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
-  };
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    onRecordingStateChange?.(false);
+    setSpeechDetected(false);
+    setSilenceCountdown(null);
+  }, [onRecordingStateChange]);
 
   const startRecording = async () => {
     if (disabled || isBusyProcessing || isTranscribing || isPlayingSpeech) return;
     setPermissionError(null);
+    hasSpokenRef.current = false;
+    silenceStartRef.current = null;
+    liveTranscriptRef.current = "";
+    setSpeechDetected(false);
+    setSilenceCountdown(null);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -77,6 +121,94 @@ export function AudioControls({
       });
       streamRef.current = stream;
 
+      // 1. Initialize Web Audio API Analyser for Voice Activity & Silence Detection
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const audioCtx = new AudioCtx();
+          audioContextRef.current = audioCtx;
+          const sourceNode = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          sourceNode.connect(analyser);
+
+          const bufferLength = analyser.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+
+          const SILENCE_TIMEOUT_MS = 1800; // 1.8 seconds of silence after speech triggers auto-send
+          const SPEECH_VOLUME_THRESHOLD = 12; // Volume threshold for human speech
+
+          vadIntervalRef.current = setInterval(() => {
+            if (!analyser) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              sum += dataArray[i];
+            }
+            const avg = sum / bufferLength;
+            setVolumeLevel(Math.min(100, Math.round(avg * 2.5)));
+
+            if (avg >= SPEECH_VOLUME_THRESHOLD) {
+              // Active speech detected!
+              hasSpokenRef.current = true;
+              silenceStartRef.current = null;
+              setSpeechDetected(true);
+              setSilenceCountdown(null);
+            } else if (hasSpokenRef.current) {
+              // User has spoken at least once and is currently pausing
+              const now = Date.now();
+              if (!silenceStartRef.current) {
+                silenceStartRef.current = now;
+              }
+              const elapsed = now - silenceStartRef.current;
+              const remainingSec = Math.max(0, (SILENCE_TIMEOUT_MS - elapsed) / 1000);
+              setSilenceCountdown(parseFloat(remainingSec.toFixed(1)));
+
+              if (elapsed >= SILENCE_TIMEOUT_MS) {
+                // Auto-endpoint reached: Automatically finish and submit!
+                console.log("[Curio Audio] Silence detected after speech. Automatically sending answer!");
+                if (vadIntervalRef.current) {
+                  clearInterval(vadIntervalRef.current);
+                  vadIntervalRef.current = null;
+                }
+                stopRecording();
+              }
+            }
+          }, 80);
+        }
+      } catch (audioErr) {
+        console.warn("Web Audio Analyser not available:", audioErr);
+      }
+
+      // 2. Parallel Browser Speech Recognition for instant zero-delay transcript
+      const SpeechRecognitionClass =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognitionClass) {
+        try {
+          const recognition = new SpeechRecognitionClass();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = "en-US";
+
+          recognition.onresult = (event: any) => {
+            let fullText = "";
+            for (let i = 0; i < event.results.length; ++i) {
+              fullText += event.results[i][0].transcript + " ";
+            }
+            if (fullText.trim()) {
+              liveTranscriptRef.current = fullText.trim();
+              hasSpokenRef.current = true;
+              setSpeechDetected(true);
+            }
+          };
+
+          recognition.onerror = () => {};
+          recognition.start();
+          recognitionRef.current = recognition;
+        } catch {}
+      }
+
+      // 3. MediaRecorder for high-fidelity audio capture to Whisper
       const mimeType = getSupportedAudioMimeType();
       const options = mimeType ? { mimeType } : undefined;
       const mediaRecorder = new MediaRecorder(stream, options);
@@ -89,39 +221,43 @@ export function AudioControls({
       };
 
       mediaRecorder.onstop = async () => {
-        stopTracks();
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
+        cleanupResources();
 
         const audioBlob = new Blob(audioChunksRef.current, {
           type: mimeType || "audio/webm",
         });
 
-        if (audioBlob.size === 0) {
-          setIsRecording(false);
-          onRecordingStateChange?.(false);
-          return;
-        }
-
-        // Automatic Speech Recognition & Auto-Submission (Audio-First)
+        // Begin Automatic Transcription & Submission
         setIsTranscribing(true);
         onTranscribingStateChange?.(true);
 
         try {
-          const res = await transcribeAudio(audioBlob);
-          const recognizedText = (res.text || "").trim();
+          let recognizedText = "";
+
+          // First try Whisper backend
+          if (audioBlob.size > 0) {
+            try {
+              const res = await transcribeAudio(audioBlob);
+              recognizedText = (res.text || "").trim();
+            } catch (whisperErr) {
+              console.warn("Whisper transcription fallback to browser recognition:", whisperErr);
+            }
+          }
+
+          // If Whisper was empty or errored, use browser Web Speech transcript
+          if (!recognizedText && liveTranscriptRef.current) {
+            recognizedText = liveTranscriptRef.current.trim();
+          }
 
           if (recognizedText.length > 0) {
-            // Automatically submit recognized text directly to the learning engine!
+            // AUTOMATICALLY SUBMIT SPEECH (No confirm dialog, no text input)
             await onSendAnswer(recognizedText);
           } else {
-            curioToast.info("UNHEARD", "I couldn't hear you clearly. Please tap the mic to speak again.");
+            curioToast.info("UNHEARD", "I couldn't hear you clearly. Please tap to speak again.");
           }
         } catch (err: any) {
-          console.error("Transcription error:", err);
-          curioToast.error("TRANSCRIPTION FAILED", "Could not process audio. Please try speaking again.");
+          console.error("Transcription & Submission error:", err);
+          curioToast.error("SUBMISSION FAILED", "Could not submit speech. Please try again.");
         } finally {
           setIsTranscribing(false);
           onTranscribingStateChange?.(false);
@@ -141,42 +277,29 @@ export function AudioControls({
       console.error("Microphone access error:", err);
       setPermissionError("Microphone access was denied. Please allow microphone permission in your browser.");
       curioToast.error("MIC PERMISSION REQUIRED", "Please allow microphone access to speak.");
-      stopTracks();
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      onRecordingStateChange?.(false);
+      cleanupResources();
     }
   };
 
   const cancelRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      audioChunksRef.current = []; // Discard chunks
-      mediaRecorderRef.current.onstop = () => {
-        stopTracks();
-      };
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      onRecordingStateChange?.(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-      setRecordingSeconds(0);
-      curioToast.info("DISCARDED", "Audio recording cancelled.");
-    }
+    audioChunksRef.current = [];
+    liveTranscriptRef.current = "";
+    cleanupResources();
+    setIsRecording(false);
+    onRecordingStateChange?.(false);
+    setSpeechDetected(false);
+    setSilenceCountdown(null);
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
   if (!isSupported) {
     return (
-      <div className="w-full max-w-md p-4 bg-amber-50 border border-amber-300 rounded-[8px] text-amber-900 text-xs font-mono text-center">
+      <div className="w-full max-w-xl p-4 bg-amber-50 border border-amber-300 rounded-[12px] text-amber-900 text-sm font-mono text-center">
         Your browser does not support audio recording. Please use Google Chrome, Microsoft Edge, or Firefox.
       </div>
     );
@@ -200,15 +323,24 @@ export function AudioControls({
         <div className="relative">
           {/* Subtle pulse rings when recording */}
           {isRecording && (
-            <div className="absolute -inset-3 rounded-full border-2 border-rose-500/60 animate-ping pointer-events-none" />
+            <div
+              className={`absolute -inset-3 rounded-full border-2 transition-all pointer-events-none ${
+                speechDetected
+                  ? "border-emerald-500/80 animate-ping"
+                  : "border-rose-500/60 animate-pulse"
+              }`}
+            />
           )}
 
           <button
+            type="button"
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isLocked && !isRecording}
             className={`h-20 w-20 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-[0_4px_0_0_#0F2B4A] active:translate-y-[2px] active:shadow-none ${
               isRecording
-                ? "bg-rose-600 text-white animate-pulse shadow-[0_0_24px_rgba(225,29,72,0.6)] border-3 border-rose-700"
+                ? speechDetected
+                  ? "bg-emerald-600 text-white shadow-[0_0_30px_rgba(16,185,129,0.7)] border-3 border-emerald-700 animate-pulse"
+                  : "bg-rose-600 text-white shadow-[0_0_24px_rgba(225,29,72,0.6)] border-3 border-rose-700"
                 : isTranscribing
                 ? "bg-amber-100 text-amber-700 border-3 border-amber-400"
                 : isPlayingSpeech
@@ -219,7 +351,7 @@ export function AudioControls({
             }`}
             title={
               isRecording
-                ? "Tap to finish speaking (submits automatically)"
+                ? "Tap to finish speaking (or simply pause to auto-submit)"
                 : isPlayingSpeech
                 ? "Listening to response..."
                 : isBusyProcessing
@@ -238,24 +370,39 @@ export function AudioControls({
           </button>
         </div>
 
-        {/* Audio State Label */}
+        {/* Dynamic Voice State & Auto-Sending Label */}
         <div className="text-center">
           {isRecording ? (
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-1.5">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
-                <span className="font-mono text-sm font-bold text-rose-600 tracking-wider">
-                  LISTENING... {formatTime(recordingSeconds)}
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    speechDetected
+                      ? "bg-emerald-500 animate-ping"
+                      : "bg-rose-600 animate-pulse"
+                  }`}
+                />
+                <span className="font-mono text-sm font-bold text-navy tracking-wider">
+                  {speechDetected ? "SPEECH DETECTED" : "LISTENING..."} ({formatTime(recordingSeconds)})
                 </span>
               </div>
-              <span className="font-mono text-[11px] text-navy/60">
-                Tap button when finished speaking
-              </span>
+
+              {/* Automatic Silence Countdown indicator */}
+              {silenceCountdown !== null && silenceCountdown > 0 ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-300 rounded-full text-amber-900 font-mono text-xs font-semibold animate-pulse">
+                  <span>Auto-sending in {silenceCountdown}s...</span>
+                </div>
+              ) : (
+                <span className="font-mono text-[11px] text-navy/60">
+                  Speak naturally — auto-submits when you pause
+                </span>
+              )}
             </div>
           ) : isTranscribing ? (
             <div className="flex items-center gap-2 text-amber-800">
+              <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
               <span className="font-mono text-xs font-bold uppercase tracking-wider">
-                Recognizing speech & submitting...
+                Recognizing speech & submitting automatically...
               </span>
             </div>
           ) : isPlayingSpeech ? (
@@ -274,24 +421,41 @@ export function AudioControls({
                 Tap to speak
               </span>
               <span className="font-mono text-[11px] text-navy/50">
-                Audio is automatically submitted when you finish
+                Speaks naturally — automatically submits when you stop
               </span>
             </div>
           )}
         </div>
 
-        {/* Live Audio Visualizer Equalizer during active speech */}
+        {/* Live Audio Volume Visualizer during active speech */}
         {isRecording && (
           <div className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-ice/70 border border-fog rounded-[8px]">
-            <span className="w-1.5 h-4 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.4s]" />
-            <span className="w-1.5 h-7 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.2s]" />
-            <span className="w-1.5 h-3 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.5s]" />
-            <span className="w-1.5 h-8 bg-rose-500 rounded-full animate-bounce" />
-            <span className="w-1.5 h-5 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-            <span className="w-1.5 h-7 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.1s]" />
-            <span className="w-1.5 h-3 bg-rose-500 rounded-full animate-bounce [animation-delay:-0.45s]" />
-            <span className="font-mono text-[11px] uppercase text-rose-700 font-bold ml-2">
-              Recording live speech
+            <span
+              className="w-1.5 bg-emerald-500 rounded-full transition-all duration-75"
+              style={{ height: `${Math.max(6, volumeLevel * 0.4)}px` }}
+            />
+            <span
+              className="w-1.5 bg-emerald-500 rounded-full transition-all duration-75"
+              style={{ height: `${Math.max(8, volumeLevel * 0.7)}px` }}
+            />
+            <span
+              className="w-1.5 bg-emerald-500 rounded-full transition-all duration-75"
+              style={{ height: `${Math.max(6, volumeLevel * 0.5)}px` }}
+            />
+            <span
+              className="w-1.5 bg-emerald-500 rounded-full transition-all duration-75"
+              style={{ height: `${Math.max(10, volumeLevel * 0.9)}px` }}
+            />
+            <span
+              className="w-1.5 bg-emerald-500 rounded-full transition-all duration-75"
+              style={{ height: `${Math.max(8, volumeLevel * 0.6)}px` }}
+            />
+            <span
+              className="w-1.5 bg-emerald-500 rounded-full transition-all duration-75"
+              style={{ height: `${Math.max(6, volumeLevel * 0.4)}px` }}
+            />
+            <span className="font-mono text-[11px] uppercase text-navy font-bold ml-2">
+              {speechDetected ? "Capturing voice" : "Waiting for voice"}
             </span>
           </div>
         )}
@@ -300,24 +464,30 @@ export function AudioControls({
         <div className="flex items-center justify-between w-full pt-1">
           {isRecording ? (
             <button
+              type="button"
               onClick={cancelRecording}
-              className="px-3 py-1.5 rounded-[4px] border border-fog text-xs font-mono font-bold text-navy/60 hover:text-rose-600 hover:bg-rose-50 transition-colors inline-flex items-center gap-1.5 cursor-pointer mx-auto"
-              title="Discard audio recording"
+              className="inline-flex items-center gap-1 text-xs font-mono font-bold text-navy/50 hover:text-rose-600 transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
-              CANCEL RECORDING
-            </button>
-          ) : isProfessorMode && onSkipQuestion && !isLocked ? (
-            <button
-              onClick={onSkipQuestion}
-              className="px-3.5 py-1.5 rounded-[6px] border border-fog text-xs font-mono font-bold text-navy/70 hover:text-navy hover:bg-ice transition-colors inline-flex items-center gap-1.5 cursor-pointer mx-auto shadow-xs"
-              title="Skip this question (counts as unanswered)"
-            >
-              <FastForward className="w-3.5 h-3.5 text-gap-orange" />
-              SKIP QUESTION (PROFESSOR MODE)
+              Cancel recording
             </button>
           ) : (
-            <div className="h-6" />
+            <div className="text-[11px] font-mono text-navy/40">
+              Audio-only mode · No typing needed
+            </div>
+          )}
+
+          {isProfessorMode && onSkipQuestion && !isRecording && (
+            <button
+              type="button"
+              onClick={onSkipQuestion}
+              disabled={isLocked}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-ice hover:bg-fog/30 text-navy/70 hover:text-navy text-xs font-mono font-bold rounded-[6px] border border-fog transition-colors disabled:opacity-40 cursor-pointer"
+              title="Skip this question (counts as unanswered strike)"
+            >
+              <FastForward className="w-3 h-3 text-gap-orange" />
+              Skip question
+            </button>
           )}
         </div>
       </div>

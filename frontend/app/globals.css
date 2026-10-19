@@ -133,13 +133,11 @@
 }
 
 
-/* Accessibility: Prefers-reduced-motion overrides */
+/* Accessibility: Non-essential UI transitions can respect reduced motion while preserving interactive characters */
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
+  .motion-reduce-safe {
     animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }
 

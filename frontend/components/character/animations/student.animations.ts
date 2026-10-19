@@ -37,18 +37,19 @@ export const studentIdle: AnimationDefinition = {
   id: "student-idle",
   character: "STUDENT",
   performanceState: "IDLE",
-  duration: 4000,
+  duration: 3500,
   loop: true,
   interruptible: true,
   bodyAnimation: {
-    translateY: [0, -3, -1, -3, 0],
-    rotate: [0, 0.3, 0, -0.3, 0],
+    translateY: [0, -10, -2, -8, 0],
+    rotate: [0, 1.2, 0, -1.2, 0],
+    scale: [1, 1.025, 1, 1.02, 1],
     times: [0, 0.25, 0.5, 0.75, 1],
     transition: {
       type: "tween",
       ease: "easeInOut",
       repeat: Infinity,
-      duration: 4,
+      duration: 3.5,
     },
   },
 };
@@ -236,9 +237,9 @@ export const studentSpeaking: AnimationDefinition = {
   loop: true,
   interruptible: true,
   bodyAnimation: {
-    translateY: [-3, -6, -3, -4, -3],
-    rotate: [-1.5, -0.5, -2, -1, -1.5],
-    scale: [1.01, 1.025, 1.01, 1.02, 1.01],
+    translateY: [-3, -12, -3, -8, -3],
+    rotate: [-1.5, 1.5, -2, 1, -1.5],
+    scale: [1.02, 1.05, 1.01, 1.04, 1.02],
     times: [0, 0.25, 0.5, 0.75, 1],
     transition: {
       type: "tween",
