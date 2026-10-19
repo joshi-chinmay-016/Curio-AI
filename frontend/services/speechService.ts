@@ -59,6 +59,7 @@ export class BrowserSpeechService implements SpeechProvider {
   private isCurrentlyPaused: boolean = false;
   private listeners: Set<(state: SpeechPlaybackState) => void> = new Set();
   private voices: SpeechSynthesisVoice[] = [];
+  private currentUtterance: any = null;
 
   constructor() {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -208,7 +209,27 @@ export class BrowserSpeechService implements SpeechProvider {
       options.onError?.(err);
     };
 
-    window.speechSynthesis.speak(utterance);
+    this.currentUtterance = utterance;
+
+    // Ensure speechSynthesis is active and not paused by browser
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+    }
+
+    // A 60ms delay ensures previous cancel() fully releases in Chromium engines
+    setTimeout(() => {
+      try {
+        if (typeof window !== "undefined" && window.speechSynthesis) {
+          window.speechSynthesis.resume();
+          window.speechSynthesis.speak(utterance);
+        }
+      } catch (err) {
+        console.error("Speech speak failed:", err);
+        options.onError?.(err as Error);
+      }
+    }, 60);
   }
 
   public stop(): void {

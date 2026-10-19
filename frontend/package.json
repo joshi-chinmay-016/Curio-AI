@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsx --tsconfig tsconfig.json tests/performanceEngine.test.ts && tsx --tsconfig tsconfig.json tests/interactive-audio-learning.test.ts"
   },
   "dependencies": {
     "@react-three/drei": "^9.99.0",
@@ -29,6 +30,7 @@
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.3.3"
   }
 }

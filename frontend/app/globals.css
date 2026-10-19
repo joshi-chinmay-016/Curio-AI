@@ -105,13 +105,39 @@
   background: #0F2B4A;
 }
 
-/* Accessibility: Prefers-reduced-motion overrides */
+/* Animated Character Breathing & Float */
+@keyframes character-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes pulse-gentle {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.animate-float {
+  animation: character-float 4s ease-in-out infinite;
+}
+
+.animate-pulse-gentle {
+  animation: pulse-gentle 2s ease-in-out infinite;
+}
+
+
+/* Accessibility: Non-essential UI transitions can respect reduced motion while preserving interactive characters */
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
+  .motion-reduce-safe {
     animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }
 

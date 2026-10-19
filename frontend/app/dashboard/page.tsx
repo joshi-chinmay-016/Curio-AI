@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   History,
   FileText,
+  Mic,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
 import { KeycapButton } from "@/components/curio/KeycapButton";
@@ -103,6 +104,13 @@ function DashboardContent() {
                 DASHBOARD
               </Link>
               <Link
+                href="/audio-learning"
+                className="text-navy/70 hover:text-navy transition-colors pb-0.5 inline-flex items-center gap-1.5"
+              >
+                <Mic className="w-3.5 h-3.5 text-cobalt" />
+                AUDIO LEARNING
+              </Link>
+              <Link
                 href="/documents"
                 className="text-navy/70 hover:text-navy transition-colors pb-0.5"
               >
@@ -166,32 +174,103 @@ function DashboardContent() {
               </p>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Link href="/topics">
+                <Link href="/audio-learning">
                   <KeycapButton variant="navy" size="md">
                     <span className="inline-flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-gap-orange" />
-                      TEACH CURIO SOMETHING NEW
+                      <Mic className="w-4 h-4 text-gap-orange" />
+                      AUDIO LEARNING
+                    </span>
+                  </KeycapButton>
+                </Link>
+
+                <Link href="/topics">
+                  <KeycapButton variant="default" size="md">
+                    <span className="inline-flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-cobalt" />
+                      TEACH CURIO
                     </span>
                   </KeycapButton>
                 </Link>
 
                 <Link href="/documents">
-                  <KeycapButton variant="default" size="md">
-                    <span className="inline-flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-cobalt" />
-                      MY DOCUMENTS
-                    </span>
-                  </KeycapButton>
-                </Link>
-
-                <Link href="/history">
                   <KeycapButton variant="ghost" size="md">
                     <span className="inline-flex items-center gap-2">
-                      <History className="w-4 h-4" />
-                      VIEW FULL HISTORY
+                      <FileText className="w-4 h-4 text-navy/70" />
+                      DOCUMENTS
                     </span>
                   </KeycapButton>
                 </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Interactive Audio Learning Feature Showcase Card */}
+        <section className="mb-10">
+          <div className="bg-gradient-to-r from-[#0F2B4A] via-[#163860] to-[#0F2B4A] border-2 border-navy text-white rounded-[10px] p-6 md:p-8 shadow-[6px_6px_0_0_#3B82F6] relative overflow-hidden">
+            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/10 border border-white/20 rounded-[4px] text-[10px] font-mono uppercase tracking-widest text-white/90 font-bold mb-3 backdrop-blur-xs">
+                  <span className="w-2 h-2 rounded-full bg-gap-orange animate-pulse" />
+                  INTERACTIVE AUDIO LEARNING
+                </div>
+                <h2 className="font-heading text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-2">
+                  Speak with Animated AI Characters
+                </h2>
+                <p className="font-sans text-sm md:text-base text-white/80 leading-relaxed mb-6">
+                  Teach a curious student or test your knowledge with a strict professor — entirely through voice.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link href="/audio-learning">
+                    <KeycapButton variant="default" size="md">
+                      <span className="inline-flex items-center gap-2 font-bold text-navy">
+                        <Mic className="w-4 h-4 text-cobalt" />
+                        START AUDIO SESSION →
+                      </span>
+                    </KeycapButton>
+                  </Link>
+
+                  <span className="font-mono text-xs text-white/60">
+                    Live speech & reactions · STT + TTS
+                  </span>
+                </div>
+              </div>
+
+              {/* Character Avatars Preview Showcase */}
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="group relative flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/20 rounded-[8px] p-2 transition-all">
+                  <img
+                    src="/characters/student.png"
+                    alt="Student Character"
+                    className="w-16 h-20 object-cover rounded-[6px] shadow-sm"
+                  />
+                  <span className="font-mono text-[10px] uppercase font-bold text-white/90 mt-1.5">
+                    Student
+                  </span>
+                </div>
+
+                <div className="group relative flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/20 rounded-[8px] p-2 transition-all">
+                  <img
+                    src="/characters/teacher.png"
+                    alt="Teacher Character"
+                    className="w-16 h-20 object-cover rounded-[6px] shadow-sm"
+                  />
+                  <span className="font-mono text-[10px] uppercase font-bold text-white/90 mt-1.5">
+                    Teacher
+                  </span>
+                </div>
+
+                <div className="group relative flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/20 rounded-[8px] p-2 transition-all">
+                  <img
+                    src="/characters/professor.png"
+                    alt="Professor Character"
+                    className="w-16 h-20 object-cover rounded-[6px] shadow-sm"
+                  />
+                  <span className="font-mono text-[10px] uppercase font-bold text-white/90 mt-1.5">
+                    Professor
+                  </span>
+                </div>
               </div>
             </div>
           </div>
