@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Copy, Check, BookOpen } from "lucide-react";
+import { Copy, Check, BookOpen, Volume2, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatMessage } from "@/types/session";
 import { ModeChip } from "@/components/curio/ModeChip";
 import { MarkdownContent } from "./MarkdownContent";
+import { useSpeechPlayback } from "@/hooks/useSpeechPlayback";
 
 export interface ChatBubbleProps {
   message: ChatMessage;
@@ -16,6 +17,11 @@ export function ChatBubble({ message }: ChatBubbleProps) {
   const isLearner = message.role === "learner";
   const isTeacher = message.mode === "TEACHER" && message.role === "curio";
   const isGap = Boolean(message.gapReference);
+
+  const { isPlaying, isSupported, toggle: toggleSpeech } = useSpeechPlayback(
+    message.id,
+    message.content
+  );
 
   if (message.type === "separator") {
     const isTeacherTransition = message.content.includes("PAUSE") || message.content.includes("TEACHER");
@@ -142,7 +148,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
           </div>
         )}
 
-        {/* Footer info & copy on hover */}
+        {/* Footer info & copy / speak on hover */}
         <div className="flex items-center gap-2 mt-1 px-1">
           <span className="font-mono text-[10px] text-navy/40 uppercase">
             {message.timestamp} {message.turnNumber ? `· Turn ${message.turnNumber}` : ""}
@@ -151,6 +157,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
             onClick={handleCopyText}
             className="opacity-0 group-hover:opacity-100 transition-opacity text-navy/40 hover:text-navy p-0.5"
             title="Copy message"
+            aria-label="Copy message text"
           >
             {copied ? (
               <Check className="w-3 h-3 text-cobalt" />
@@ -158,6 +165,32 @@ export function ChatBubble({ message }: ChatBubbleProps) {
               <Copy className="w-3 h-3" />
             )}
           </button>
+
+          {isSupported && (
+            <button
+              onClick={toggleSpeech}
+              className={`p-0.5 rounded transition-all cursor-pointer ${
+                isPlaying
+                  ? "opacity-100 text-rose-600 hover:text-rose-700 bg-rose-50"
+                  : "opacity-0 group-hover:opacity-100 text-navy/40 hover:text-cobalt"
+              }`}
+              title={isPlaying ? "Stop reading aloud" : "Read aloud response"}
+              aria-label={isPlaying ? "Stop reading aloud" : "Read aloud response"}
+            >
+              {isPlaying ? (
+                <Square className="w-3 h-3 fill-current animate-pulse" />
+              ) : (
+                <Volume2 className="w-3 h-3" />
+              )}
+            </button>
+          )}
+
+          {isPlaying && (
+            <span className="inline-flex items-center gap-1 font-mono text-[10px] text-rose-600 font-medium animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+              Speaking...
+            </span>
+          )}
         </div>
       </div>
     </div>

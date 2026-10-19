@@ -67,6 +67,28 @@ class Settings(BaseSettings):
     RETRIEVAL_TOP_K: int = 5  # Default number of results to return
     RETRIEVAL_SIMILARITY_THRESHOLD: float = 0.0  # Minimum cosine similarity (0-1)
 
+    # Voice & Speech-to-Text Configuration
+    VOICE_WHISPER_MODEL: str = "base"
+    VOICE_DEVICE: str = "cpu"
+    VOICE_COMPUTE_TYPE: str = "int8"
+    VOICE_MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10 MB audio max
+    VOICE_MAX_AUDIO_DURATION_SECONDS: float = 300.0  # 5 minutes max
+    VOICE_CONCURRENT_REQUEST_LIMIT: int = 2  # Concurrency throttle for CPU model inference
+    VOICE_ALLOWED_MIME_TYPES: List[str] = [
+        "audio/webm",
+        "audio/ogg",
+        "audio/wav",
+        "audio/wave",
+        "audio/x-wav",
+        "audio/mp3",
+        "audio/mpeg",
+        "audio/m4a",
+        "audio/mp4",
+        "audio/x-m4a",
+        "audio/flac",
+        "application/octet-stream",
+    ]
+
     class Config:
         case_sensitive = True
         extra = "ignore"
