@@ -421,6 +421,7 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
             target_concept_override=concept_target,
             strategy=decision.strategy,
             strategy_reason=decision.reason,
+            adjust_difficulty=False,
         )
 
         # Synchronize decision with specification
@@ -582,6 +583,7 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 learner_model=learner_model,
                 current_difficulty=decision.difficulty,
                 recent_question_history=recent_q,
+                adjust_difficulty=False,
             )
 
         assessment = state.get("assessment")

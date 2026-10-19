@@ -47,6 +47,7 @@ class QuestionSelector:
         target_concept_override: Optional[str] = None,
         strategy: Optional[Strategy] = None,
         strategy_reason: Optional[str] = None,
+        adjust_difficulty: bool = True,
     ) -> QuestionSpecification:
         recent_concepts = recent_concept_history or []
         recent_questions = recent_question_history or []
@@ -66,7 +67,7 @@ class QuestionSelector:
                     concept_state=c_state,
                     latest_evaluation=latest_evaluation,
                 )
-                if latest_evaluation is not None
+                if (adjust_difficulty and latest_evaluation is not None)
                 else current_difficulty
             )
 
@@ -110,9 +111,12 @@ class QuestionSelector:
         if unresolved_target:
             c_node = concept_model.get_concept(unresolved_target)
             node_name = c_node.name if c_node else unresolved_target
-            diff = c_node.difficulty_level if c_node else current_difficulty
-            # Bounded difficulty change
-            diff = max(1, min(current_difficulty, diff))
+            if adjust_difficulty:
+                diff = c_node.difficulty_level if c_node else current_difficulty
+                # Bounded difficulty change
+                diff = max(1, min(current_difficulty, diff))
+            else:
+                diff = current_difficulty
 
             c_state = learner_model.get_or_create_concept(unresolved_target)
             if c_state.active_misconceptions:
@@ -151,8 +155,11 @@ class QuestionSelector:
         if prereq_target:
             c_node = concept_model.get_concept(prereq_target)
             node_name = c_node.name if c_node else prereq_target
-            diff = c_node.difficulty_level if c_node else 1
-            diff = max(1, min(diff, current_difficulty))
+            if adjust_difficulty:
+                diff = c_node.difficulty_level if c_node else 1
+                diff = max(1, min(diff, current_difficulty))
+            else:
+                diff = current_difficulty
 
             obj = LearningObjective(
                 objective_type=ObjectiveType.UNDERSTAND_DEFINITION if diff == 1 else ObjectiveType.UNDERSTAND_MECHANISM,
@@ -182,7 +189,7 @@ class QuestionSelector:
         c_state = learner_model.get_or_create_concept(c_id)
 
         # Determine target difficulty (bounded change: at most +-1)
-        if latest_evaluation is not None:
+        if adjust_difficulty and latest_evaluation is not None:
             target_diff = self._calculate_next_difficulty(
                 current_difficulty=current_difficulty,
                 concept_node=target_concept_node,
