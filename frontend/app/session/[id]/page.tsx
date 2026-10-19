@@ -16,6 +16,7 @@ import { DocumentContextPanel } from "@/components/curio/session/DocumentContext
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
+import { speechService } from "@/services/speechService";
 
 export default function LearningSessionPage() {
   const params = useParams();
@@ -47,6 +48,9 @@ export default function LearningSessionPage() {
 
   useEffect(() => {
     initSession(sessionId, topicParam);
+    return () => {
+      speechService.stop();
+    };
   }, [sessionId, topicParam, initSession]);
 
   const handleConfirmEnd = () => {

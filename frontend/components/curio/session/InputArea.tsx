@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Plus,
   Mic,
+  Square,
   Send,
   FileText,
   Upload,
@@ -21,6 +22,7 @@ import { SessionMode } from "@/types/session";
 import { DocumentItem } from "@/types/document";
 import { curioToast } from "@/components/curio/CurioToast";
 import { useSessionStore } from "@/stores/sessionStore";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import {
   validateDocumentFile,
   uploadDocument,
@@ -71,6 +73,41 @@ export function InputArea({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Audio recording and Whisper transcription lifecycle
+  const {
+    state: voiceState,
+    duration: voiceDuration,
+    error: voiceError,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+    clearError: clearVoiceError,
+    isRecording,
+    isTranscribing,
+    isRequestingPermission,
+  } = useAudioRecorder({
+    onTranscriptionSuccess: (transcribedText) => {
+      setContent((prev) => {
+        const trimmed = prev.trim();
+        return trimmed ? `${trimmed} ${transcribedText}` : transcribedText;
+      });
+      curioToast.success(
+        "TRANSCRIPTION COMPLETE",
+        `Recognized: "${transcribedText.length > 50 ? transcribedText.slice(0, 50) + "..." : transcribedText}"`
+      );
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.style.height = "auto";
+          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+        }
+      }, 50);
+    },
+    onError: (err) => {
+      curioToast.error("VOICE ERROR", err.message || "Failed to record or transcribe audio.");
+    },
+  });
 
   const isTeacher = mode === "TEACHER";
   const placeholder = isTeacher
@@ -351,6 +388,81 @@ export function InputArea({
           </div>
         )}
 
+        {/* Active Voice Recording Status Bar */}
+        {isRecording && (
+          <div
+            id="voice-recording-banner"
+            className="flex items-center justify-between gap-3 px-3 py-2 mb-2 bg-rose-50/90 border border-rose-200 rounded-[6px] animate-in fade-in"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
+              </span>
+              <span className="font-mono text-xs font-bold text-rose-700 shrink-0">
+                {Math.floor(voiceDuration / 60)}:{String(voiceDuration % 60).padStart(2, "0")}
+              </span>
+              <span className="text-xs text-rose-800 font-sans truncate hidden sm:inline">
+                Recording question... Speak clearly
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                id="voice-cancel-btn"
+                type="button"
+                onClick={cancelRecording}
+                className="px-2 py-1 text-xs font-mono font-medium text-rose-700 hover:text-rose-900 hover:bg-rose-100 rounded transition-colors"
+                title="Discard audio recording"
+              >
+                Discard
+              </button>
+              <button
+                id="voice-stop-btn"
+                type="button"
+                onClick={stopRecording}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-mono font-semibold bg-rose-600 text-white hover:bg-rose-700 rounded shadow-sm transition-colors cursor-pointer"
+                title="Finish recording and transcribe"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span>Done</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Transcribing Indicator */}
+        {isTranscribing && (
+          <div
+            id="voice-transcribing-banner"
+            className="flex items-center gap-2 px-3 py-2 mb-2 bg-cobalt/10 border border-cobalt/20 rounded-[6px] text-xs font-mono text-cobalt animate-pulse"
+          >
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>Transcribing spoken audio with Whisper...</span>
+          </div>
+        )}
+
+        {/* Voice Error Notice */}
+        {voiceError && !isRecording && !isTranscribing && (
+          <div
+            id="voice-error-banner"
+            className="flex items-center justify-between gap-2 px-3 py-1.5 mb-2 bg-rose-50 border border-rose-200 rounded-[6px] text-xs font-sans text-rose-700 animate-in fade-in"
+          >
+            <div className="flex items-center gap-1.5 min-w-0">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+              <span className="truncate">{voiceError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={clearVoiceError}
+              className="p-1 hover:bg-rose-100 rounded text-rose-700"
+              title="Dismiss error"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
         {/* Selected Document Indicator (Chip) */}
         {(attachedDoc || uploadPhase !== "idle") && (
           <div
@@ -526,16 +638,45 @@ export function InputArea({
             className="flex-1 resize-none bg-transparent font-sans text-sm md:text-base text-navy placeholder:text-navy/40 focus:outline-none min-h-[48px] max-h-[180px] py-1 leading-relaxed"
           />
 
-          {/* Voice placeholder button */}
+          {/* Microphone recording button */}
           <button
+            id="voice-record-btn"
             type="button"
-            onClick={() =>
-              curioToast.info("VOICE INGESTION READY", "Voice explanation input will be available in the next release.")
+            onClick={() => {
+              if (isRecording) {
+                stopRecording();
+              } else if (!isTranscribing && !isRequestingPermission && !disabled) {
+                startRecording();
+              }
+            }}
+            disabled={disabled || isTranscribing || isRequestingPermission}
+            className={`p-2 rounded-[4px] transition-all shrink-0 mb-0.5 ${
+              isRecording
+                ? "bg-rose-600 text-white animate-pulse shadow-[0_0_8px_rgba(225,29,72,0.4)]"
+                : isTranscribing
+                ? "bg-cobalt/10 text-cobalt"
+                : isRequestingPermission
+                ? "bg-amber-100 text-amber-800"
+                : "text-navy/60 hover:text-navy hover:bg-ice"
+            }`}
+            title={
+              isRecording
+                ? "Click to finish recording and transcribe"
+                : isTranscribing
+                ? "Transcribing audio..."
+                : isRequestingPermission
+                ? "Requesting microphone permission..."
+                : "Record question with microphone (Whisper)"
             }
-            className="p-2 text-navy/40 hover:text-navy hover:bg-ice rounded-[4px] transition-colors shrink-0 mb-0.5"
-            title="Voice explanation (Coming soon)"
+            aria-label={isRecording ? "Stop recording voice" : "Start recording voice"}
           >
-            <Mic className="w-4 h-4" />
+            {isTranscribing || isRequestingPermission ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : isRecording ? (
+              <Square className="w-4 h-4 fill-current" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
           </button>
 
           {/* Send Button */}
