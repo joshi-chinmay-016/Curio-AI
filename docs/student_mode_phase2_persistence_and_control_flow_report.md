@@ -364,12 +364,11 @@ backend/tests/ai/test_student_nodes_turn_interpretation.py::test_evaluation_node
 4. **Student Node Execution ([student_nodes.py](file:///c:/Users/Vishal%20S%20Naik/MyProjects/Curio-AI/backend/app/ai/nodes/student_nodes.py)):**
    - Checks topic matching between hydrated `concept_model` and `context.topic`.
    - Reuses identical `ConceptModel` with stable node IDs across turns whenever topic has not changed.
-   - Generates a fresh model via `ConceptModelBuilder` if topic changes or model is absent.
-   - Fallback protection prevents overwriting valid models if dynamic building throws an exception.
+   - Step 3.1 Hardening: If topic mismatches, `concept_model` is discarded (`None`) immediately before invoking `ConceptModelBuilder`. If builder fails, safe fallback creates an empty model for the current topic; under no condition can a previous topic's graph be retained or returned.
 
 ### C. Test Validation & Matrix
 **Suite:** `backend/tests/services/test_concept_model_persistence.py`
-All 10 tests passed against isolated mocks:
+All 11 tests passed against isolated mocks:
 
 | Test Name | Scenario Validated | Result |
 | :--- | :--- | :--- |
@@ -380,14 +379,15 @@ All 10 tests passed against isolated mocks:
 | `test_concept_model_ids_remain_stable_across_turns` | Graph node IDs remain stable across turns when topic is unchanged | PASSED |
 | `test_topic_change_invalidates_stale_graph_in_context_building` | Stale graph discarded by `ChatService` when topic changes | PASSED |
 | `test_student_nodes_rebuilds_graph_when_topic_changes` | `student_nodes.py` triggers builder for new topic upon topic mismatch | PASSED |
+| `test_student_nodes_mismatched_graph_discarded_even_if_builder_fails` | Step 3.1: Mismatched graph discarded even if builder raises exception | PASSED |
 | `test_invalid_stored_model_data_handled_gracefully` | Corrupt stored JSON handled gracefully without crashing application | PASSED |
 | `test_failed_model_update_preserves_existing_valid_graph` | Failed/empty build update preserves previously valid graph | PASSED |
 | `test_legacy_session_with_null_concept_model_is_backward_compatible` | Sessions with null `concept_model` remain 100% backward-compatible | PASSED |
 
-**Full Regression Verification (67/67 tests passed):**
+**Full Regression Verification (68/68 tests passed):**
 - `backend/tests/repositories/test_session_repository_learning_state.py`: 9/9 PASSED
 - `backend/tests/ai/test_student_nodes_turn_interpretation.py`: 4/4 PASSED
-- `backend/tests/services/test_concept_model_persistence.py`: 10/10 PASSED
+- `backend/tests/services/test_concept_model_persistence.py`: 11/11 PASSED
 - `backend/tests/services/test_chat_service.py`: 33/33 PASSED
 - `backend/tests/ai/test_turn_interpreter.py`: 7/7 PASSED
 - `backend/tests/ai/test_concept_session_lifecycle.py`: 4/4 PASSED
@@ -395,7 +395,7 @@ All 10 tests passed against isolated mocks:
 ---
 
 ## 8. HARD STOP
-Phase 2B Step 3 is complete.
+Phase 2B Steps 1, 2, 3, and 3.1 are complete.
 No further phases (adaptive questioning, topic coverage, or PDF learning-plan coverage) have been initiated.
 Awaiting user review and approval.
 

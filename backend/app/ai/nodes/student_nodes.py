@@ -69,17 +69,19 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         and bool(context.topic)
         and concept_model.topic.strip().lower() == context.topic.strip().lower()
     )
-    if not concept_model or not topic_matches:
+    if not topic_matches:
+        concept_model = None
+
+    if not concept_model:
         builder = ConceptModelBuilder(provider)
         try:
             built_model = builder.build_model(context.topic)
             if built_model and built_model.concepts:
                 concept_model = built_model
-            elif not concept_model:
-                concept_model = built_model
+            else:
+                concept_model = built_model or ConceptModel(topic=context.topic, concepts=[], relationships=[])
         except Exception:
-            if not concept_model:
-                concept_model = ConceptModel(topic=context.topic, concepts=[], relationships=[])
+            concept_model = ConceptModel(topic=context.topic, concepts=[], relationships=[])
 
     # 2. Hydrate or initialize LearnerModel
     learner_model: Optional[LearnerModel] = context.current_state.learner_model

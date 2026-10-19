@@ -411,6 +411,51 @@ def test_student_nodes_rebuilds_graph_when_topic_changes():
         assert result["concept_model"].topic == "Photosynthesis"
 
 
+def test_student_nodes_mismatched_graph_discarded_even_if_builder_fails():
+    """Verify evaluation_node never returns mismatched topic model even when builder fails."""
+    old_recursion_model = _create_sample_concept_model("Recursion")
+
+    mock_provider = MagicMock()
+
+    context = MagicMock()
+    context.session_id = str(uuid4())
+    context.topic = "Photosynthesis"
+    context.current_state.concept_model = old_recursion_model
+    context.current_state.learner_model = None
+    context.current_state.concept_mastery = {}
+    context.current_state.unresolved_misconceptions = []
+    context.current_mode = Mode.STUDENT
+    context.active_concept = "chloroplast"
+    context.current_question = None
+    context.teacher_intervention = None
+    context.document_context = None
+
+    state = {
+        "context": context,
+        "provider": mock_provider,
+        "messages": [],
+    }
+
+    with patch("backend.app.ai.nodes.student_nodes.ConceptModelBuilder") as mock_builder_cls:
+        mock_builder = MagicMock()
+        mock_builder.build_model.side_effect = RuntimeError("LLM service unavailable")
+        mock_builder_cls.return_value = mock_builder
+
+        result = evaluation_node(state)
+        returned_model = result["concept_model"]
+
+        # 1. Old graph must NOT be returned or reused
+        assert returned_model.topic != "Recursion"
+        old_concept_ids = {c.id for c in old_recursion_model.concepts}
+        returned_concept_ids = {c.id for c in returned_model.concepts}
+        assert not returned_concept_ids.intersection(old_concept_ids)
+
+        # 2. Returned model must belong to the new topic
+        assert returned_model.topic == "Photosynthesis"
+        # 3. Safe fallback used (empty concepts on failure)
+        assert len(returned_model.concepts) == 0
+
+
 # =====================================================================
 # 6. Missing or invalid stored model data
 # =====================================================================
