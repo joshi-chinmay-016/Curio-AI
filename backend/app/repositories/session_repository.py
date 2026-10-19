@@ -22,14 +22,18 @@ class SessionRepository:
         # Create initial state
         db_state = SessionState(
             session_id=db_session.id,
-            current_mode="STUDENT",
-            difficulty=1,
-            confidence=0.0,
-            active_concept="Core Definition",
-            unresolved_misconceptions=[],
-            mastered_concepts=[],
-            teacher_attempt_count=0,
-            teacher_intervention=None,
+            current_mode=getattr(obj_in, "current_mode", "STUDENT"),
+            difficulty=getattr(obj_in, "difficulty", 1),
+            confidence=getattr(obj_in, "confidence", 0.0),
+            active_concept=getattr(obj_in, "active_concept", "Core Definition"),
+            unresolved_misconceptions=getattr(obj_in, "unresolved_misconceptions", None) or [],
+            mastered_concepts=getattr(obj_in, "mastered_concepts", None) or [],
+            concept_mastery=getattr(obj_in, "concept_mastery", None) or {},
+            misconception_counts=getattr(obj_in, "misconception_counts", None) or {},
+            recent_strategy_history=getattr(obj_in, "recent_strategy_history", None) or [],
+            mode_switch_history=getattr(obj_in, "mode_switch_history", None) or [],
+            teacher_attempt_count=getattr(obj_in, "teacher_attempt_count", 0),
+            teacher_intervention=getattr(obj_in, "teacher_intervention", None),
         )
         db.add(db_state)
         db.commit()
@@ -126,22 +130,113 @@ class SessionRepository:
             db_state = SessionState(session_id=session_id)
             db.add(db_state)
 
-        db_state.current_mode = state_in.current_mode.value if hasattr(state_in.current_mode, 'value') else str(state_in.current_mode)
-        db_state.difficulty = state_in.difficulty
-        db_state.confidence = state_in.confidence
-        db_state.active_concept = state_in.active_concept
-        db_state.current_question_id = state_in.current_question_id
-        db_state.interrupted_question_id = state_in.interrupted_question_id
-        db_state.consecutive_strong_answers = state_in.consecutive_strong_answers
-        db_state.consecutive_weak_answers = state_in.consecutive_weak_answers
-        db_state.unresolved_misconceptions = state_in.unresolved_misconceptions
-        db_state.mastered_concepts = state_in.mastered_concepts
+        fields_set = getattr(state_in, "model_fields_set", None)
+        has_fields_set = isinstance(fields_set, (set, frozenset))
+
+        def _is_explicit(field_name: str) -> bool:
+            if has_fields_set:
+                return field_name in fields_set
+            if isinstance(state_in, dict):
+                return field_name in state_in
+            val = getattr(state_in, field_name, None)
+            return val is not None
+
+        def _safe_flag_modified(instance: SessionState, key: str) -> None:
+            try:
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(instance, key)
+            except Exception:
+                pass
+
+        if _is_explicit("current_mode"):
+            db_state.current_mode = state_in.current_mode.value if hasattr(state_in.current_mode, 'value') else str(state_in.current_mode)
+        elif not has_fields_set:
+            db_state.current_mode = state_in.current_mode.value if hasattr(state_in.current_mode, 'value') else str(state_in.current_mode)
+
+        if _is_explicit("difficulty"):
+            db_state.difficulty = state_in.difficulty
+        elif not has_fields_set:
+            db_state.difficulty = state_in.difficulty
+
+        if _is_explicit("confidence"):
+            db_state.confidence = state_in.confidence
+        elif not has_fields_set:
+            db_state.confidence = state_in.confidence
+
+        if _is_explicit("active_concept"):
+            db_state.active_concept = state_in.active_concept
+        elif not has_fields_set:
+            db_state.active_concept = state_in.active_concept
+
+        if _is_explicit("current_question_id"):
+            db_state.current_question_id = state_in.current_question_id
+        elif not has_fields_set and hasattr(state_in, "current_question_id"):
+            db_state.current_question_id = state_in.current_question_id
+
+        if _is_explicit("interrupted_question_id"):
+            db_state.interrupted_question_id = state_in.interrupted_question_id
+        elif not has_fields_set and hasattr(state_in, "interrupted_question_id"):
+            db_state.interrupted_question_id = state_in.interrupted_question_id
+
+        if _is_explicit("consecutive_strong_answers"):
+            db_state.consecutive_strong_answers = state_in.consecutive_strong_answers
+        elif not has_fields_set:
+            db_state.consecutive_strong_answers = state_in.consecutive_strong_answers
+
+        if _is_explicit("consecutive_weak_answers"):
+            db_state.consecutive_weak_answers = state_in.consecutive_weak_answers
+        elif not has_fields_set:
+            db_state.consecutive_weak_answers = state_in.consecutive_weak_answers
+
+        if _is_explicit("unresolved_misconceptions"):
+            db_state.unresolved_misconceptions = list(state_in.unresolved_misconceptions) if isinstance(state_in.unresolved_misconceptions, list) else state_in.unresolved_misconceptions
+            _safe_flag_modified(db_state, "unresolved_misconceptions")
+        elif not has_fields_set and getattr(state_in, "unresolved_misconceptions", None) is not None:
+            db_state.unresolved_misconceptions = list(state_in.unresolved_misconceptions) if isinstance(state_in.unresolved_misconceptions, list) else state_in.unresolved_misconceptions
+            _safe_flag_modified(db_state, "unresolved_misconceptions")
+
+        if _is_explicit("mastered_concepts"):
+            db_state.mastered_concepts = list(state_in.mastered_concepts) if isinstance(state_in.mastered_concepts, list) else state_in.mastered_concepts
+            _safe_flag_modified(db_state, "mastered_concepts")
+        elif not has_fields_set and getattr(state_in, "mastered_concepts", None) is not None:
+            db_state.mastered_concepts = list(state_in.mastered_concepts) if isinstance(state_in.mastered_concepts, list) else state_in.mastered_concepts
+            _safe_flag_modified(db_state, "mastered_concepts")
+
+        # Learning persistence fields
+        if _is_explicit("concept_mastery"):
+            db_state.concept_mastery = dict(state_in.concept_mastery) if isinstance(state_in.concept_mastery, dict) else state_in.concept_mastery
+            _safe_flag_modified(db_state, "concept_mastery")
+        elif not has_fields_set and getattr(state_in, "concept_mastery", None) is not None:
+            db_state.concept_mastery = dict(state_in.concept_mastery) if isinstance(state_in.concept_mastery, dict) else state_in.concept_mastery
+            _safe_flag_modified(db_state, "concept_mastery")
+
+        if _is_explicit("misconception_counts"):
+            db_state.misconception_counts = dict(state_in.misconception_counts) if isinstance(state_in.misconception_counts, dict) else state_in.misconception_counts
+            _safe_flag_modified(db_state, "misconception_counts")
+        elif not has_fields_set and getattr(state_in, "misconception_counts", None) is not None:
+            db_state.misconception_counts = dict(state_in.misconception_counts) if isinstance(state_in.misconception_counts, dict) else state_in.misconception_counts
+            _safe_flag_modified(db_state, "misconception_counts")
+
+        if _is_explicit("recent_strategy_history"):
+            db_state.recent_strategy_history = list(state_in.recent_strategy_history) if isinstance(state_in.recent_strategy_history, list) else state_in.recent_strategy_history
+            _safe_flag_modified(db_state, "recent_strategy_history")
+        elif not has_fields_set and getattr(state_in, "recent_strategy_history", None) is not None:
+            db_state.recent_strategy_history = list(state_in.recent_strategy_history) if isinstance(state_in.recent_strategy_history, list) else state_in.recent_strategy_history
+            _safe_flag_modified(db_state, "recent_strategy_history")
+
+        if _is_explicit("mode_switch_history"):
+            db_state.mode_switch_history = list(state_in.mode_switch_history) if isinstance(state_in.mode_switch_history, list) else state_in.mode_switch_history
+            _safe_flag_modified(db_state, "mode_switch_history")
+        elif not has_fields_set and getattr(state_in, "mode_switch_history", None) is not None:
+            db_state.mode_switch_history = list(state_in.mode_switch_history) if isinstance(state_in.mode_switch_history, list) else state_in.mode_switch_history
+            _safe_flag_modified(db_state, "mode_switch_history")
+
         if hasattr(state_in, 'teacher_intervention_data') and state_in.teacher_intervention_data is not None:
             db_state.teacher_intervention_data = state_in.teacher_intervention_data
-        if hasattr(state_in, 'mode_switch_history') and state_in.mode_switch_history is not None:
-            db_state.mode_switch_history = state_in.mode_switch_history
-        db_state.teacher_attempt_count = state_in.teacher_attempt_count
-        db_state.teacher_intervention = state_in.teacher_intervention
+        if hasattr(state_in, 'teacher_attempt_count') and state_in.teacher_attempt_count is not None:
+            db_state.teacher_attempt_count = state_in.teacher_attempt_count
+        if hasattr(state_in, 'teacher_intervention') and state_in.teacher_intervention is not None:
+            db_state.teacher_intervention = state_in.teacher_intervention
 
         db.add(db_state)
         db.commit()

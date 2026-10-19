@@ -1,0 +1,295 @@
+# Curio AI — Student Mode Phase 2: Persistence & Control-Flow Report
+
+**Repository:** `Curio-AI`  
+**Date:** October 19, 2026  
+**Scope:** Student Mode Backend — Persistence Fixes, Control Flow Verification, and Step 1 Implementation
+
+---
+
+## 1. Executive Summary
+
+This report documents the verification and implementation results for **Student Mode Phase 2**:
+1. **Phase 2A (Independent Verification):**
+   - Verified the learning-state persistence defect in `SessionRepository.update_state()`.
+   - Verified the duplicate `TurnInterpreter.interpret()` call in `student_nodes.py`.
+   - Determined the durable storage strategy for `ConceptModel` across restarts and multi-worker environments.
+2. **Phase 2B — Step 1 (Controlled Implementation):**
+   - Implemented explicit initialization and selective field persistence in `SessionRepository`.
+   - Resolved the bug where omitted fields in `SessionStateBase` were vulnerable to overwriting existing database state with empty defaults.
+   - Added a dedicated, 100% mock-isolated unit test suite covering creation, explicit updates, omitted-field preservation, intentional resets, and backward compatibility.
+
+---
+
+## 2. Phase 2A: Verification Findings
+
+### A. Learning-State Persistence in `SessionRepository`
+
+- **Database Model & Deployed Schema:**
+  - Alembic migration `d9640bb3d3cf_add_session_state_learning_persistence_.py` already created the columns:
+    - `concept_mastery` (`JSON`, default `{}`)
+    - `misconception_counts` (`JSON`, default `{}`)
+    - `recent_strategy_history` (`JSON`, default `[]`)
+    - `mode_switch_history` (`JSON`, default `[]`)
+  - The SQLAlchemy model `SessionState` (`backend/app/models/session.py`) and schema `SessionStateBase` (`backend/app/schemas/session.py`) already declared these fields.
+- **Service Layer (`ChatService`):**
+  - `ChatService.send_message()` properly extracts new scores and histories, merges them with existing state, and supplies all four fields to `SessionStateBase`.
+- **Root Cause Code Defect:**
+  - In `SessionRepository.update_state()` (`backend/app/repositories/session_repository.py`), lines 129–145 assigned modes, scores, streaks, and teacher intervention, but **completely omitted** assigning `concept_mastery`, `misconception_counts`, `recent_strategy_history`, and `mode_switch_history`.
+- **Downstream Consequence:**
+  - On the subsequent turn, `ChatService._build_ai_context()` read `db_session.state.concept_mastery`, which remained `{}`.
+  - In `student_nodes.py`, `LearnerModel` attempted hydration from `context.current_state.concept_mastery` and reset to zero on every turn, wiping out student learning progress.
+
+### B. Duplicate Interpretation in `student_nodes.py`
+
+- In `backend/app/ai/nodes/student_nodes.py`:
+  - **Call 1 (lines 155–161):**
+    ```python
+    interpreter = TurnInterpreter(provider)
+    interpretation = interpreter.interpret(
+        user_message=latest_user_msg,
+        context=context,
+        current_question=curr_q,
+        mode=context.current_mode,
+    )
+    ```
+  - **Intermediate execution (lines 163–189):** Computes `target_concept` and calls `AssessmentAggregator.assess()`. Neither function reads or receives `interpretation`.
+  - **Call 2 (lines 191–198):**
+    ```python
+    interpreter = TurnInterpreter(provider)
+    interpretation = interpreter.interpret(
+        user_message=latest_user_msg,
+        context=context,
+        current_question=curr_q,
+        mode=context.current_mode,
+    )
+    ```
+- **Finding:**
+  - Both calls receive identical arguments.
+  - `TurnInterpreter.interpret()` has no side effects and does not mutate `context`.
+  - The result of Call 1 is overwritten by Call 2 without ever being used.
+  - Call 2 constitutes a completely redundant second LLM structured-generation call per turn. Removing Call 2 eliminates redundant latency and API cost without altering state or evaluation.
+
+### C. `ConceptModel` Persistence Strategy
+
+- **Architecture:**
+  - `ConceptModel` is a Pydantic v2 graph model (`backend/app/ai/schemas.py`).
+  - Serializes with `.model_dump(mode="json")` and deserializes with `.model_validate(data)`.
+  - `AIContext`, `SessionState` (AI schema), and `StateUpdates` already have `concept_model: Optional[ConceptModel] = None`.
+  - However, database model `SessionState` does not have a column for `concept_model`.
+  - As a result, `student_nodes.py` calls `ConceptModelBuilder.build_model(context.topic)` on every single turn, regenerating the topic decomposition from scratch. This introduces latency, API costs, and risks concept ID drift between turns.
+- **Strategy Decision:**
+  - An in-process cache is not multi-worker safe and does not survive restarts.
+  - **Approved Strategy (Option A):** Add a single nullable JSON column `concept_model = Column(JSON, nullable=True)` to `session_states` via an Alembic migration. This is zero-downtime safe, backward-compatible with existing sessions, and provides durable persistence across horizontal workers and restarts.
+
+---
+
+## 3. Phase 2B: Step 1 Implementation
+
+### 1. `SessionRepository` Fix
+
+Updated `backend/app/repositories/session_repository.py`:
+- In `create()`: Initialized `concept_mastery`, `misconception_counts`, `recent_strategy_history`, and `mode_switch_history` explicitly.
+- In `update_state()`:
+  - Inspected `model_fields_set` on `state_in`.
+  - When `state_in` is a Pydantic model (`isinstance(fields_set, (set, frozenset))`), only fields explicitly provided by the caller or service are updated.
+  - Omitted fields preserve existing database values, preventing schema defaults (`{}` or `[]`) from overwriting valid state.
+  - Intentional resets (`SessionStateBase(concept_mastery={})`) are honored because `"concept_mastery"` is tracked in `model_fields_set`.
+  - Applied `flag_modified` on SQLAlchemy JSON attributes defensively.
+  - Maintained backward compatibility for mock objects and dictionaries.
+
+### 2. Implementation Diff
+
+```diff
+--- a/backend/app/repositories/session_repository.py
++++ b/backend/app/repositories/session_repository.py
+@@ -24,14 +24,18 @@ class SessionRepository:
+         # Create initial state
+         db_state = SessionState(
+             session_id=db_session.id,
+-            current_mode="STUDENT",
+-            difficulty=1,
+-            confidence=0.0,
+-            active_concept="Core Definition",
+-            unresolved_misconceptions=[],
+-            mastered_concepts=[],
+-            teacher_attempt_count=0,
+-            teacher_intervention=None,
++            current_mode=getattr(obj_in, "current_mode", "STUDENT"),
++            difficulty=getattr(obj_in, "difficulty", 1),
++            confidence=getattr(obj_in, "confidence", 0.0),
++            active_concept=getattr(obj_in, "active_concept", "Core Definition"),
++            unresolved_misconceptions=getattr(obj_in, "unresolved_misconceptions", None) or [],
++            mastered_concepts=getattr(obj_in, "mastered_concepts", None) or [],
++            concept_mastery=getattr(obj_in, "concept_mastery", None) or {},
++            misconception_counts=getattr(obj_in, "misconception_counts", None) or {},
++            recent_strategy_history=getattr(obj_in, "recent_strategy_history", None) or [],
++            mode_switch_history=getattr(obj_in, "mode_switch_history", None) or [],
++            teacher_attempt_count=getattr(obj_in, "teacher_attempt_count", 0),
++            teacher_intervention=getattr(obj_in, "teacher_intervention", None),
+         )
+         db.add(db_state)
+         db.commit()
+@@ -125,24 +129,115 @@ class SessionRepository:
+             db_state = SessionState(session_id=session_id)
+             db.add(db_state)
+ 
+-        db_state.current_mode = state_in.current_mode.value if hasattr(state_in.current_mode, 'value') else str(state_in.current_mode)
+-        db_state.difficulty = state_in.difficulty
+-        db_state.confidence = state_in.confidence
+-        db_state.active_concept = state_in.active_concept
+-        db_state.current_question_id = state_in.current_question_id
+-        db_state.interrupted_question_id = state_in.interrupted_question_id
+-        db_state.consecutive_strong_answers = state_in.consecutive_strong_answers
+-        db_state.consecutive_weak_answers = state_in.consecutive_weak_answers
+-        db_state.unresolved_misconceptions = state_in.unresolved_misconceptions
+-        db_state.mastered_concepts = state_in.mastered_concepts
++        fields_set = getattr(state_in, "model_fields_set", None)
++        has_fields_set = isinstance(fields_set, (set, frozenset))
++
++        def _is_explicit(field_name: str) -> bool:
++            if has_fields_set:
++                return field_name in fields_set
++            if isinstance(state_in, dict):
++                return field_name in state_in
++            val = getattr(state_in, field_name, None)
++            return val is not None
++
++        def _safe_flag_modified(instance: SessionState, key: str) -> None:
++            try:
++                from sqlalchemy.orm.attributes import flag_modified
++                flag_modified(instance, key)
++            except Exception:
++                pass
++
++        if _is_explicit("current_mode"):
++            db_state.current_mode = state_in.current_mode.value if hasattr(state_in.current_mode, 'value') else str(state_in.current_mode)
++        elif not has_fields_set:
++            db_state.current_mode = state_in.current_mode.value if hasattr(state_in.current_mode, 'value') else str(state_in.current_mode)
++
++        if _is_explicit("difficulty"):
++            db_state.difficulty = state_in.difficulty
++        elif not has_fields_set:
++            db_state.difficulty = state_in.difficulty
++
++        if _is_explicit("confidence"):
++            db_state.confidence = state_in.confidence
++        elif not has_fields_set:
++            db_state.confidence = state_in.confidence
++
++        if _is_explicit("active_concept"):
++            db_state.active_concept = state_in.active_concept
++        elif not has_fields_set:
++            db_state.active_concept = state_in.active_concept
++
++        if _is_explicit("current_question_id"):
++            db_state.current_question_id = state_in.current_question_id
++        elif not has_fields_set and hasattr(state_in, "current_question_id"):
++            db_state.current_question_id = state_in.current_question_id
++
++        if _is_explicit("interrupted_question_id"):
++            db_state.interrupted_question_id = state_in.interrupted_question_id
++        elif not has_fields_set and hasattr(state_in, "interrupted_question_id"):
++            db_state.interrupted_question_id = state_in.interrupted_question_id
++
++        if _is_explicit("consecutive_strong_answers"):
++            db_state.consecutive_strong_answers = state_in.consecutive_strong_answers
++        elif not has_fields_set:
++            db_state.consecutive_strong_answers = state_in.consecutive_strong_answers
++
++        if _is_explicit("consecutive_weak_answers"):
++            db_state.consecutive_weak_answers = state_in.consecutive_weak_answers
++        elif not has_fields_set:
++            db_state.consecutive_weak_answers = state_in.consecutive_weak_answers
++
++        if _is_explicit("unresolved_misconceptions"):
++            db_state.unresolved_misconceptions = list(state_in.unresolved_misconceptions) if isinstance(state_in.unresolved_misconceptions, list) else state_in.unresolved_misconceptions
++            _safe_flag_modified(db_state, "unresolved_misconceptions")
++        elif not has_fields_set and getattr(state_in, "unresolved_misconceptions", None) is not None:
++            db_state.unresolved_misconceptions = list(state_in.unresolved_misconceptions) if isinstance(state_in.unresolved_misconceptions, list) else state_in.unresolved_misconceptions
++            _safe_flag_modified(db_state, "unresolved_misconceptions")
++
++        if _is_explicit("mastered_concepts"):
++            db_state.mastered_concepts = list(state_in.mastered_concepts) if isinstance(state_in.mastered_concepts, list) else state_in.mastered_concepts
++            _safe_flag_modified(db_state, "mastered_concepts")
++        elif not has_fields_set and getattr(state_in, "mastered_concepts", None) is not None:
++            db_state.mastered_concepts = list(state_in.mastered_concepts) if isinstance(state_in.mastered_concepts, list) else state_in.mastered_concepts
++            _safe_flag_modified(db_state, "mastered_concepts")
++
++        # Learning persistence fields
++        if _is_explicit("concept_mastery"):
++            db_state.concept_mastery = dict(state_in.concept_mastery) if isinstance(state_in.concept_mastery, dict) else state_in.concept_mastery
++            _safe_flag_modified(db_state, "concept_mastery")
++        elif not has_fields_set and getattr(state_in, "concept_mastery", None) is not None:
++            db_state.concept_mastery = dict(state_in.concept_mastery) if isinstance(state_in.concept_mastery, dict) else state_in.concept_mastery
++            _safe_flag_modified(db_state, "concept_mastery")
++
++        if _is_explicit("misconception_counts"):
++            db_state.misconception_counts = dict(state_in.misconception_counts) if isinstance(state_in.misconception_counts, dict) else state_in.misconception_counts
++            _safe_flag_modified(db_state, "misconception_counts")
++        elif not has_fields_set and getattr(state_in, "misconception_counts", None) is not None:
++            db_state.misconception_counts = dict(state_in.misconception_counts) if isinstance(state_in.misconception_counts, dict) else state_in.misconception_counts
++            _safe_flag_modified(db_state, "misconception_counts")
++
++        if _is_explicit("recent_strategy_history"):
++            db_state.recent_strategy_history = list(state_in.recent_strategy_history) if isinstance(state_in.recent_strategy_history, list) else state_in.recent_strategy_history
++            _safe_flag_modified(db_state, "recent_strategy_history")
++        elif not has_fields_set and getattr(state_in, "recent_strategy_history", None) is not None:
++            db_state.recent_strategy_history = list(state_in.recent_strategy_history) if isinstance(state_in.recent_strategy_history, list) else state_in.recent_strategy_history
++            _safe_flag_modified(db_state, "recent_strategy_history")
++
++        if _is_explicit("mode_switch_history"):
++            db_state.mode_switch_history = list(state_in.mode_switch_history) if isinstance(state_in.mode_switch_history, list) else state_in.mode_switch_history
++            _safe_flag_modified(db_state, "mode_switch_history")
++        elif not has_fields_set and getattr(state_in, "mode_switch_history", None) is not None:
++            db_state.mode_switch_history = list(state_in.mode_switch_history) if isinstance(state_in.mode_switch_history, list) else state_in.mode_switch_history
++            _safe_flag_modified(db_state, "mode_switch_history")
++
+         if hasattr(state_in, 'teacher_intervention_data') and state_in.teacher_intervention_data is not None:
+             db_state.teacher_intervention_data = state_in.teacher_intervention_data
+-        if hasattr(state_in, 'mode_switch_history') and state_in.mode_switch_history is not None:
+-            db_state.mode_switch_history = state_in.mode_switch_history
+-        db_state.teacher_attempt_count = state_in.teacher_attempt_count
+-        db_state.teacher_intervention = state_in.teacher_intervention
++        if hasattr(state_in, 'teacher_attempt_count') and state_in.teacher_attempt_count is not None:
++            db_state.teacher_attempt_count = state_in.teacher_attempt_count
++        if hasattr(state_in, 'teacher_intervention') and state_in.teacher_intervention is not None:
++            db_state.teacher_intervention = state_in.teacher_intervention
+ 
+         db.add(db_state)
+         db.commit()
+```
+
+---
+
+## 4. Test Validation & Database Safety
+
+### Safety Invariants Respected
+- **No live database touched:** 100% of the tests run against pure unit test doubles (`MagicMock`).
+- **No migration executed:** The proposed Alembic migration for `ConceptModel` has not been generated or applied to Supabase or any live database.
+- **Zero credential exposure:** No environment variables or connection strings were logged or displayed.
+
+### Unit Test Execution
+**Suite:** `backend/tests/repositories/test_session_repository_learning_state.py`
+```
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_create_initializes_learning_state PASSED [ 20%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_persists_explicit_learning_state PASSED [ 40%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_preserves_omitted_learning_state PASSED [ 60%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_allows_explicit_empty_resets PASSED [ 80%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_backward_compatibility_with_mocks PASSED [100%]
+
+======================== 5 passed in 0.68s ========================
+```
+
+### Regression Verification
+**Existing Suite:** `backend/tests/services/test_chat_service.py`
+```
+backend/tests/services/test_chat_service.py::test_session_repository_persists_and_updates_teacher_mode_fields PASSED [100%]
+======================== 1 passed in 1.49s ========================
+```
+
+---
+
+## 5. Next Steps
+
+1. **Step 2:** Remove the redundant `TurnInterpreter.interpret()` call in `student_nodes.py` (lines 191–198) and add a test verifying a single interpretation per applicable turn.
+2. **Step 3:** Add durable `ConceptModel` persistence (Alembic migration file creation, model update, `SessionRepository` and `ChatService` round-trip integration).
