@@ -25,6 +25,7 @@ from backend.app.ai.learner_model import LearnerModelManager
 from backend.app.ai.providers.mock_provider import MockLLMProvider
 from backend.app.ai.question_generator import QuestionGenerator
 from backend.app.ai.question_selector import QuestionSelector
+from backend.app.ai.question_validator import enforce_single_student_question
 from backend.app.ai.schemas import (
     AIContext,
     AIResponse,
@@ -535,6 +536,19 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 student_handler = StudentModeHandler(provider)
                 content = student_handler.generate_followup_question(context, evaluation, decision)
 
+        target_concept = (
+            (spec.target_concept if spec else None)
+            or (restored_q.concept if restored_q and hasattr(restored_q, "concept") else None)
+            or decision.active_concept
+            or context.active_concept
+            or context.topic
+        )
+        content = enforce_single_student_question(
+            content=content,
+            spec=spec,
+            fallback_concept=target_concept,
+        )
+
         response = AIResponse(
             content=content,
             mode=Mode.STUDENT,
@@ -582,6 +596,13 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
         elif interpretation.intent == TurnIntent.CLARIFICATION_REQUEST:
             clean_term = spec.target_concept.replace("_", " ")
             content = f"By that, I'm referring to the core mechanism of {clean_term}.\n\n{content}"
+
+        target_concept = spec.target_concept if spec else (context.active_concept or context.topic)
+        content = enforce_single_student_question(
+            content=content,
+            spec=spec,
+            fallback_concept=target_concept,
+        )
 
         resp_metadata = {
             "selected_concept": spec.target_concept,

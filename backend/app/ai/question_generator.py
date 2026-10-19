@@ -193,7 +193,8 @@ class QuestionGenerator:
             generation_constraints=new_constraints,
         )
 
-    def _construct_specification_fallback(self, spec: QuestionSpecification) -> QuestionCandidate:
+    @staticmethod
+    def construct_specification_fallback(spec: QuestionSpecification) -> QuestionCandidate:
         """
         Dynamically construct a clean, single Socratic question strictly tailored to the specification.
         Guaranteed to pass all validator checks.
@@ -222,3 +223,7 @@ class QuestionGenerator:
             question_text=q_text,
             rationale=f"Specification-driven safe fallback for {c_name} ({obj_type.value})",
         )
+
+    def _construct_specification_fallback(self, spec: QuestionSpecification) -> QuestionCandidate:
+        return QuestionGenerator.construct_specification_fallback(spec)
+
