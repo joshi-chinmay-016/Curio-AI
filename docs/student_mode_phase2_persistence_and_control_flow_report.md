@@ -261,7 +261,29 @@ Updated `backend/app/repositories/session_repository.py`:
 
 ---
 
-## 4. Test Validation & Database Safety
+## 4. Semantics & Failure Handling Review
+
+### A. Update Semantics Verification Matrix
+| Semantic Case | Behavior Verified | Evidence / Test |
+| :--- | :--- | :--- |
+| **1. Omitted field preserves DB value** | Field not in `model_fields_set` leaves column unchanged. | `test_session_repository_update_state_preserves_omitted_learning_state` |
+| **2. Explicit empty (`{}` / `[]`) resets value** | Explicitly passing `{}` or `[]` is tracked in `model_fields_set` and resets value. | `test_session_repository_update_state_allows_explicit_empty_resets` |
+| **3. Supplied `None` does not erase valid state** | Supplying `None` on non-nullable collections is prevented from erasing valid state or violating DB constraints. | `test_session_repository_update_state_supplied_none_does_not_erase_valid_state` |
+| **4. ChatService pattern persists all fields** | Passing all 4 learning fields as done in `ChatService.send_message()` updates all 4 columns. | `test_session_repository_update_state_chat_service_pattern_persists_all_fields` |
+| **5. Legacy dicts and mock objects compatible** | Non-Pydantic objects without `model_fields_set` fall back to safe attribute/key inspection. | `test_session_repository_update_state_backward_compatibility_with_mocks` |
+| **6. Updating one JSON field isolates others** | Updating only `concept_mastery` leaves `misconception_counts`, `strategy_history`, etc., completely intact. | `test_session_repository_update_state_updating_one_json_field_does_not_mutate_others` |
+
+### B. Failure Handling Review
+1. **Targeted Exception Handling in `_safe_flag_modified()`:**
+   - Swallowing `except Exception` was identified as overly broad.
+   - Refined to specifically catch `(AttributeError, KeyError, InvalidRequestError)` which occur when an un-instrumented test mock is passed.
+2. **Commit Failure Integrity:**
+   - `db.commit()` is never wrapped in a broad try/except. Any database or persistence error propagates immediately to the caller and aborts the turn.
+   - Verified by `test_session_repository_update_state_commit_failure_raises_exception`.
+
+---
+
+## 5. Test Validation & Database Safety
 
 ### Safety Invariants Respected
 - **No live database touched:** 100% of the tests run against pure unit test doubles (`MagicMock`).
@@ -271,25 +293,29 @@ Updated `backend/app/repositories/session_repository.py`:
 ### Unit Test Execution
 **Suite:** `backend/tests/repositories/test_session_repository_learning_state.py`
 ```
-backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_create_initializes_learning_state PASSED [ 20%]
-backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_persists_explicit_learning_state PASSED [ 40%]
-backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_preserves_omitted_learning_state PASSED [ 60%]
-backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_allows_explicit_empty_resets PASSED [ 80%]
-backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_backward_compatibility_with_mocks PASSED [100%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_create_initializes_learning_state PASSED [ 11%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_persists_explicit_learning_state PASSED [ 22%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_preserves_omitted_learning_state PASSED [ 33%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_allows_explicit_empty_resets PASSED [ 44%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_backward_compatibility_with_mocks PASSED [ 55%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_supplied_none_does_not_erase_valid_state PASSED [ 66%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_updating_one_json_field_does_not_mutate_others PASSED [ 77%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_chat_service_pattern_persists_all_fields PASSED [ 88%]
+backend/tests/repositories/test_session_repository_learning_state.py::test_session_repository_update_state_commit_failure_raises_exception PASSED [100%]
 
-======================== 5 passed in 0.68s ========================
+======================== 9 passed in 0.65s ========================
 ```
 
 ### Regression Verification
 **Existing Suite:** `backend/tests/services/test_chat_service.py`
 ```
 backend/tests/services/test_chat_service.py::test_session_repository_persists_and_updates_teacher_mode_fields PASSED [100%]
-======================== 1 passed in 1.49s ========================
+======================== 1 passed in 1.45s ========================
 ```
 
 ---
 
-## 5. Next Steps
+## 6. Next Steps
 
 1. **Step 2:** Remove the redundant `TurnInterpreter.interpret()` call in `student_nodes.py` (lines 191–198) and add a test verifying a single interpretation per applicable turn.
 2. **Step 3:** Add durable `ConceptModel` persistence (Alembic migration file creation, model update, `SessionRepository` and `ChatService` round-trip integration).

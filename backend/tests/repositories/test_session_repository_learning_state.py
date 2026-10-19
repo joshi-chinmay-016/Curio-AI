@@ -202,3 +202,139 @@ def test_session_repository_update_state_backward_compatibility_with_mocks():
     assert updated.concept_mastery == {"Limits": 1.0}
     assert updated.recent_strategy_history == ["DIRECT_INSTRUCTION"]
     assert updated.mastered_concepts == ["Limits"]
+
+
+def test_session_repository_update_state_supplied_none_does_not_erase_valid_state():
+    """Verify explicitly supplied None on non-nullable fields does not erase valid database state."""
+    repo = SessionRepository()
+    mock_db = MagicMock()
+    session_id = uuid4()
+
+    existing_state = SessionState(
+        session_id=session_id,
+        current_mode="STUDENT",
+        difficulty=2,
+        concept_mastery={"recursion": 0.8},
+        misconception_counts={"base_case": 1},
+        recent_strategy_history=["HINT"],
+        mode_switch_history=[{"from": "STUDENT", "to": "TEACHER"}],
+        unresolved_misconceptions=["gap1"],
+        mastered_concepts=["concept1"],
+    )
+    mock_db.query.return_value.filter.return_value.first.return_value = existing_state
+
+    # Caller passes a dictionary or mock containing None for non-nullable collections
+    none_update = {
+        "difficulty": 3,
+        "concept_mastery": None,
+        "misconception_counts": None,
+        "recent_strategy_history": None,
+        "mode_switch_history": None,
+        "unresolved_misconceptions": None,
+        "mastered_concepts": None,
+    }
+
+    updated = repo.update_state(mock_db, session_id, none_update)
+
+    assert updated.difficulty == 3
+    # Existing valid non-nullable collections must be protected from being overwritten by None
+    assert updated.concept_mastery == {"recursion": 0.8}
+    assert updated.misconception_counts == {"base_case": 1}
+    assert updated.recent_strategy_history == ["HINT"]
+    assert updated.mode_switch_history == [{"from": "STUDENT", "to": "TEACHER"}]
+    assert updated.unresolved_misconceptions == ["gap1"]
+    assert updated.mastered_concepts == ["concept1"]
+
+
+def test_session_repository_update_state_updating_one_json_field_does_not_mutate_others():
+    """Verify updating a single JSON field leaves all other JSON fields completely intact."""
+    repo = SessionRepository()
+    mock_db = MagicMock()
+    session_id = uuid4()
+
+    existing_state = SessionState(
+        session_id=session_id,
+        current_mode="STUDENT",
+        difficulty=1,
+        concept_mastery={"dp": 0.5},
+        misconception_counts={"memo": 2},
+        recent_strategy_history=["STEP_BY_STEP"],
+        mode_switch_history=[{"from": "STUDENT", "to": "STUDENT"}],
+    )
+    mock_db.query.return_value.filter.return_value.first.return_value = existing_state
+
+    # Update ONLY concept_mastery
+    single_field_update = SessionStateBase(
+        concept_mastery={"dp": 0.9, "memoization": 0.7}
+    )
+
+    updated = repo.update_state(mock_db, session_id, single_field_update)
+
+    # Updated field
+    assert updated.concept_mastery == {"dp": 0.9, "memoization": 0.7}
+    # Unrelated fields MUST remain untouched
+    assert updated.misconception_counts == {"memo": 2}
+    assert updated.recent_strategy_history == ["STEP_BY_STEP"]
+    assert updated.mode_switch_history == [{"from": "STUDENT", "to": "STUDENT"}]
+
+
+def test_session_repository_update_state_chat_service_pattern_persists_all_fields():
+    """Verify the exact pattern used in ChatService.send_message() correctly updates all 4 learning fields."""
+    repo = SessionRepository()
+    mock_db = MagicMock()
+    session_id = uuid4()
+
+    existing_state = SessionState(
+        session_id=session_id,
+        current_mode="STUDENT",
+        difficulty=1,
+        concept_mastery={},
+        misconception_counts={},
+        recent_strategy_history=[],
+        mode_switch_history=[],
+    )
+    mock_db.query.return_value.filter.return_value.first.return_value = existing_state
+
+    # Replicate ChatService lines 666-684
+    state_update = SessionStateBase(
+        current_mode=LearningMode.STUDENT,
+        difficulty=2,
+        confidence=0.8,
+        active_concept="Dynamic Programming",
+        current_question_id=None,
+        interrupted_question_id=None,
+        consecutive_strong_answers=2,
+        consecutive_weak_answers=0,
+        unresolved_misconceptions=["overlapping_subproblems"],
+        mastered_concepts=["optimal_substructure"],
+        concept_mastery={"dp_intro": 0.85},
+        misconception_counts={"subproblems": 1},
+        recent_strategy_history=["SOCRATIC_QUESTION"],
+        mode_switch_history=[],
+        teacher_attempt_count=0,
+        teacher_intervention=None,
+    )
+
+    updated = repo.update_state(mock_db, session_id, state_update)
+
+    assert updated.concept_mastery == {"dp_intro": 0.85}
+    assert updated.misconception_counts == {"subproblems": 1}
+    assert updated.recent_strategy_history == ["SOCRATIC_QUESTION"]
+    assert updated.mode_switch_history == []
+    assert updated.unresolved_misconceptions == ["overlapping_subproblems"]
+    assert updated.mastered_concepts == ["optimal_substructure"]
+
+
+def test_session_repository_update_state_commit_failure_raises_exception():
+    """Verify that a commit or database error is never silently swallowed or reported as success."""
+    repo = SessionRepository()
+    mock_db = MagicMock()
+    session_id = uuid4()
+
+    mock_db.query.return_value.filter.return_value.first.return_value = SessionState(session_id=session_id)
+    mock_db.commit.side_effect = RuntimeError("DB connection dropped")
+
+    state_in = SessionStateBase(difficulty=2)
+
+    with pytest.raises(RuntimeError, match="DB connection dropped"):
+        repo.update_state(mock_db, session_id, state_in)
