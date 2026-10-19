@@ -514,7 +514,12 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
         else:
             if spec:
                 generator = QuestionGenerator(provider)
-                sel_res = generator.generate_and_select_question(spec, context, recent_q)
+                sel_res = generator.generate_and_select_question(
+                    spec=spec,
+                    context=context,
+                    recent_questions=recent_q,
+                    assessment=state.get("assessment"),
+                )
                 content = sel_res.selected_candidate.question_text
             else:
                 student_handler = StudentModeHandler(provider)
@@ -550,14 +555,15 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 recent_question_history=recent_q,
             )
 
+        assessment = state.get("assessment")
         selection_res: QuestionSelectionResult = generator.generate_and_select_question(
             spec=spec,
             context=context,
             recent_questions=recent_q,
+            assessment=assessment,
         )
 
         content = selection_res.selected_candidate.question_text
-        assessment = state.get("assessment")
 
         # If learner response was irrelevant / off-topic, prefix with gentle redirection (Section 49)
         if assessment and assessment.relevance_level in (RelevanceLevel.IRRELEVANT, RelevanceLevel.UNCERTAIN):

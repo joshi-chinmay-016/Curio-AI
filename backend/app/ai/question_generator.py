@@ -9,7 +9,7 @@ Coordinates:
 """
 import logging
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from backend.app.ai.novelty import QuestionNoveltyChecker
 from backend.app.ai.prompts.candidate_prompts import build_candidate_generation_prompt
@@ -48,11 +48,12 @@ class QuestionGenerator:
         spec: QuestionSpecification,
         context: Optional[AIContext] = None,
         recent_questions: Optional[List[str]] = None,
+        assessment: Optional[Any] = None,
     ) -> QuestionSelectionResult:
         recent_q = recent_questions or []
 
         # 1. First generation attempt (3 candidates)
-        candidates = self._generate_candidates(spec, context, recent_q)
+        candidates = self._generate_candidates(spec, context, recent_q, assessment=assessment)
         validations = [self.validator.validate_candidate(c, spec, recent_q) for c in candidates]
 
         valid_candidates = [
@@ -81,7 +82,7 @@ class QuestionGenerator:
             [f"{v.candidate_id}: {', '.join(v.rejection_reasons)}" for v in validations]
         )
         retry_spec = self._strengthen_spec_constraints(spec, rejection_summary)
-        retry_candidates = self._generate_candidates(retry_spec, context, recent_q)
+        retry_candidates = self._generate_candidates(retry_spec, context, recent_q, assessment=assessment)
         retry_validations = [self.validator.validate_candidate(c, spec, recent_q) for c in retry_candidates]
 
         retry_valid = [
@@ -122,8 +123,14 @@ class QuestionGenerator:
         spec: QuestionSpecification,
         context: Optional[AIContext],
         recent_questions: List[str],
+        assessment: Optional[Any] = None,
     ) -> List[QuestionCandidate]:
-        prompt = build_candidate_generation_prompt(spec, context, recent_questions)
+        prompt = build_candidate_generation_prompt(
+            spec=spec,
+            context=context,
+            recent_questions=recent_questions,
+            assessment=assessment,
+        )
         try:
             candidate_list: CandidateList = self.provider.generate_structured(prompt, CandidateList)
             if candidate_list and candidate_list.candidates:
