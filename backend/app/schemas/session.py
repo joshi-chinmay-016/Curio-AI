@@ -21,6 +21,7 @@ class SessionStateBase(BaseModel):
     mode_switch_history: List[dict] = []
     teacher_attempt_count: int = 0
     teacher_intervention: Optional[Dict[str, Any]] = None
+    concept_model: Optional[Dict[str, Any]] = None
 
 class SessionStateResponse(SessionStateBase):
     session_id: UUID

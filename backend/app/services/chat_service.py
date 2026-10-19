@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -27,6 +28,7 @@ from backend.app.ai.schemas import (
     AIContext,
     AIResult,
     ChatMessage,
+    ConceptModel,
     ConversationContext,
     CurrentQuestion,
     InputType,
@@ -43,6 +45,8 @@ from backend.app.ai.schemas import (
     TurnEvaluation as AITurnEvaluation,
 )
 from backend.app.retrieval import RetrievalService, create_retrieval_service, RetrievalError
+
+logger = logging.getLogger(__name__)
 
 
 class ChatService:
@@ -229,6 +233,224 @@ class ChatService:
         db_messages = self.message_repo.list_by_session(db, session_id)
         return [self._to_message_response(m) for m in db_messages]
 
+    def _build_ai_context(
+        self,
+        db: SQLAlchemySession,
+        session_id: UUID,
+        db_session: Any,
+        ai_history: Optional[List[ChatMessage]] = None,
+        db_history: Optional[List[Any]] = None,
+    ) -> AIContext:
+        if db_history is None:
+            if hasattr(self.message_repo, "list_by_session"):
+                try:
+                    db_history = self.message_repo.list_by_session(db, session_id)
+                except Exception:
+                    db_history = []
+            else:
+                db_history = []
+
+        if ai_history is None:
+            ai_history = [
+                ChatMessage(
+                    role=Role.ASSISTANT if getattr(m, "sender", "USER") == "AI" else Role.USER,
+                    content=m.content,
+                    input_type=self._normalize_input_type(getattr(m, "input_type", None))
+                ) for m in (db_history or [])
+            ]
+
+        # Resolve SourceMode from session source_type
+        source_mode = SourceMode.GENERAL
+        if hasattr(db_session, "source_type") and db_session.source_type:
+            try:
+                source_mode = SourceMode(db_session.source_type)
+            except ValueError:
+                source_mode = SourceMode.GENERAL
+
+        session_info = SessionInfo(
+            session_id=str(session_id),
+            topic=db_session.topic,
+            source_mode=source_mode
+        )
+
+        # Convert LearningMode to AI Mode explicitly
+        mode_val = db_session.state.current_mode if db_session and db_session.state else "STUDENT"
+        try:
+            current_mode = Mode(mode_val.value if hasattr(mode_val, "value") else str(mode_val))
+        except ValueError:
+            current_mode = Mode.STUDENT
+
+        # Question hydration: safely look up message if current_question_id is set
+        current_question_obj: Optional[CurrentQuestion] = None
+        target_qid = getattr(db_session.state, "current_question_id", None) if db_session and db_session.state else None
+        if target_qid is not None:
+            target_qid_str = str(target_qid)
+            matching_q = next(
+                (m for m in (db_history or []) if getattr(m, "id", None) is not None and str(m.id) == target_qid_str),
+                None
+            )
+            if matching_q:
+                current_question_obj = CurrentQuestion(
+                    id=str(matching_q.id),
+                    content=matching_q.content,
+                    concept=getattr(db_session.state, "active_concept", ""),
+                    difficulty=getattr(db_session.state, "difficulty", 1)
+                )
+
+        # Interrupted question hydration: safely look up message if interrupted_question_id is set
+        interrupted_question_obj: Optional[CurrentQuestion] = None
+        target_int_id = getattr(db_session.state, "interrupted_question_id", None) if db_session and db_session.state else None
+        if target_int_id is not None:
+            target_int_id_str = str(target_int_id)
+            matching_int = next(
+                (m for m in (db_history or []) if getattr(m, "id", None) is not None and str(m.id) == target_int_id_str),
+                None
+            )
+            if matching_int:
+                interrupted_question_obj = CurrentQuestion(
+                    id=str(matching_int.id),
+                    content=matching_int.content,
+                    concept=getattr(db_session.state, "active_concept", ""),
+                    difficulty=getattr(db_session.state, "difficulty", 1)
+                )
+
+        # Teacher intervention hydration
+        teacher_intervention_obj: Optional[TeacherIntervention] = None
+        raw_intervention = getattr(db_session.state, "teacher_intervention", None) if db_session and db_session.state else None
+        if isinstance(raw_intervention, TeacherIntervention):
+            teacher_intervention_obj = raw_intervention
+        elif isinstance(raw_intervention, dict):
+            try:
+                teacher_intervention_obj = TeacherIntervention(**raw_intervention)
+            except Exception:
+                teacher_intervention_obj = None
+        elif db_session and db_session.state:
+            ti_data = getattr(db_session.state, "teacher_intervention_data", None)
+            if ti_data and isinstance(ti_data, dict) and ti_data.get("active"):
+                teacher_intervention_obj = TeacherIntervention(
+                    active=ti_data.get("active", False),
+                    gap=ti_data.get("gap", ""),
+                    attempt_count=ti_data.get("attempt_count", 0),
+                    verification_required=ti_data.get("verification_required", True),
+                )
+
+        # Mode switch history hydration
+        mode_transitions = []
+        raw_msh = (getattr(db_session.state, "mode_switch_history", None) or []) if db_session and db_session.state else []
+        for tr in raw_msh:
+            if isinstance(tr, dict):
+                mode_transitions.append(ModeTransition(**tr))
+            elif isinstance(tr, ModeTransition):
+                mode_transitions.append(tr)
+
+        teacher_attempts = (
+            teacher_intervention_obj.attempt_count if teacher_intervention_obj else 0
+        )
+        raw_attempts = getattr(db_session.state, "teacher_attempt_count", 0) if db_session and db_session.state else 0
+        teacher_attempt_count_val = raw_attempts if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool) else 0
+
+        def _safe_dict(val):
+            if isinstance(val, dict):
+                return val
+            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
+                return {}
+            try:
+                return dict(val) if val is not None else {}
+            except (TypeError, ValueError):
+                return {}
+
+        def _safe_list(val):
+            if isinstance(val, list):
+                return val
+            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
+                return []
+            try:
+                return list(val) if val is not None else []
+            except (TypeError, ValueError):
+                return []
+
+        # Hydrate concept_model safely
+        saved_concept_model: Optional[ConceptModel] = None
+        raw_concept_model = getattr(db_session.state, "concept_model", None) if db_session and db_session.state else None
+        if raw_concept_model and isinstance(raw_concept_model, dict):
+            try:
+                validated_cm = ConceptModel.model_validate(raw_concept_model)
+                session_topic = (db_session.topic or "").strip().lower()
+                model_topic = (validated_cm.topic or "").strip().lower()
+                if session_topic and model_topic and session_topic != model_topic:
+                    logger.warning(
+                        "Stored ConceptModel topic '%s' does not match session topic '%s'. Discarding stale model.",
+                        validated_cm.topic,
+                        db_session.topic,
+                    )
+                    saved_concept_model = None
+                else:
+                    saved_concept_model = validated_cm
+            except Exception as e:
+                logger.warning(
+                    "Failed to deserialize stored ConceptModel for session %s: %s",
+                    session_id,
+                    e,
+                )
+                saved_concept_model = None
+        elif isinstance(raw_concept_model, ConceptModel):
+            session_topic = (db_session.topic or "").strip().lower()
+            model_topic = (raw_concept_model.topic or "").strip().lower()
+            if session_topic and model_topic and session_topic != model_topic:
+                saved_concept_model = None
+            else:
+                saved_concept_model = raw_concept_model
+
+        current_state = SessionState(
+            session_id=str(session_id),
+            current_mode=current_mode,
+            current_difficulty=getattr(db_session.state, "difficulty", 1) if db_session and db_session.state else 1,
+            understanding_confidence=getattr(db_session.state, "confidence", 0.0) if db_session and db_session.state else 0.0,
+            active_concept=getattr(db_session.state, "active_concept", "") if db_session and db_session.state else "",
+            current_question=current_question_obj,
+            interrupted_question=interrupted_question_obj,
+            consecutive_successes=getattr(db_session.state, "consecutive_strong_answers", 0) if db_session and db_session.state else 0,
+            consecutive_failures=getattr(db_session.state, "consecutive_weak_answers", 0) if db_session and db_session.state else 0,
+            unresolved_misconceptions=(getattr(db_session.state, "unresolved_misconceptions", None) or []) if db_session and db_session.state else [],
+            teacher_intervention=teacher_intervention_obj,
+            teacher_attempt_count=max(teacher_attempts, teacher_attempt_count_val),
+            mode_switch_history=mode_transitions,
+            concept_mastery=_safe_dict(getattr(db_session.state, "concept_mastery", None) if db_session and db_session.state else None),
+            misconception_counts=_safe_dict(getattr(db_session.state, "misconception_counts", None) if db_session and db_session.state else None),
+            recent_strategy_history=_safe_list(getattr(db_session.state, "recent_strategy_history", None) if db_session and db_session.state else None),
+            concept_model=saved_concept_model,
+        )
+
+        conversation = ConversationContext(
+            recent_messages=ai_history,
+            message_count=len(ai_history)
+        )
+
+        # Hydrate recent evaluations for session (up to 10 chronologically)
+        raw_recent_evals = []
+        if hasattr(self.message_repo, "get_recent_evaluations_by_session"):
+            res_evals = self.message_repo.get_recent_evaluations_by_session(db, session_id, limit=10)
+            if isinstance(res_evals, list):
+                raw_recent_evals = res_evals
+        recent_evaluations_list: List[AITurnEvaluation] = [
+            ev_obj for raw_ev in raw_recent_evals
+            if (ev_obj := self._to_ai_turn_evaluation(raw_ev)) is not None
+        ]
+
+        learning_context = LearningContext(
+            mastered_concepts=(getattr(db_session.state, "mastered_concepts", None) or []) if db_session and db_session.state else [],
+            unresolved_misconceptions=(getattr(db_session.state, "unresolved_misconceptions", None) or []) if db_session and db_session.state else [],
+            recent_evaluations=recent_evaluations_list,
+            teacher_intervention=teacher_intervention_obj,
+        )
+
+        return AIContext(
+            session=session_info,
+            current_state=current_state,
+            conversation=conversation,
+            learning_context=learning_context
+        )
+
     def send_message(
         self,
         db: SQLAlchemySession,
@@ -256,168 +478,7 @@ class ChatService:
                 input_type=self._normalize_input_type(getattr(m, "input_type", None))
             ) for m in db_history
         ]
-
-        # Resolve SourceMode from session source_type
-        source_mode = SourceMode.GENERAL
-        if hasattr(db_session, "source_type") and db_session.source_type:
-            try:
-                source_mode = SourceMode(db_session.source_type)
-            except ValueError:
-                source_mode = SourceMode.GENERAL
-
-        session_info = SessionInfo(
-            session_id=str(session_id),
-            topic=db_session.topic,
-            source_mode=source_mode
-        )
-
-        # Convert LearningMode to AI Mode explicitly
-        mode_val = db_session.state.current_mode
-        try:
-            current_mode = Mode(mode_val.value if hasattr(mode_val, "value") else str(mode_val))
-        except ValueError:
-            current_mode = Mode.STUDENT
-
-        # Question hydration: safely look up message if current_question_id is set
-        current_question_obj: Optional[CurrentQuestion] = None
-        target_qid = db_session.state.current_question_id
-        if target_qid is not None:
-            target_qid_str = str(target_qid)
-            matching_q = next(
-                (m for m in db_history if getattr(m, "id", None) is not None and str(m.id) == target_qid_str),
-                None
-            )
-            if matching_q:
-                current_question_obj = CurrentQuestion(
-                    id=str(matching_q.id),
-                    content=matching_q.content,
-                    concept=db_session.state.active_concept,
-                    difficulty=db_session.state.difficulty
-                )
-
-        # Interrupted question hydration: safely look up message if interrupted_question_id is set
-        interrupted_question_obj: Optional[CurrentQuestion] = None
-        target_int_id = db_session.state.interrupted_question_id
-        if target_int_id is not None:
-            target_int_id_str = str(target_int_id)
-            matching_int = next(
-                (m for m in db_history if getattr(m, "id", None) is not None and str(m.id) == target_int_id_str),
-                None
-            )
-            if matching_int:
-                interrupted_question_obj = CurrentQuestion(
-                    id=str(matching_int.id),
-                    content=matching_int.content,
-                    concept=db_session.state.active_concept,
-                    difficulty=db_session.state.difficulty
-                )
-
-        # Teacher intervention hydration
-        teacher_intervention_obj: Optional[TeacherIntervention] = None
-        ti_data = getattr(db_session.state, "teacher_intervention_data", None)
-        if ti_data and isinstance(ti_data, dict) and ti_data.get("active"):
-            teacher_intervention_obj = TeacherIntervention(
-                active=ti_data.get("active", False),
-                gap=ti_data.get("gap", ""),
-                attempt_count=ti_data.get("attempt_count", 0),
-                verification_required=ti_data.get("verification_required", True),
-            )
-
-        # Mode switch history hydration
-        mode_transitions = []
-        raw_msh = getattr(db_session.state, "mode_switch_history", None) or []
-        for tr in raw_msh:
-            if isinstance(tr, dict):
-                mode_transitions.append(ModeTransition(**tr))
-            elif isinstance(tr, ModeTransition):
-                mode_transitions.append(tr)
-
-        teacher_attempts = (
-            teacher_intervention_obj.attempt_count if teacher_intervention_obj else 0
-        )
-        # Teacher Mode state hydration
-        raw_attempts = getattr(db_session.state, "teacher_attempt_count", 0)
-        teacher_attempt_count_val = raw_attempts if isinstance(raw_attempts, int) and not isinstance(raw_attempts, bool) else 0
-
-        teacher_intervention_obj: Optional[TeacherIntervention] = None
-        raw_intervention = getattr(db_session.state, "teacher_intervention", None)
-        if isinstance(raw_intervention, TeacherIntervention):
-            teacher_intervention_obj = raw_intervention
-        elif isinstance(raw_intervention, dict):
-            try:
-                teacher_intervention_obj = TeacherIntervention(**raw_intervention)
-            except Exception:
-                teacher_intervention_obj = None
-
-        def _safe_dict(val):
-            if isinstance(val, dict):
-                return val
-            # Handle MagicMock and other non-dict objects
-            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
-                return {}
-            try:
-                return dict(val) if val is not None else {}
-            except (TypeError, ValueError):
-                return {}
-
-        def _safe_list(val):
-            if isinstance(val, list):
-                return val
-            if hasattr(val, "_mock_return_value") or type(val).__name__ == "MagicMock":
-                return []
-            try:
-                return list(val) if val is not None else []
-            except (TypeError, ValueError):
-                return []
-
-        current_state = SessionState(
-            session_id=str(session_id),
-            current_mode=current_mode,
-            current_difficulty=db_session.state.difficulty,
-            understanding_confidence=db_session.state.confidence,
-            active_concept=db_session.state.active_concept,
-            current_question=current_question_obj,
-            interrupted_question=interrupted_question_obj,
-            consecutive_successes=db_session.state.consecutive_strong_answers,
-            consecutive_failures=db_session.state.consecutive_weak_answers,
-            unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
-            teacher_intervention=teacher_intervention_obj,
-            teacher_attempt_count=max(teacher_attempts, teacher_attempt_count_val),
-            mode_switch_history=mode_transitions,
-            concept_mastery=_safe_dict(getattr(db_session.state, "concept_mastery", None)),
-            misconception_counts=_safe_dict(getattr(db_session.state, "misconception_counts", None)),
-            recent_strategy_history=_safe_list(getattr(db_session.state, "recent_strategy_history", None)),
-        )
-
-        conversation = ConversationContext(
-            recent_messages=ai_history,
-            message_count=len(ai_history)
-        )
-
-        # Hydrate recent evaluations for session (up to 10 chronologically)
-        raw_recent_evals = []
-        if hasattr(self.message_repo, "get_recent_evaluations_by_session"):
-            res_evals = self.message_repo.get_recent_evaluations_by_session(db, session_id, limit=10)
-            if isinstance(res_evals, list):
-                raw_recent_evals = res_evals
-        recent_evaluations_list: List[AITurnEvaluation] = [
-            ev_obj for raw_ev in raw_recent_evals
-            if (ev_obj := self._to_ai_turn_evaluation(raw_ev)) is not None
-        ]
-
-        learning_context = LearningContext(
-            mastered_concepts=db_session.state.mastered_concepts or [],
-            unresolved_misconceptions=db_session.state.unresolved_misconceptions or [],
-            recent_evaluations=recent_evaluations_list,
-            teacher_intervention=teacher_intervention_obj,
-        )
-
-        context = AIContext(
-            session=session_info,
-            current_state=current_state,
-            conversation=conversation,
-            learning_context=learning_context
-        )
+        context = self._build_ai_context(db, session_id, db_session, ai_history, db_history)
 
         # 3b. Retrieve document context for RAG (if session is document-backed)
         source_context = self._retrieve_source_context(
@@ -561,6 +622,7 @@ class ChatService:
             new_interrupted_qid = db_session.state.interrupted_question_id
 
         # Teacher intervention persistence
+        ti_data = getattr(db_session.state, "teacher_intervention_data", None)
         new_ti_data = None
         if updates.teacher_intervention is not None and hasattr(updates.teacher_intervention, "model_dump"):
             new_ti_data = updates.teacher_intervention.model_dump()
@@ -569,7 +631,7 @@ class ChatService:
 
         # Mode switch history persistence
         new_msh = []
-        raw_msh_source = updates.mode_switch_history if updates.mode_switch_history is not None else mode_transitions
+        raw_msh_source = updates.mode_switch_history if updates.mode_switch_history is not None else getattr(db_session.state, "mode_switch_history", None)
         if isinstance(raw_msh_source, (list, tuple)):
             for t in raw_msh_source:
                 if hasattr(t, "model_dump"):
@@ -663,6 +725,39 @@ class ChatService:
         else:
             new_mode_switch_history = _safe_list(getattr(db_session.state, "mode_switch_history", None))
 
+        # ConceptModel persistence:
+        # Serialize valid ConceptModel instances via model_dump(mode="json").
+        # If the update is None or has no concepts (failed build), preserve existing valid model if topics match.
+        raw_existing_cm = getattr(db_session.state, "concept_model", None)
+        new_concept_model: Optional[Dict[str, Any]] = None
+
+        if updates.concept_model is not None:
+            if isinstance(updates.concept_model, ConceptModel):
+                if updates.concept_model.concepts:
+                    new_concept_model = updates.concept_model.model_dump(mode="json")
+                else:
+                    # Model has 0 concepts - preserve existing valid model if topics match
+                    if raw_existing_cm and isinstance(raw_existing_cm, dict):
+                        existing_topic = (raw_existing_cm.get("topic") or "").strip().lower()
+                        sess_topic = (db_session.topic or "").strip().lower()
+                        if not sess_topic or not existing_topic or sess_topic == existing_topic:
+                            new_concept_model = raw_existing_cm
+            elif isinstance(updates.concept_model, dict):
+                try:
+                    ConceptModel.model_validate(updates.concept_model)
+                    new_concept_model = updates.concept_model
+                except Exception as e:
+                    logger.warning("Invalid concept_model dict in state updates: %s", e)
+                    new_concept_model = raw_existing_cm if isinstance(raw_existing_cm, dict) else None
+        else:
+            if raw_existing_cm and isinstance(raw_existing_cm, dict):
+                existing_topic = (raw_existing_cm.get("topic") or "").strip().lower()
+                sess_topic = (db_session.topic or "").strip().lower()
+                if not sess_topic or not existing_topic or sess_topic == existing_topic:
+                    new_concept_model = raw_existing_cm
+            elif isinstance(raw_existing_cm, ConceptModel):
+                new_concept_model = raw_existing_cm.model_dump(mode="json")
+
         state_update = SessionStateBase(
             current_mode=new_mode,
             difficulty=new_difficulty,
@@ -678,6 +773,7 @@ class ChatService:
             misconception_counts=new_misconception_counts,
             recent_strategy_history=new_recent_strategy_history,
             mode_switch_history=new_mode_switch_history,
+            concept_model=new_concept_model,
             teacher_intervention_data=new_ti_data,
             teacher_attempt_count=new_teacher_attempts,
             teacher_intervention=new_teacher_intervention,

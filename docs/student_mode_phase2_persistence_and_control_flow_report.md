@@ -315,7 +315,87 @@ backend/tests/services/test_chat_service.py::test_session_repository_persists_an
 
 ---
 
-## 6. Next Steps
+## 6. Step 2 Implementation: Redundant Turn Interpretation Removal
 
-1. **Step 2:** Remove the redundant `TurnInterpreter.interpret()` call in `student_nodes.py` (lines 191–198) and add a test verifying a single interpretation per applicable turn.
-2. **Step 3:** Add durable `ConceptModel` persistence (Alembic migration file creation, model update, `SessionRepository` and `ChatService` round-trip integration).
+### A. Code Change in `student_nodes.py`
+In `backend/app/ai/nodes/student_nodes.py`:
+- Removed lines 191–198 (the redundant second instantiation of `TurnInterpreter` and call to `interpreter.interpret()`).
+- Call 1 at lines 155–161 is preserved, runs before `target_concept` resolution and `aggregator.assess()`, and its return value directly feeds synchronization (lines 191–209) and downstream evaluation/decision logic.
+
+### B. Unit Test Execution
+**Suite:** `backend/tests/ai/test_student_nodes_turn_interpretation.py`
+```
+backend/tests/ai/test_student_nodes_turn_interpretation.py::test_evaluation_node_invokes_turn_interpreter_exactly_once PASSED [ 25%]
+backend/tests/ai/test_student_nodes_turn_interpretation.py::test_evaluation_node_returns_interpretation_downstream PASSED [ 50%]
+backend/tests/ai/test_student_nodes_turn_interpretation.py::test_evaluation_node_preserves_defensive_fallback_on_faulty_provider PASSED [ 75%]
+backend/tests/ai/test_student_nodes_turn_interpretation.py::test_evaluation_node_skips_turn_interpretation_on_initial_turn PASSED [100%]
+
+======================== 4 passed in 2.55s ========================
+```
+
+---
+
+## 7. Step 3 Implementation: Durable ConceptModel Persistence
+
+### A. Database Persistence & Migration
+- **SQLAlchemy Model:** Added nullable JSON column `concept_model = Column(JSON, nullable=True)` to `SessionState` in [session.py](file:///c:/Users/Vishal%20S%20Naik/MyProjects/Curio-AI/backend/app/models/session.py).
+- **Pydantic Schema:** Added `concept_model: Optional[Dict[str, Any]] = None` to `SessionStateBase` in [session.py](file:///c:/Users/Vishal%20S%20Naik/MyProjects/Curio-AI/backend/app/schemas/session.py).
+- **Alembic Migration:** Created [e5f6a7b8c9d0_add_concept_model_to_session_states.py](file:///c:/Users/Vishal%20S%20Naik/MyProjects/Curio-AI/backend/alembic/versions/e5f6a7b8c9d0_add_concept_model_to_session_states.py):
+  - `revision = 'e5f6a7b8c9d0'`
+  - `down_revision = '6b4da17ad0d5'` (linear successor to the existing head)
+  - `upgrade()`: adds nullable `concept_model` JSON column to `session_states`.
+  - `downgrade()`: drops only `concept_model` column.
+  - **Migration Safety:** The migration file was created on disk only. It was **NOT** executed against Supabase or any live database.
+
+### B. Serialization & Deserialization Flow
+1. **Repository Flow ([session_repository.py](file:///c:/Users/Vishal%20S%20Naik/MyProjects/Curio-AI/backend/app/repositories/session_repository.py)):**
+   - `create()` explicitly sets `concept_model=getattr(obj_in, "concept_model", None)`.
+   - `update_state()` safely tracks `concept_model` in `_is_explicit()` and applies `_safe_flag_modified(db_state, "concept_model")` to guarantee SQLAlchemy JSON mutation detection.
+   - Omitted updates never overwrite or erase existing stored `concept_model`.
+2. **Context Hydration ([chat_service.py](file:///c:/Users/Vishal%20S%20Naik/MyProjects/Curio-AI/backend/app/services/chat_service.py)):**
+   - Extracted modular `_build_ai_context()` method on `ChatService`.
+   - Safely parses and validates stored `concept_model` JSON via `ConceptModel.model_validate()`.
+   - Validates topic consistency: if `db_session.topic` mismatches `validated_cm.topic`, discards the stale graph (`None`) and logs a warning.
+   - Gracefully handles corrupted JSON without crashing, falling back to on-demand generation.
+3. **Turn Persistence ([chat_service.py](file:///c:/Users/Vishal%20S%20Naik/MyProjects/Curio-AI/backend/app/services/chat_service.py)):**
+   - In `send_message()`, serializes valid `updates.concept_model` using `model_dump(mode="json")`.
+   - Defensive preservation: If `updates.concept_model` is None or has 0 concepts (e.g. failed generation), any valid stored model with matching topic is preserved.
+   - Database commit errors propagate immediately, ensuring persistence success is never falsely reported.
+4. **Student Node Execution ([student_nodes.py](file:///c:/Users/Vishal%20S%20Naik/MyProjects/Curio-AI/backend/app/ai/nodes/student_nodes.py)):**
+   - Checks topic matching between hydrated `concept_model` and `context.topic`.
+   - Reuses identical `ConceptModel` with stable node IDs across turns whenever topic has not changed.
+   - Generates a fresh model via `ConceptModelBuilder` if topic changes or model is absent.
+   - Fallback protection prevents overwriting valid models if dynamic building throws an exception.
+
+### C. Test Validation & Matrix
+**Suite:** `backend/tests/services/test_concept_model_persistence.py`
+All 10 tests passed against isolated mocks:
+
+| Test Name | Scenario Validated | Result |
+| :--- | :--- | :--- |
+| `test_concept_model_pydantic_v2_round_trip` | Pydantic v2 `model_dump(mode="json")` and `model_validate()` round-trip | PASSED |
+| `test_session_repository_create_and_update_concept_model` | Repository creation initialization and update persistence with `flag_modified` | PASSED |
+| `test_session_repository_update_state_preserves_omitted_concept_model` | Omission of `concept_model` preserves existing stored model | PASSED |
+| `test_chatservice_hydrates_and_persists_concept_model` | Multi-turn hydration into `AIContext` and persistence into `SessionStateBase` | PASSED |
+| `test_concept_model_ids_remain_stable_across_turns` | Graph node IDs remain stable across turns when topic is unchanged | PASSED |
+| `test_topic_change_invalidates_stale_graph_in_context_building` | Stale graph discarded by `ChatService` when topic changes | PASSED |
+| `test_student_nodes_rebuilds_graph_when_topic_changes` | `student_nodes.py` triggers builder for new topic upon topic mismatch | PASSED |
+| `test_invalid_stored_model_data_handled_gracefully` | Corrupt stored JSON handled gracefully without crashing application | PASSED |
+| `test_failed_model_update_preserves_existing_valid_graph` | Failed/empty build update preserves previously valid graph | PASSED |
+| `test_legacy_session_with_null_concept_model_is_backward_compatible` | Sessions with null `concept_model` remain 100% backward-compatible | PASSED |
+
+**Full Regression Verification (67/67 tests passed):**
+- `backend/tests/repositories/test_session_repository_learning_state.py`: 9/9 PASSED
+- `backend/tests/ai/test_student_nodes_turn_interpretation.py`: 4/4 PASSED
+- `backend/tests/services/test_concept_model_persistence.py`: 10/10 PASSED
+- `backend/tests/services/test_chat_service.py`: 33/33 PASSED
+- `backend/tests/ai/test_turn_interpreter.py`: 7/7 PASSED
+- `backend/tests/ai/test_concept_session_lifecycle.py`: 4/4 PASSED
+
+---
+
+## 8. HARD STOP
+Phase 2B Step 3 is complete.
+No further phases (adaptive questioning, topic coverage, or PDF learning-plan coverage) have been initiated.
+Awaiting user review and approval.
+

@@ -63,9 +63,23 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # 1. Hydrate or dynamically build ConceptModel
     concept_model: Optional[ConceptModel] = context.current_state.concept_model
-    if not concept_model:
+    topic_matches = (
+        concept_model is not None
+        and bool(concept_model.topic)
+        and bool(context.topic)
+        and concept_model.topic.strip().lower() == context.topic.strip().lower()
+    )
+    if not concept_model or not topic_matches:
         builder = ConceptModelBuilder(provider)
-        concept_model = builder.build_model(context.topic)
+        try:
+            built_model = builder.build_model(context.topic)
+            if built_model and built_model.concepts:
+                concept_model = built_model
+            elif not concept_model:
+                concept_model = built_model
+        except Exception:
+            if not concept_model:
+                concept_model = ConceptModel(topic=context.topic, concepts=[], relationships=[])
 
     # 2. Hydrate or initialize LearnerModel
     learner_model: Optional[LearnerModel] = context.current_state.learner_model
@@ -186,15 +200,6 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
             current_question=curr_q,
             concept_model=concept_model,
             target_concept_override=target_concept,
-        )
-
-        # Semantic Turn Interpretation
-        interpreter = TurnInterpreter(provider)
-        interpretation = interpreter.interpret(
-            user_message=latest_user_msg,
-            context=context,
-            current_question=curr_q,
-            mode=context.current_mode,
         )
 
         # Synchronize interpretation with assessment

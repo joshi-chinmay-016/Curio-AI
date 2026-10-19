@@ -34,6 +34,7 @@ class SessionRepository:
             mode_switch_history=getattr(obj_in, "mode_switch_history", None) or [],
             teacher_attempt_count=getattr(obj_in, "teacher_attempt_count", 0),
             teacher_intervention=getattr(obj_in, "teacher_intervention", None),
+            concept_model=getattr(obj_in, "concept_model", None),
         )
         db.add(db_state)
         db.commit()
@@ -267,6 +268,15 @@ class SessionRepository:
         elif not has_fields_set and mode_sw_val is not None:
             db_state.mode_switch_history = list(mode_sw_val) if isinstance(mode_sw_val, list) else mode_sw_val
             _safe_flag_modified(db_state, "mode_switch_history")
+
+        model_val = _get_val("concept_model")
+        if _is_explicit("concept_model"):
+            if model_val is not None:
+                db_state.concept_model = dict(model_val) if isinstance(model_val, dict) else model_val
+                _safe_flag_modified(db_state, "concept_model")
+        elif not has_fields_set and model_val is not None:
+            db_state.concept_model = dict(model_val) if isinstance(model_val, dict) else model_val
+            _safe_flag_modified(db_state, "concept_model")
 
         if hasattr(state_in, 'teacher_intervention_data') and state_in.teacher_intervention_data is not None:
             db_state.teacher_intervention_data = state_in.teacher_intervention_data
