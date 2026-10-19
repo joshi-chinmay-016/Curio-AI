@@ -650,14 +650,14 @@ export function InputArea({
               }
             }}
             disabled={disabled || isTranscribing || isRequestingPermission}
-            className={`p-2 rounded-[4px] transition-all shrink-0 mb-0.5 ${
+            className={`h-[42px] w-[42px] rounded-[4px] inline-flex items-center justify-center transition-all shrink-0 cursor-pointer ${
               isRecording
-                ? "bg-rose-600 text-white animate-pulse shadow-[0_0_8px_rgba(225,29,72,0.4)]"
+                ? "bg-rose-600 text-white border-2 border-rose-700 animate-pulse shadow-[0_0_12px_rgba(225,29,72,0.4)]"
                 : isTranscribing
-                ? "bg-cobalt/10 text-cobalt"
+                ? "bg-cobalt/15 text-cobalt border-2 border-cobalt/40"
                 : isRequestingPermission
-                ? "bg-amber-100 text-amber-800"
-                : "text-navy/60 hover:text-navy hover:bg-ice"
+                ? "bg-amber-100 text-amber-800 border-2 border-amber-300"
+                : "bg-white text-navy/70 border-2 border-navy/20 hover:text-cobalt hover:border-cobalt hover:bg-cobalt/5 shadow-[0_2px_0_0_#0F2B4A] active:translate-y-[2px] active:shadow-none"
             }`}
             title={
               isRecording
@@ -671,11 +671,11 @@ export function InputArea({
             aria-label={isRecording ? "Stop recording voice" : "Start recording voice"}
           >
             {isTranscribing || isRequestingPermission ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : isRecording ? (
-              <Square className="w-4 h-4 fill-current" />
+              <Square className="w-5 h-5 fill-current" />
             ) : (
-              <Mic className="w-4 h-4" />
+              <Mic className="w-5 h-5" />
             )}
           </button>
 
