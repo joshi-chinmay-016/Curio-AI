@@ -923,6 +923,8 @@ class AIContext(BaseModel):
                 current_question=curr_q,
                 interrupted_question=interrupted_q,
                 teacher_intervention=teacher_int,
+                recent_strategy_history=data.get("recent_strategy_history", []),
+                misconception_counts=data.get("misconception_counts", {}),
             )
 
         raw_history = data.get("history", data.get("recent_messages", data.get("messages", [])))

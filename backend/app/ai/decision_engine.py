@@ -573,6 +573,30 @@ class DecisionEngine:
             active_concept = context.active_concept or context.topic
             reason = "Partial answer. Verifying understanding with concrete application."
 
+        # Adaptive Strategy Anti-Repetition
+        # Avoid selecting the same probing strategy for consecutive turns when a pedagogically sound alternative exists.
+        # DO NOT suppress CLARIFY_TERM or CHALLENGE_MISCONCEPTION while terms remain undefined or misconceptions active.
+        recent_history = list(context.current_state.recent_strategy_history or [])
+        if recent_history:
+            last_strategy = recent_history[-1]
+            # Normalize enum/string
+            last_strategy_val = last_strategy.value if hasattr(last_strategy, "value") else str(last_strategy)
+            curr_strategy_val = strategy.value if hasattr(strategy, "value") else str(strategy)
+
+            if curr_strategy_val == last_strategy_val:
+                if strategy == Strategy.PROBE_WHY:
+                    # Alternative for repeated PROBE_WHY: probe process/mechanism (PROBE_HOW)
+                    strategy = Strategy.PROBE_HOW
+                    reason = f"{reason} (Shifted from PROBE_WHY to PROBE_HOW to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.PROBE_HOW:
+                    # Alternative for repeated PROBE_HOW: verify understanding/application (VERIFY_UNDERSTANDING)
+                    strategy = Strategy.VERIFY_UNDERSTANDING
+                    reason = f"{reason} (Shifted from PROBE_HOW to VERIFY_UNDERSTANDING to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.VERIFY_UNDERSTANDING:
+                    # Alternative for repeated VERIFY_UNDERSTANDING: probe deeper causal explanation (PROBE_WHY)
+                    strategy = Strategy.PROBE_WHY
+                    reason = f"{reason} (Shifted from VERIFY_UNDERSTANDING to PROBE_WHY to avoid consecutive strategy repetition)."
+
         # Difficulty Transitions
         if has_misconception:
             next_difficulty = current_difficulty
