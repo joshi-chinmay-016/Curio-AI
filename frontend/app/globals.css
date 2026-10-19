@@ -105,6 +105,34 @@
   background: #0F2B4A;
 }
 
+/* Animated Character Breathing & Float */
+@keyframes character-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes pulse-gentle {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.animate-float {
+  animation: character-float 4s ease-in-out infinite;
+}
+
+.animate-pulse-gentle {
+  animation: pulse-gentle 2s ease-in-out infinite;
+}
+
+
 /* Accessibility: Prefers-reduced-motion overrides */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
