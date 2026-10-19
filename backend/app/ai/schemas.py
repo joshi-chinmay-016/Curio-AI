@@ -1,7 +1,7 @@
 from enum import Enum, IntEnum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import UUID
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.ai.answer_intelligence.schemas import LearningAssessment
 
@@ -326,6 +326,8 @@ class ConceptModel(BaseModel):
     Top-level validated concept representation for a topic.
     Serves as TopicModel describing knowledge decomposition, prerequisites, and learning objectives.
     """
+    model_config = ConfigDict(protected_namespaces=())
+
     topic: str
     topic_id: str = ""
     topic_title: str = ""
