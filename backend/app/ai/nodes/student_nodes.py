@@ -678,12 +678,14 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     qid = f"q_{uuid.uuid4().hex[:8]}"
 
-    # Synced concept mastery from LearnerModel
-    mastery_dict = (
-        LearnerModelManager(learner_model).export_mastery_dict()
-        if learner_model
-        else (context.current_state.concept_mastery or {})
-    )
+    # Synced concept mastery and cumulative misconception counts from LearnerModel
+    if learner_model:
+        lm_mgr = LearnerModelManager(learner_model)
+        mastery_dict = lm_mgr.export_mastery_dict()
+        misconception_dict = lm_mgr.export_misconception_counts_dict()
+    else:
+        mastery_dict = context.current_state.concept_mastery or {}
+        misconception_dict = context.current_state.misconception_counts if context.current_state.misconception_counts is not None else None
 
     if decision.next_mode == Mode.EVALUATOR:
         state_updates = StateUpdates(
@@ -707,6 +709,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             latest_interpretation=interpretation,
             question_specification=spec,
             concept_mastery=mastery_dict,
+            misconception_counts=misconception_dict,
         )
 
     elif decision.next_mode == Mode.TEACHER:
@@ -766,6 +769,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             latest_interpretation=interpretation,
             question_specification=spec,
             concept_mastery=mastery_dict,
+            misconception_counts=misconception_dict,
         )
 
     elif decision.should_restore_interrupted_question:
@@ -798,6 +802,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 lm_mgr = LearnerModelManager(learner_model)
                 lm_mgr.record_teacher_verification(decision.active_concept, passed=True)
                 mastery_dict = lm_mgr.export_mastery_dict()
+                misconception_dict = lm_mgr.export_misconception_counts_dict()
 
         state_updates = StateUpdates(
             active_concept=current_q.concept if current_q else decision.active_concept,
@@ -820,6 +825,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             latest_interpretation=interpretation,
             question_specification=spec,
             concept_mastery=mastery_dict,
+            misconception_counts=misconception_dict,
         )
 
     else:
@@ -852,6 +858,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             latest_interpretation=interpretation,
             question_specification=spec,
             concept_mastery=mastery_dict,
+            misconception_counts=misconception_dict,
         )
 
     return {"state_updates": state_updates}

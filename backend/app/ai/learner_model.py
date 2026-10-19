@@ -258,3 +258,7 @@ class LearnerModelManager:
     def export_mastery_dict(self) -> Dict[str, float]:
         """Export concept_id -> mastery mapping for SessionState synchronization."""
         return {cid: round(c.mastery, 3) for cid, c in self.model.concepts.items()}
+
+    def export_misconception_counts_dict(self) -> Dict[str, int]:
+        """Export concept_id -> cumulative misconception count mapping for SessionState synchronization."""
+        return {cid: int(c.misconception_count) for cid, c in self.model.concepts.items()}

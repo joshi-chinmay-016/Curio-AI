@@ -373,3 +373,131 @@ def test_student_mode_isolation_unrelated_modes_untouched():
         res_e = response_node(state_evaluator)
         mock_gen.assert_not_called()
         assert res_e["response"].mode == Mode.EVALUATOR
+
+
+def test_state_updates_node_emits_misconception_counts_from_learner_model():
+    """Verify state_updates_node exports cumulative misconception counts from learner model into StateUpdates."""
+    from backend.app.ai.learner_model import LearnerModelManager
+    from backend.app.ai.nodes.student_nodes import state_updates_node
+    from backend.app.ai.schemas import AIResponse, ConceptModel, ConceptNode, LearnerModel
+
+    mgr = LearnerModelManager()
+    mgr.update_from_evaluation(
+        "binary_search",
+        TurnEvaluation(
+            correctness=0.3,
+            clarity=0.5,
+            completeness=0.3,
+            depth=0.2,
+            relevance=1.0,
+            stuck_probability=0.2,
+            misconceptions=["Always checks linearly"],
+            recommended_strategy=Strategy.CHALLENGE_MISCONCEPTION,
+            recommended_difficulty=1,
+        ),
+        interpretation=TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT),
+    )
+
+    spec = _make_sample_spec()
+    context = _make_context()
+    evaluation = TurnEvaluation(
+        correctness=0.4,
+        clarity=0.6,
+        completeness=0.4,
+        depth=0.3,
+        relevance=1.0,
+        stuck_probability=0.1,
+        misconceptions=["Always checks linearly"],
+        recommended_strategy=Strategy.CHALLENGE_MISCONCEPTION,
+        recommended_difficulty=1,
+    )
+    decision = LearningDecision(
+        next_mode=Mode.STUDENT,
+        strategy=Strategy.CHALLENGE_MISCONCEPTION,
+        difficulty=1,
+        active_concept="binary_search",
+        confidence=0.4,
+        reason="Challenge misconception",
+    )
+    response = AIResponse(
+        content="What happens if the array is unsorted?",
+        mode=Mode.STUDENT,
+        strategy=Strategy.CHALLENGE_MISCONCEPTION,
+        difficulty=1,
+        confidence=0.4,
+    )
+
+    state = {
+        "context": context,
+        "evaluation": evaluation,
+        "decision": decision,
+        "response": response,
+        "question_specification": spec,
+        "assessment": _make_sample_assessment(),
+        "interpretation": TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT),
+        "concept_model": ConceptModel(topic="Binary Search", concepts=[ConceptNode(id="binary_search", name="Binary Search")]),
+        "learner_model": mgr.model,
+    }
+
+    res = state_updates_node(state)
+    updates = res["state_updates"]
+
+    assert updates.misconception_counts is not None
+    assert updates.misconception_counts.get("binary_search") == 1
+
+
+def test_state_updates_node_missing_learner_model_preserves_existing_counts():
+    """Verify that when learner_model is None, state_updates_node preserves existing session misconception counts."""
+    from backend.app.ai.nodes.student_nodes import state_updates_node
+    from backend.app.ai.schemas import AIResponse
+
+    spec = _make_sample_spec()
+    context = _make_context()
+    context.current_state.misconception_counts = {"existing_concept": 3}
+
+    evaluation = TurnEvaluation(
+        correctness=0.8,
+        clarity=0.8,
+        completeness=0.8,
+        depth=0.7,
+        relevance=1.0,
+        stuck_probability=0.0,
+        misconceptions=[],
+        recommended_strategy=Strategy.PROBE_WHY,
+        recommended_difficulty=1,
+    )
+    decision = LearningDecision(
+        next_mode=Mode.STUDENT,
+        strategy=Strategy.PROBE_WHY,
+        difficulty=1,
+        active_concept="binary_search",
+        confidence=0.6,
+        reason="Probe deeper why",
+    )
+    response = AIResponse(
+        content="Could you explain why?",
+        mode=Mode.STUDENT,
+        strategy=Strategy.PROBE_WHY,
+        difficulty=1,
+        confidence=0.6,
+    )
+
+    state = {
+        "context": context,
+        "evaluation": evaluation,
+        "decision": decision,
+        "response": response,
+        "question_specification": spec,
+        "assessment": _make_sample_assessment(),
+        "interpretation": TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT),
+        "concept_model": None,
+        "learner_model": None,
+    }
+
+    res = state_updates_node(state)
+    updates = res["state_updates"]
+
+    # Must preserve existing {"existing_concept": 3} rather than resetting to {}
+    assert updates.misconception_counts == {"existing_concept": 3}
+
+
