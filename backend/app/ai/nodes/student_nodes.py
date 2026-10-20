@@ -19,6 +19,7 @@ from backend.app.ai.answer_intelligence.schemas import (
     RelevanceLevel,
 )
 from backend.app.ai.concept_model import ConceptModelBuilder
+from backend.app.ai.document_curriculum import DocumentCurriculumBuilder
 from backend.app.ai.decision_engine import DecisionEngine
 from backend.app.ai.evaluator import AIEvaluator
 from backend.app.ai.learner_model import LearnerModelManager
@@ -62,7 +63,19 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     provider = state.get("provider") or MockLLMProvider()
     doc_context = state.get("document_context") or context.document_context
 
-    # 1. Hydrate or dynamically build ConceptModel
+    # 1. Hydrate or initialize LearnerModel
+    learner_model: Optional[LearnerModel] = context.current_state.learner_model
+    if not learner_model:
+        learner_model = LearnerModel(session_id=context.session_id)
+        if context.current_state.concept_mastery:
+            for cid, score in context.current_state.concept_mastery.items():
+                cs = learner_model.get_or_create_concept(cid)
+                cs.mastery = score
+        if context.current_state.unresolved_misconceptions:
+            learner_model.unresolved_gaps = list(context.current_state.unresolved_misconceptions)
+    learner_mgr = LearnerModelManager(learner_model, session_id=context.session_id)
+
+    # 2. Hydrate or dynamically build ConceptModel
     concept_model: Optional[ConceptModel] = context.current_state.concept_model
     topic_matches = (
         concept_model is not None
@@ -74,27 +87,27 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         concept_model = None
 
     if not concept_model:
-        builder = ConceptModelBuilder(provider)
-        try:
-            built_model = builder.build_model(context.topic)
-            if built_model and built_model.concepts:
-                concept_model = built_model
-            else:
-                concept_model = built_model or ConceptModel(topic=context.topic, concepts=[], relationships=[])
-        except Exception:
-            concept_model = ConceptModel(topic=context.topic, concepts=[], relationships=[])
-
-    # 2. Hydrate or initialize LearnerModel
-    learner_model: Optional[LearnerModel] = context.current_state.learner_model
-    if not learner_model:
-        learner_model = LearnerModel(session_id=context.session_id)
-        if context.current_state.concept_mastery:
-            for cid, score in context.current_state.concept_mastery.items():
-                cs = learner_model.get_or_create_concept(cid)
-                cs.mastery = score
-        if context.current_state.unresolved_misconceptions:
-            learner_model.unresolved_gaps = list(context.current_state.unresolved_misconceptions)
-    learner_mgr = LearnerModelManager(learner_model, session_id=context.session_id)
+        doc_chunks = getattr(doc_context, "chunks", None) if doc_context else None
+        if doc_chunks and len(doc_chunks) > 0:
+            doc_id = doc_chunks[0].document_id if doc_chunks else "document"
+            curr_builder = DocumentCurriculumBuilder(provider)
+            curriculum = curr_builder.build_curriculum(
+                document_id=doc_id,
+                chunks=doc_chunks,
+                topic_hint=context.topic,
+                learner_model=learner_model,
+            )
+            concept_model = curriculum.concept_model
+        else:
+            builder = ConceptModelBuilder(provider)
+            try:
+                built_model = builder.build_model(context.topic)
+                if built_model and built_model.concepts:
+                    concept_model = built_model
+                else:
+                    concept_model = built_model or ConceptModel(topic=context.topic, concepts=[], relationships=[])
+            except Exception:
+                concept_model = ConceptModel(topic=context.topic, concepts=[], relationships=[])
 
     # 3. Evaluator Mode branch
     if context.current_mode == Mode.EVALUATOR:

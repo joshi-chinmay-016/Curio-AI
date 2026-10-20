@@ -43,6 +43,12 @@ from backend.app.ai.schemas import (
     TopicPlan,
 )
 from backend.app.ai.topic_plan import TopicPlanner
+from backend.app.ai.document_curriculum import (
+    DocumentCurriculum,
+    DocumentCurriculumBuilder,
+    DocumentCurriculumStatus,
+    DocumentSourceReference,
+)
 
 
 __all__ = [
@@ -85,4 +91,8 @@ __all__ = [
     "ConceptCoverageItem",
     "TopicPlan",
     "TopicPlanner",
+    "DocumentCurriculum",
+    "DocumentCurriculumBuilder",
+    "DocumentCurriculumStatus",
+    "DocumentSourceReference",
 ]

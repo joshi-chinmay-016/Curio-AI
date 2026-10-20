@@ -316,6 +316,8 @@ class ConceptNode(BaseModel):
     edge_cases: List[str] = Field(default_factory=list)
     difficulty_level: int = Field(default=1, ge=1, le=5)
     generation_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    source_references: List[Dict[str, Any]] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ConceptRelationship(BaseModel):
@@ -483,6 +485,9 @@ class ConceptCoverageItem(BaseModel):
     attempt_count: int = Field(default=0, ge=0)
     unresolved_gap: bool = False
     active_misconceptions: List[str] = Field(default_factory=list)
+    source_references: List[Dict[str, Any]] = Field(default_factory=list)
+    has_source_evidence: bool = True
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @property
     def coverage_status(self) -> CoverageStatus:
@@ -552,20 +557,44 @@ class TopicPlan(BaseModel):
                 "needs_review_count": 0,
                 "coverage_ratio": 0.0,
                 "mastery_ratio": 0.0,
+                "curriculum_coverage": 0.0,
+                "learner_mastery": 0.0,
+                "assessed_mastery_ratio": 0.0,
+                "source_availability_ratio": 0.0,
+                "is_generic_scaffold": bool(self.metadata.get("is_generic_scaffold", False)),
+                "curriculum_type": "GENERIC_SCAFFOLD" if self.metadata.get("is_generic_scaffold", False) else ("DOCUMENT_DERIVED" if self.metadata.get("document_id") else "TOPIC_DERIVED"),
+                "document_id": self.metadata.get("document_id"),
+                "document_version": self.metadata.get("document_version") or self.metadata.get("content_hash"),
+                "ingestion_status": self.metadata.get("ingestion_status", "PROCESSED"),
             }
         unassessed = len(self.get_unassessed_concepts())
         in_progress = len(self.get_in_progress_concepts())
         mastered = len(self.get_mastered_concepts())
         needs_review = len(self.get_review_needed_concepts())
         explored = total - unassessed
+        cov_ratio = round(explored / total, 3)
+        mast_ratio = round(mastered / total, 3)
+        assessed_mast = round(mastered / explored, 3) if explored > 0 else 0.0
+        with_evidence = sum(1 for c in self.concepts if getattr(c, "has_source_evidence", True))
+        source_ratio = round(with_evidence / total, 3)
+
         return {
             "total_concepts": total,
             "unassessed_count": unassessed,
             "in_progress_count": in_progress,
             "mastered_count": mastered,
             "needs_review_count": needs_review,
-            "coverage_ratio": round(explored / total, 3),
-            "mastery_ratio": round(mastered / total, 3),
+            "coverage_ratio": cov_ratio,
+            "mastery_ratio": mast_ratio,
+            "curriculum_coverage": cov_ratio,
+            "learner_mastery": mast_ratio,
+            "assessed_mastery_ratio": assessed_mast,
+            "source_availability_ratio": source_ratio,
+            "is_generic_scaffold": bool(self.metadata.get("is_generic_scaffold", False)),
+            "curriculum_type": "GENERIC_SCAFFOLD" if self.metadata.get("is_generic_scaffold", False) else ("DOCUMENT_DERIVED" if self.metadata.get("document_id") else "TOPIC_DERIVED"),
+            "document_id": self.metadata.get("document_id"),
+            "document_version": self.metadata.get("document_version") or self.metadata.get("content_hash"),
+            "ingestion_status": self.metadata.get("ingestion_status", "PROCESSED"),
         }
 
 

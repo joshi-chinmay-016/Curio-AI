@@ -126,6 +126,10 @@ class TopicPlanner:
 
             diff = max(1, min(5, int(node.difficulty_level or 1)))
 
+            source_refs = list(getattr(node, "source_references", []) or [])
+            has_evidence = bool(source_refs) or bool(getattr(node, "has_source_evidence", False))
+            node_meta = dict(getattr(node, "metadata", {}) or {})
+
             coverage_items.append(
                 ConceptCoverageItem(
                     concept_id=raw_id,
@@ -141,8 +145,15 @@ class TopicPlanner:
                     attempt_count=attempt_cnt,
                     unresolved_gap=gap,
                     active_misconceptions=misc,
+                    source_references=source_refs,
+                    has_source_evidence=has_evidence,
+                    metadata=node_meta,
                 )
             )
+
+        meta = dict(concept_model.metadata if concept_model and concept_model.metadata else {})
+        if concept_model and hasattr(concept_model, "generation_metadata") and concept_model.generation_metadata:
+            meta.update(concept_model.generation_metadata)
 
         return TopicPlan(
             topic=clean_topic,
@@ -151,6 +162,7 @@ class TopicPlanner:
             topic_description=topic_desc,
             concepts=coverage_items,
             validation_status=concept_model.validation_status if concept_model else ValidationStatus.VALID,
+            metadata=meta,
         )
 
     @classmethod

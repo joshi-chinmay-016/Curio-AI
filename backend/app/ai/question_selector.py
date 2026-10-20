@@ -357,12 +357,17 @@ class QuestionSelector:
                 elif node.id in recent_concepts[-3:]:
                     recent_penalty = 25
 
+            # Evidence availability preference: prefer concepts with verified source evidence
+            has_ev = bool(getattr(node, "source_references", [])) or (c_cov.has_source_evidence if c_cov else True)
+            ev_penalty = 0 if has_ev else 10
+
             # Order by:
             # 1. Tier (NEEDS_REVIEW < UNASSESSED_CORE < UNASSESSED_OTHER < IN_PROGRESS < MASTERED)
             # 2. Anti-repetition penalty (non-recent first)
-            # 3. Difficulty level (lower/foundational first)
-            # 4. Mastery (lower mastery first)
-            return (tier, recent_penalty, node.difficulty_level, state.mastery)
+            # 3. Evidence availability (concepts with source evidence first)
+            # 4. Difficulty level (lower/foundational first)
+            # 5. Mastery (lower mastery first)
+            return (tier, recent_penalty, ev_penalty, node.difficulty_level, state.mastery)
 
         return sorted(eligible_nodes, key=_concept_selection_score)[0]
 
