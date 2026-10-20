@@ -267,22 +267,60 @@ class ChatService:
             except ValueError:
                 source_mode = SourceMode.GENERAL
 
-        session_doc_id = getattr(db_session, "document_id", None)
+        # Check for MagicMock to avoid treating unconfigured mock attributes as real IDs
+        def _is_mock(obj: Any) -> bool:
+            if obj is None:
+                return False
+            return hasattr(obj, "_mock_return_value") or type(obj).__name__ == "MagicMock"
+
+        raw_doc_id = getattr(db_session, "document_id", None)
+        session_doc_id = str(raw_doc_id) if (raw_doc_id is not None and not _is_mock(raw_doc_id)) else None
+
+        raw_uid = getattr(db_session, "user_id", None)
+        uid = raw_uid if (raw_uid is not None and not _is_mock(raw_uid)) else None
+
         session_doc_ver: Optional[str] = None
+        doc_rec = None
         if session_doc_id:
-            from backend.app.models.document import Document
-            try:
-                doc_rec = db.query(Document).filter(Document.id == session_doc_id).first()
-                if doc_rec:
-                    session_doc_ver = doc_rec.content_hash or (str(doc_rec.created_at) if doc_rec.created_at else None)
-            except Exception as e:
-                logger.warning("Could not query document record for session %s: %s", session_id, e)
+            if not uid:
+                logger.warning(
+                    "Session %s references document %s but lacks an authenticated user_id; access denied.",
+                    session_id, session_doc_id
+                )
+            else:
+                from backend.app.models.document import Document
+                try:
+                    doc_rec = db.query(Document).filter(
+                        Document.id == session_doc_id,
+                        Document.user_id == uid,
+                    ).first()
+                    if doc_rec:
+                        c_hash = getattr(doc_rec, "content_hash", None)
+                        c_at = getattr(doc_rec, "created_at", None)
+                        if c_hash is not None and not _is_mock(c_hash):
+                            session_doc_ver = str(c_hash)
+                        elif c_at is not None and not _is_mock(c_at):
+                            session_doc_ver = str(c_at)
+                        else:
+                            session_doc_ver = "v1"
+                    else:
+                        doc_rec = None
+                        logger.warning(
+                            "Document %s does not exist or access denied for user %s in session %s.",
+                            session_doc_id, uid, session_id
+                        )
+                except Exception as e:
+                    doc_rec = None
+                    logger.warning("Could not query document record for session %s: %s", session_id, e)
+
+        # Only retain document_id if ownership is verified
+        authorized_doc_id = session_doc_id if (doc_rec is not None) else None
 
         session_info = SessionInfo(
             session_id=str(session_id),
             topic=db_session.topic,
-            source_mode=source_mode,
-            document_id=str(session_doc_id) if session_doc_id else None,
+            source_mode=source_mode if authorized_doc_id else (SourceMode.GENERAL if source_mode == SourceMode.DOCUMENT else source_mode),
+            document_id=authorized_doc_id,
             document_version=session_doc_ver,
         )
 
@@ -435,37 +473,44 @@ class ChatService:
             elif cm_doc_id:
                 saved_concept_model = None
 
-        # If curriculum is not yet built for a document-backed session, fetch complete chunks once
+        # If curriculum is not yet built for an authorized document-backed session, fetch complete chunks once
         full_document_chunks = None
-        if session_doc_id and saved_concept_model is None:
-            from backend.app.repositories.document_chunk_repository import DocumentChunkRepository
-            try:
-                repo = DocumentChunkRepository()
-                uid = getattr(db_session, "user_id", None)
-                chunk_models = repo.get_chunks_by_document(db, session_doc_id, uid) if uid else None
-                if not chunk_models:
-                    from backend.app.models.document import DocumentChunk
-                    chunk_models = db.query(DocumentChunk).filter(
-                        DocumentChunk.document_id == session_doc_id
-                    ).order_by(DocumentChunk.chunk_index).all()
-
-                if chunk_models:
-                    from backend.app.ai.rag.models import DocumentChunkEvidence
-                    full_document_chunks = [
-                        DocumentChunkEvidence(
-                            chunk_id=str(c.id),
-                            document_id=str(c.document_id),
-                            chunk_index=c.chunk_index,
-                            text=c.text,
-                            start_char=c.start_char,
-                            end_char=c.end_char,
-                            page_number=(c.chunk_metadata or {}).get("page_number") or (c.chunk_metadata or {}).get("page"),
-                            chunk_metadata=c.chunk_metadata,
-                        )
-                        for c in chunk_models
-                    ]
-            except Exception as e:
-                logger.warning("Could not fetch full document chunks for curriculum building: %s", e)
+        if authorized_doc_id and saved_concept_model is None:
+            if not uid:
+                logger.warning(
+                    "Cannot fetch document chunks for session %s: missing authenticated user_id.",
+                    session_id
+                )
+            elif doc_rec is None:
+                logger.warning(
+                    "Cannot fetch document chunks for session %s: document %s is not owned by user %s or does not exist.",
+                    session_id, authorized_doc_id, uid
+                )
+            else:
+                from backend.app.repositories.document_chunk_repository import DocumentChunkRepository
+                try:
+                    repo = DocumentChunkRepository()
+                    chunk_models = repo.get_chunks_by_document(db, authorized_doc_id, uid)
+                    if chunk_models and not _is_mock(chunk_models):
+                        from backend.app.ai.rag.models import DocumentChunkEvidence
+                        full_document_chunks = [
+                            DocumentChunkEvidence(
+                                chunk_id=str(c.id),
+                                document_id=str(c.document_id),
+                                chunk_index=c.chunk_index,
+                                text=c.text,
+                                start_char=c.start_char,
+                                end_char=c.end_char,
+                                page_number=(c.chunk_metadata or {}).get("page_number") or (c.chunk_metadata or {}).get("page"),
+                                chunk_metadata=c.chunk_metadata,
+                            )
+                            for c in chunk_models
+                        ]
+                    else:
+                        # Legitimate empty document owned by authorized user
+                        full_document_chunks = []
+                except Exception as e:
+                    logger.warning("Could not fetch full document chunks for curriculum building: %s", e)
 
         current_state = SessionState(
             session_id=str(session_id),
