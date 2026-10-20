@@ -43,13 +43,25 @@ def mask_technical_question_marks(text: str) -> str:
     if not text:
         return ""
 
-    # 1. Mask code inside backticks: `...`
+    # 1. Mask fenced code blocks: ```...``` or ~~~...~~~
+    def _mask_fenced(match):
+        return match.group(0).replace("?", "[QM_LITERAL]")
+
+    result = re.sub(r"```[\s\S]*?```|~~~[\s\S]*?~~~", _mask_fenced, text)
+
+    # 2. Mask inline code inside backticks: `...`
     def _mask_backticks(match):
         return match.group(0).replace("?", "[QM_LITERAL]")
 
-    result = re.sub(r"`[^`\n]+`", _mask_backticks, text)
+    result = re.sub(r"`[^`\n]+`", _mask_backticks, result)
 
-    # 2. Mask short quoted literals or non-interrogative quotes: '...' or "..."
+    # 3. Mask multiline triple-quoted docstrings / strings: """...""" or '''...'''
+    def _mask_triple_quotes(match):
+        return match.group(0).replace("?", "[QM_LITERAL]")
+
+    result = re.sub(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'', _mask_triple_quotes, result)
+
+    # 4. Mask short quoted literals or non-interrogative quotes: '...' or "..."
     def _mask_quotes(match):
         quoted = match.group(0)
         inner = quoted[1:-1].strip()
