@@ -135,6 +135,21 @@ class QuestionSelector:
                 reason=reason,
                 evidence_expected=evidence,
             )
+            u_node = concept_model.get_concept(unresolved_target)
+            u_evidence = None
+            u_refs = []
+            if u_node:
+                from backend.app.ai.document_curriculum import format_concept_evidence
+                cm_meta = concept_model.metadata if concept_model and concept_model.metadata else {}
+                u_evidence = format_concept_evidence(
+                    concept_id=unresolved_target,
+                    concept_node=u_node,
+                    source_references=getattr(u_node, "source_references", None),
+                    expected_doc_id=cm_meta.get("document_id"),
+                    expected_doc_version=cm_meta.get("document_version") or cm_meta.get("content_hash"),
+                )
+                u_refs = list(getattr(u_node, "source_references", []) or [])
+
             return QuestionSpecification(
                 target_concept=unresolved_target,
                 learning_objective=obj,
@@ -147,6 +162,8 @@ class QuestionSelector:
                     "Do NOT reveal the correct answer",
                     "Ask exactly ONE question in Socratic student voice",
                 ],
+                target_concept_evidence=u_evidence,
+                source_references=u_refs,
             )
 
         # 2. Check for missing prerequisite gaps
@@ -160,6 +177,20 @@ class QuestionSelector:
                 diff = max(1, min(diff, current_difficulty))
             else:
                 diff = current_difficulty
+
+            p_evidence = None
+            p_refs = []
+            if c_node:
+                from backend.app.ai.document_curriculum import format_concept_evidence
+                cm_meta = concept_model.metadata if concept_model and concept_model.metadata else {}
+                p_evidence = format_concept_evidence(
+                    concept_id=prereq_target,
+                    concept_node=c_node,
+                    source_references=getattr(c_node, "source_references", None),
+                    expected_doc_id=cm_meta.get("document_id"),
+                    expected_doc_version=cm_meta.get("document_version") or cm_meta.get("content_hash"),
+                )
+                p_refs = list(getattr(c_node, "source_references", []) or [])
 
             obj = LearningObjective(
                 objective_type=ObjectiveType.UNDERSTAND_DEFINITION if diff == 1 else ObjectiveType.UNDERSTAND_MECHANISM,
@@ -180,6 +211,8 @@ class QuestionSelector:
                     "Do NOT reveal the answer",
                     "Exactly ONE question",
                 ],
+                target_concept_evidence=p_evidence,
+                source_references=p_refs,
             )
 
         # 3. Determine next concept based on mastery progression
@@ -225,6 +258,19 @@ class QuestionSelector:
             evidence_expected=evidence_exp,
         )
 
+        from backend.app.ai.document_curriculum import format_concept_evidence
+        cm_meta = concept_model.metadata if concept_model and concept_model.metadata else {}
+        expected_doc_id = cm_meta.get("document_id")
+        expected_doc_ver = cm_meta.get("document_version") or cm_meta.get("content_hash")
+        targeted_evidence = format_concept_evidence(
+            concept_id=c_id,
+            concept_node=target_concept_node,
+            source_references=getattr(target_concept_node, "source_references", None),
+            expected_doc_id=expected_doc_id,
+            expected_doc_version=expected_doc_ver,
+        )
+        node_refs = list(getattr(target_concept_node, "source_references", []) or [])
+
         constraints = [
             f"Target concept: {node_name}",
             f"Objective: {obj_type.value}",
@@ -234,6 +280,10 @@ class QuestionSelector:
             "Do NOT explain or teach the answer in Student mode",
             "Avoid semantic repetition with recent questions",
         ]
+        if targeted_evidence:
+            constraints.append("Ground question strictly in verified source evidence for this concept")
+        elif expected_doc_id:
+            constraints.append("No verified document evidence for this concept; ask from general principles and do NOT claim it came from the document")
 
         return QuestionSpecification(
             target_concept=c_id,
@@ -242,6 +292,8 @@ class QuestionSelector:
             reason=reason,
             evidence_expected=evidence_exp,
             generation_constraints=constraints,
+            target_concept_evidence=targeted_evidence,
+            source_references=node_refs,
         )
 
     def _find_unresolved_gap_or_misconception(
@@ -358,7 +410,11 @@ class QuestionSelector:
                     recent_penalty = 25
 
             # Evidence availability preference: prefer concepts with verified source evidence
-            has_ev = bool(getattr(node, "source_references", [])) or (c_cov.has_source_evidence if c_cov else True)
+            is_scaffold = bool(getattr(node, "metadata", {}).get("is_generic_scaffold", False))
+            has_ev = (not is_scaffold) and (
+                bool(getattr(node, "source_references", []))
+                or (getattr(c_cov, "has_source_evidence", False) if c_cov else False)
+            )
             ev_penalty = 0 if has_ev else 10
 
             # Order by:

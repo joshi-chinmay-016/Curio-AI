@@ -83,17 +83,46 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         and bool(context.topic)
         and concept_model.topic.strip().lower() == context.topic.strip().lower()
     )
-    if not topic_matches:
+    doc_matches = True
+    session_info = getattr(context, "session", None)
+    session_doc_id = getattr(session_info, "document_id", None) if session_info else None
+    session_doc_ver = getattr(session_info, "document_version", None) if session_info else None
+    if concept_model:
+        cm_meta = concept_model.metadata or {}
+        cm_doc_id = cm_meta.get("document_id")
+        cm_doc_ver = cm_meta.get("document_version") or cm_meta.get("content_hash")
+        if session_doc_id:
+            if cm_doc_id != str(session_doc_id):
+                doc_matches = False
+            elif session_doc_ver and cm_doc_ver and str(cm_doc_ver) != str(session_doc_ver):
+                doc_matches = False
+        elif cm_doc_id:
+            doc_matches = False
+
+    if not (topic_matches and doc_matches):
         concept_model = None
 
     if not concept_model:
-        doc_chunks = getattr(doc_context, "chunks", None) if doc_context else None
+        # Prefer complete document chunks passed from ingestion/session, then fallback to turn-level doc_context
+        all_chunks = getattr(context, "all_document_chunks", None) or state.get("document_chunks")
+        doc_chunks = all_chunks if (all_chunks and len(all_chunks) > 0) else (getattr(doc_context, "chunks", None) if doc_context else None)
+
         if doc_chunks and len(doc_chunks) > 0:
-            doc_id = doc_chunks[0].document_id if doc_chunks else "document"
+            first_chunk = doc_chunks[0]
+            if session_doc_id:
+                doc_id = str(session_doc_id)
+            elif hasattr(first_chunk, "document_id"):
+                doc_id = str(first_chunk.document_id)
+            elif isinstance(first_chunk, dict) and "document_id" in first_chunk:
+                doc_id = str(first_chunk["document_id"])
+            else:
+                doc_id = "document"
+
             curr_builder = DocumentCurriculumBuilder(provider)
             curriculum = curr_builder.build_curriculum(
                 document_id=doc_id,
                 chunks=doc_chunks,
+                content_hash=str(session_doc_ver) if session_doc_ver else None,
                 topic_hint=context.topic,
                 learner_model=learner_model,
             )
@@ -611,6 +640,21 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 recent_question_history=recent_q,
                 adjust_difficulty=False,
             )
+
+        if spec and not getattr(spec, "target_concept_evidence", None):
+            cm = state.get("concept_model") or context.current_state.concept_model
+            if cm:
+                from backend.app.ai.document_curriculum import format_concept_evidence
+                c_node = cm.get_concept(spec.target_concept)
+                if c_node:
+                    cm_meta = cm.metadata or {}
+                    spec.target_concept_evidence = format_concept_evidence(
+                        concept_id=spec.target_concept,
+                        concept_node=c_node,
+                        source_references=getattr(c_node, "source_references", None),
+                        expected_doc_id=cm_meta.get("document_id"),
+                        expected_doc_version=cm_meta.get("document_version") or cm_meta.get("content_hash"),
+                    )
 
         assessment = state.get("assessment")
         selection_res: QuestionSelectionResult = generator.generate_and_select_question(

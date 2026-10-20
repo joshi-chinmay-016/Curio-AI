@@ -326,6 +326,8 @@ class ConceptRelationship(BaseModel):
     target_concept_id: str
     relation_type: str = "PREREQUISITE_OF"
     description: str = ""
+    evidence_type: str = "EXPLICIT_STATEMENT"  # EXPLICIT_STATEMENT, HEURISTIC_INFERENCE
+    is_explicit: bool = True
 
 
 class ConceptModel(BaseModel):
@@ -486,8 +488,17 @@ class ConceptCoverageItem(BaseModel):
     unresolved_gap: bool = False
     active_misconceptions: List[str] = Field(default_factory=list)
     source_references: List[Dict[str, Any]] = Field(default_factory=list)
-    has_source_evidence: bool = True
+    has_source_evidence: bool = False
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_source_evidence_flag(self) -> Any:
+        if self.metadata.get("is_generic_scaffold", False):
+            self.has_source_evidence = False
+            return self
+        if not self.source_references:
+            self.has_source_evidence = False
+        return self
 
     @property
     def coverage_status(self) -> CoverageStatus:
@@ -575,8 +586,18 @@ class TopicPlan(BaseModel):
         cov_ratio = round(explored / total, 3)
         mast_ratio = round(mastered / total, 3)
         assessed_mast = round(mastered / explored, 3) if explored > 0 else 0.0
-        with_evidence = sum(1 for c in self.concepts if getattr(c, "has_source_evidence", True))
-        source_ratio = round(with_evidence / total, 3)
+        
+        is_scaffold = bool(self.metadata.get("is_generic_scaffold", False))
+        if is_scaffold:
+            source_ratio = 0.0
+        else:
+            with_evidence = sum(
+                1 for c in self.concepts
+                if getattr(c, "has_source_evidence", False)
+                and bool(getattr(c, "source_references", []))
+                and not bool(getattr(c, "metadata", {}).get("is_generic_scaffold", False))
+            )
+            source_ratio = round(with_evidence / total, 3)
 
         return {
             "total_concepts": total,
@@ -590,15 +611,12 @@ class TopicPlan(BaseModel):
             "learner_mastery": mast_ratio,
             "assessed_mastery_ratio": assessed_mast,
             "source_availability_ratio": source_ratio,
-            "is_generic_scaffold": bool(self.metadata.get("is_generic_scaffold", False)),
-            "curriculum_type": "GENERIC_SCAFFOLD" if self.metadata.get("is_generic_scaffold", False) else ("DOCUMENT_DERIVED" if self.metadata.get("document_id") else "TOPIC_DERIVED"),
+            "is_generic_scaffold": is_scaffold,
+            "curriculum_type": "GENERIC_SCAFFOLD" if is_scaffold else ("DOCUMENT_DERIVED" if self.metadata.get("document_id") else "TOPIC_DERIVED"),
             "document_id": self.metadata.get("document_id"),
             "document_version": self.metadata.get("document_version") or self.metadata.get("content_hash"),
             "ingestion_status": self.metadata.get("ingestion_status", "PROCESSED"),
         }
-
-
-
 
 
 class QuestionSpecification(BaseModel):
@@ -612,6 +630,8 @@ class QuestionSpecification(BaseModel):
     concept_constraints: List[ConceptConstraint] = Field(default_factory=list)
     prerequisite_context: List[str] = Field(default_factory=list)
     cognitive_action: Optional[CognitiveAction] = None
+    target_concept_evidence: Optional[str] = None
+    source_references: List[Any] = Field(default_factory=list)
 
 
 class QuestionCandidate(BaseModel):
@@ -998,6 +1018,8 @@ class SessionInfo(BaseModel):
     session_id: str
     topic: str
     source_mode: SourceMode = SourceMode.GENERAL
+    document_id: Optional[str] = None
+    document_version: Optional[str] = None
 
     @field_validator("session_id", mode="before")
     @classmethod
@@ -1032,6 +1054,7 @@ class AIContext(BaseModel):
     conversation: ConversationContext
     learning_context: LearningContext = Field(default_factory=LearningContext)
     source_context: Optional[Dict[str, Any]] = None
+    document_chunks: Optional[List[Any]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -1054,10 +1077,14 @@ class AIContext(BaseModel):
         topic = data.get("topic", "General Topic")
         source_mode = data.get("source_mode", SourceMode.GENERAL)
 
+        document_id = data.get("document_id")
+        document_version = data.get("document_version")
         session_info = SessionInfo(
             session_id=session_id,
             topic=topic,
-            source_mode=source_mode
+            source_mode=source_mode,
+            document_id=str(document_id) if document_id else None,
+            document_version=str(document_version) if document_version else None,
         )
 
         current_mode = data.get("current_mode", Mode.STUDENT)
@@ -1105,13 +1132,15 @@ class AIContext(BaseModel):
 
         learning_context = data.get("learning_context", LearningContext())
         source_context = data.get("source_context", None)
+        document_chunks = data.get("document_chunks", None)
 
         return {
             "session": session_info,
             "current_state": current_state,
             "conversation": conversation,
             "learning_context": learning_context,
-            "source_context": source_context
+            "source_context": source_context,
+            "document_chunks": document_chunks,
         }
 
     # Backward compatibility accessors
@@ -1155,3 +1184,7 @@ class AIContext(BaseModel):
     def document_context(self) -> Any:
         from backend.app.ai.rag.models import parse_document_source_context
         return parse_document_source_context(self.source_context)
+
+    @property
+    def all_document_chunks(self) -> Optional[List[Any]]:
+        return self.document_chunks

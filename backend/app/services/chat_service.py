@@ -267,10 +267,23 @@ class ChatService:
             except ValueError:
                 source_mode = SourceMode.GENERAL
 
+        session_doc_id = getattr(db_session, "document_id", None)
+        session_doc_ver: Optional[str] = None
+        if session_doc_id:
+            from backend.app.models.document import Document
+            try:
+                doc_rec = db.query(Document).filter(Document.id == session_doc_id).first()
+                if doc_rec:
+                    session_doc_ver = doc_rec.content_hash or (str(doc_rec.created_at) if doc_rec.created_at else None)
+            except Exception as e:
+                logger.warning("Could not query document record for session %s: %s", session_id, e)
+
         session_info = SessionInfo(
             session_id=str(session_id),
             topic=db_session.topic,
-            source_mode=source_mode
+            source_mode=source_mode,
+            document_id=str(session_doc_id) if session_doc_id else None,
+            document_version=session_doc_ver,
         )
 
         # Convert LearningMode to AI Mode explicitly
@@ -401,6 +414,59 @@ class ChatService:
             else:
                 saved_concept_model = raw_concept_model
 
+        # Document identity and version validation on stored concept_model
+        if saved_concept_model:
+            cm_meta = saved_concept_model.metadata or {}
+            cm_doc_id = cm_meta.get("document_id")
+            cm_doc_ver = cm_meta.get("document_version") or cm_meta.get("content_hash")
+            if session_doc_id:
+                if cm_doc_id != str(session_doc_id):
+                    logger.warning(
+                        "Stored ConceptModel document_id '%s' does not match session document_id '%s'. Discarding stale model.",
+                        cm_doc_id, session_doc_id
+                    )
+                    saved_concept_model = None
+                elif session_doc_ver and cm_doc_ver and str(cm_doc_ver) != str(session_doc_ver):
+                    logger.warning(
+                        "Stored ConceptModel document_version '%s' does not match current version '%s'. Discarding stale model.",
+                        cm_doc_ver, session_doc_ver
+                    )
+                    saved_concept_model = None
+            elif cm_doc_id:
+                saved_concept_model = None
+
+        # If curriculum is not yet built for a document-backed session, fetch complete chunks once
+        full_document_chunks = None
+        if session_doc_id and saved_concept_model is None:
+            from backend.app.repositories.document_chunk_repository import DocumentChunkRepository
+            try:
+                repo = DocumentChunkRepository()
+                uid = getattr(db_session, "user_id", None)
+                chunk_models = repo.get_chunks_by_document(db, session_doc_id, uid) if uid else None
+                if not chunk_models:
+                    from backend.app.models.document import DocumentChunk
+                    chunk_models = db.query(DocumentChunk).filter(
+                        DocumentChunk.document_id == session_doc_id
+                    ).order_by(DocumentChunk.chunk_index).all()
+
+                if chunk_models:
+                    from backend.app.ai.rag.models import DocumentChunkEvidence
+                    full_document_chunks = [
+                        DocumentChunkEvidence(
+                            chunk_id=str(c.id),
+                            document_id=str(c.document_id),
+                            chunk_index=c.chunk_index,
+                            text=c.text,
+                            start_char=c.start_char,
+                            end_char=c.end_char,
+                            page_number=(c.chunk_metadata or {}).get("page_number") or (c.chunk_metadata or {}).get("page"),
+                            chunk_metadata=c.chunk_metadata,
+                        )
+                        for c in chunk_models
+                    ]
+            except Exception as e:
+                logger.warning("Could not fetch full document chunks for curriculum building: %s", e)
+
         current_state = SessionState(
             session_id=str(session_id),
             current_mode=current_mode,
@@ -448,7 +514,8 @@ class ChatService:
             session=session_info,
             current_state=current_state,
             conversation=conversation,
-            learning_context=learning_context
+            learning_context=learning_context,
+            document_chunks=full_document_chunks,
         )
 
     def send_message(

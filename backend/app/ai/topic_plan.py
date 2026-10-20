@@ -127,8 +127,9 @@ class TopicPlanner:
             diff = max(1, min(5, int(node.difficulty_level or 1)))
 
             source_refs = list(getattr(node, "source_references", []) or [])
-            has_evidence = bool(source_refs) or bool(getattr(node, "has_source_evidence", False))
             node_meta = dict(getattr(node, "metadata", {}) or {})
+            is_scaffold = bool(node_meta.get("is_generic_scaffold", False))
+            has_evidence = bool(source_refs) and not is_scaffold
 
             coverage_items.append(
                 ConceptCoverageItem(
