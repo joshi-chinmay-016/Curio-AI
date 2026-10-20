@@ -460,14 +460,13 @@ def test_scope3_single_correct_answer_clears_all_concept_misconceptions_risk():
     # Process assessment through LearnerModelManager
     lm_mgr.update_from_assessment(cid, assessment)
 
-    # AUDIT VERIFICATION:
-    # Demonstrates that a single correct answer cleared ALL active misconceptions on the concept,
-    # including M2 which was never evaluated or refuted.
-    assert c_state.unresolved_gap is False
-    assert c_state.active_misconceptions == [], (
-        "Production behavior confirmed: active_misconceptions cleared in bulk on score >= 0.80."
-    )
-    assert cid not in learner_m.unresolved_gaps
+    # BATCH 5 PRECISE RESOLUTION VERIFICATION:
+    # A single correct answer without specific resolution evidence must NOT clear active misconceptions in bulk.
+    # Unresolved misconceptions are preserved.
+    assert c_state.unresolved_gap is True
+    assert m1 in c_state.active_misconceptions
+    assert m2 in c_state.active_misconceptions
+    assert cid in learner_m.unresolved_gaps
 
 
 # ============================================================================

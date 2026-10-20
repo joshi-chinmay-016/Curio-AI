@@ -5,10 +5,14 @@ Enforces deterministic, bounded mastery updates based strictly on evidence.
 """
 from datetime import datetime, timezone
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.app.ai.answer_intelligence.mastery_gate import MasteryGate
-from backend.app.ai.answer_intelligence.schemas import LearningAssessment, MasteryDecision
+from backend.app.ai.answer_intelligence.schemas import (
+    EvidenceStatus,
+    LearningAssessment,
+    MasteryDecision,
+)
 from backend.app.ai.schemas import (
     ConceptState,
     LearnerModel,
@@ -106,10 +110,7 @@ class LearnerModelManager:
             state.confidence = min(1.0, max(state.confidence, score * 0.9))
 
             if state.unresolved_gap and score >= 0.80 and not assessment.misconception_status:
-                state.unresolved_gap = False
-                state.active_misconceptions = []
-                if concept_id in self.model.unresolved_gaps:
-                    self.model.unresolved_gaps.remove(concept_id)
+                self._resolve_misconceptions(concept_id, state, assessment=assessment)
 
         self._refresh_overall_mastery()
         return state
@@ -181,10 +182,7 @@ class LearnerModelManager:
 
             # If it was marked as a gap and now answered correctly without misconception, resolve it
             if state.unresolved_gap and correctness >= 0.80:
-                state.unresolved_gap = False
-                state.active_misconceptions = []
-                if concept_id in self.model.unresolved_gaps:
-                    self.model.unresolved_gaps.remove(concept_id)
+                self._resolve_misconceptions(concept_id, state, evaluation=evaluation)
 
         elif correctness >= 0.40:
             # Partial understanding
@@ -246,6 +244,100 @@ class LearnerModelManager:
         scores = [c.mastery for c in self.model.concepts.values()]
         self.model.overall_mastery = round(sum(scores) / len(scores), 3)
         return self.model.overall_mastery
+
+    def _resolve_misconceptions(
+        self,
+        concept_id: str,
+        state: ConceptState,
+        assessment: Optional[LearningAssessment] = None,
+        evaluation: Optional[TurnEvaluation] = None,
+    ) -> None:
+        """
+        Precise resolution of active misconceptions for a concept.
+        Prevents answering one question from clearing multiple unresolved misconceptions
+        without evidence that each one was resolved.
+        """
+        active = list(state.active_misconceptions or [])
+        if not active:
+            state.unresolved_gap = False
+            state.active_misconceptions = []
+            if concept_id in self.model.unresolved_gaps:
+                self.model.unresolved_gaps.remove(concept_id)
+            return
+
+        # 1. Determine explicitly resolved misconceptions from assessment metadata or attributes
+        explicit_resolved: Optional[List[str]] = None
+        if assessment is not None:
+            if hasattr(assessment, "metadata") and isinstance(assessment.metadata, dict):
+                if "resolved_misconceptions" in assessment.metadata:
+                    raw = assessment.metadata.get("resolved_misconceptions")
+                    explicit_resolved = list(raw) if raw is not None else None
+            if explicit_resolved is None and hasattr(assessment, "resolved_misconceptions"):
+                raw = getattr(assessment, "resolved_misconceptions")
+                explicit_resolved = list(raw) if raw is not None else None
+        elif evaluation is not None:
+            if hasattr(evaluation, "resolved_misconceptions"):
+                raw = getattr(evaluation, "resolved_misconceptions")
+                explicit_resolved = list(raw) if raw is not None else None
+
+        # 2. Extract supported evidence descriptions from assessment
+        supported_evidence_descriptions: List[str] = []
+        if assessment is not None and getattr(assessment, "evidence", None):
+            for ev in assessment.evidence:
+                status_val = getattr(ev, "status", None)
+                is_supported = (
+                    status_val in (EvidenceStatus.SUPPORTED, EvidenceStatus.PARTIALLY_SUPPORTED)
+                    or str(status_val).lower() in (
+                        "supported",
+                        "partially_supported",
+                        "evidencestatus.supported",
+                        "evidencestatus.partially_supported",
+                    )
+                )
+                if is_supported and getattr(ev, "expected_description", None):
+                    supported_evidence_descriptions.append(str(ev.expected_description).strip().lower())
+
+        def is_misconception_evidenced(m: str) -> bool:
+            m_norm = str(m).strip().lower()
+            if explicit_resolved is not None:
+                for r in explicit_resolved:
+                    r_norm = str(r).strip().lower()
+                    if r_norm == m_norm or r_norm in m_norm or m_norm in r_norm:
+                        return True
+            for ev_desc in supported_evidence_descriptions:
+                if ev_desc == m_norm or ev_desc in m_norm or m_norm in ev_desc:
+                    return True
+            return False
+
+        # 3. Apply precise resolution rules
+        if len(active) == 1:
+            # Single active misconception:
+            # If explicit_resolved was passed as empty list [], explicitly nothing was resolved
+            if explicit_resolved is not None and len(explicit_resolved) == 0:
+                pass
+            elif explicit_resolved is not None and not is_misconception_evidenced(active[0]):
+                pass
+            else:
+                # Backward-compatible: high score with evidence resolves single active misconception
+                state.active_misconceptions = []
+        else:
+            # Multiple active misconceptions:
+            # Only remove misconceptions for which specific resolution evidence is present
+            remaining = []
+            for m in active:
+                if not is_misconception_evidenced(m):
+                    remaining.append(m)
+            state.active_misconceptions = remaining
+
+        # 4. Synchronize unresolved_gap flag and model-level unresolved_gaps list
+        if not state.active_misconceptions:
+            state.unresolved_gap = False
+            if concept_id in self.model.unresolved_gaps:
+                self.model.unresolved_gaps.remove(concept_id)
+        else:
+            state.unresolved_gap = True
+            if concept_id not in self.model.unresolved_gaps:
+                self.model.unresolved_gaps.append(concept_id)
 
     def get_weakest_concepts(self, limit: int = 3) -> List[ConceptState]:
         """Return concepts ordered by mastery ascending, prioritizing unresolved gaps."""
