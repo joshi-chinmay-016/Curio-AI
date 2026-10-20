@@ -42,13 +42,17 @@ class TopicPlanner:
     """
 
     @staticmethod
-    def derive_coverage_status(state: Optional[ConceptState]) -> CoverageStatus:
+    def derive_coverage_status(
+        state: Optional[ConceptState],
+        concept_node: Optional[ConceptNode] = None,
+    ) -> CoverageStatus:
         """
-        Derive the exact CoverageStatus from a ConceptState:
+        Derive the exact CoverageStatus from a ConceptState and optional ConceptNode:
         - NEEDS_REVIEW: If there is an unresolved gap or active misconception.
-        - MASTERED: If mastery >= 0.75 and at least one substantive evidence count without active gaps/misconceptions.
-        - IN_PROGRESS: If there have been attempts/evidence or partial mastery > 0.0.
-        - UNASSESSED: No substantive evidence or attempts.
+        - MASTERED: If mastery >= 0.75 and at least one substantive evidence count without active gaps/misconceptions,
+          AND all essential learning objectives defined on the concept node (if any) are mastered.
+        - IN_PROGRESS: If there have been attempts/evidence, assessed objectives, or partial mastery > 0.0.
+        - UNASSESSED: No substantive evidence, attempts, or assessed objectives.
         """
         if state is None:
             return CoverageStatus.UNASSESSED
@@ -57,15 +61,34 @@ class TopicPlanner:
         if state.unresolved_gap or bool(state.active_misconceptions):
             return CoverageStatus.NEEDS_REVIEW
 
-        # 2. Mastered criteria: sufficient demonstrated evidence and high mastery
+        # 2. Check objective-level curriculum coverage if concept_node defines learning objectives
+        if concept_node and getattr(concept_node, "learning_objectives", None):
+            essential_objs = [
+                obj.objective_id for obj in concept_node.learning_objectives
+                if getattr(obj, "essential", True) and getattr(obj, "objective_id", None)
+            ]
+            if essential_objs:
+                state_mastered = getattr(state, "mastered_objectives", []) or []
+                all_essential_mastered = all(
+                    obj_id in state_mastered
+                    for obj_id in essential_objs
+                )
+                if not all_essential_mastered:
+                    # If some evidence/attempt exists, it's IN_PROGRESS, but NOT MASTERED!
+                    if state.attempt_count > 0 or state.evidence_count > 0 or state.mastery > 0.0 or getattr(state, "assessed_objectives", []):
+                        return CoverageStatus.IN_PROGRESS
+                    return CoverageStatus.UNASSESSED
+                return CoverageStatus.MASTERED
+
+        # 3. Mastered criteria: sufficient demonstrated evidence and high mastery
         if state.mastery >= 0.75 and (state.evidence_count >= 1 or state.attempt_count >= 2):
             return CoverageStatus.MASTERED
 
-        # 3. In progress: learner has attempted or provided some evidence, but not mastered
-        if state.attempt_count > 0 or state.evidence_count > 0 or state.mastery > 0.0:
+        # 4. In progress: learner has attempted or provided some evidence, but not mastered
+        if state.attempt_count > 0 or state.evidence_count > 0 or state.mastery > 0.0 or getattr(state, "assessed_objectives", []):
             return CoverageStatus.IN_PROGRESS
 
-        # 4. Unassessed
+        # 5. Unassessed
         return CoverageStatus.UNASSESSED
 
     @classmethod
@@ -114,12 +137,14 @@ class TopicPlanner:
             if learner_model and learner_model.concepts:
                 c_state = learner_model.concepts.get(node.id) or learner_model.concepts.get(raw_id)
 
-            status = cls.derive_coverage_status(c_state)
+            status = cls.derive_coverage_status(c_state, concept_node=node)
             mastery = round(float(c_state.mastery), 3) if c_state else 0.0
             evidence_cnt = int(c_state.evidence_count) if c_state else 0
             attempt_cnt = int(c_state.attempt_count) if c_state else 0
             gap = bool(c_state.unresolved_gap) if c_state else False
             misc = list(c_state.active_misconceptions) if c_state and c_state.active_misconceptions else []
+            assessed_objs = list(c_state.assessed_objectives) if c_state and hasattr(c_state, "assessed_objectives") else []
+            mastered_objs = list(c_state.mastered_objectives) if c_state and hasattr(c_state, "mastered_objectives") else []
 
             # Clean prerequisites (remove self-references)
             prereqs = [p for p in (node.prerequisites or []) if p and p != raw_id and p != node.id]
@@ -140,6 +165,8 @@ class TopicPlanner:
                     prerequisites=prereqs,
                     sub_concepts=list(node.sub_concepts or []),
                     learning_objectives=list(node.learning_objectives or []),
+                    assessed_objectives=assessed_objs,
+                    mastered_objectives=mastered_objs,
                     status=status,
                     mastery=mastery,
                     evidence_count=evidence_cnt,

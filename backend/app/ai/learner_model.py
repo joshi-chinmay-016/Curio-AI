@@ -84,6 +84,14 @@ class LearnerModelManager:
         if len(self.model.recent_performances) > 10:
             self.model.recent_performances = self.model.recent_performances[-10:]
 
+        # Track assessed objective
+        obj_id = None
+        if hasattr(assessment, "metadata") and isinstance(assessment.metadata, dict):
+            obj_id = assessment.metadata.get("objective_id")
+        if obj_id:
+            if obj_id not in state.assessed_objectives:
+                state.assessed_objectives.append(obj_id)
+
         if decision.record_as_misconception:
             state.misconception_count += len(assessment.misconceptions) or 1
             for m in assessment.misconceptions:
@@ -95,6 +103,8 @@ class LearnerModelManager:
                 self.model.unresolved_gaps.append(concept_id)
             state.mastery = max(0.0, min(0.35, state.mastery * 0.7))
             state.confidence = max(0.1, state.confidence * 0.8)
+            if obj_id and obj_id in state.mastered_objectives:
+                state.mastered_objectives.remove(obj_id)
 
         elif decision.record_as_gap:
             state.unresolved_gap = True
@@ -102,6 +112,8 @@ class LearnerModelManager:
                 self.model.unresolved_gaps.append(concept_id)
             state.mastery = max(0.0, state.mastery * 0.85)
             state.confidence = max(0.1, state.confidence * 0.75)
+            if obj_id and obj_id in state.mastered_objectives:
+                state.mastered_objectives.remove(obj_id)
 
         elif decision.mastery_delta_allowed:
             state.evidence_count += decision.evidence_count_increment
@@ -112,6 +124,11 @@ class LearnerModelManager:
             if state.unresolved_gap and score >= 0.80 and not assessment.misconception_status:
                 self._resolve_misconceptions(concept_id, state, assessment=assessment)
 
+            # Objective mastery requires demonstrated score without active gaps/misconceptions
+            if obj_id and score >= 0.75 and not state.unresolved_gap and not state.active_misconceptions:
+                if obj_id not in state.mastered_objectives:
+                    state.mastered_objectives.append(obj_id)
+
         self._refresh_overall_mastery()
         return state
 
@@ -121,6 +138,7 @@ class LearnerModelManager:
         evaluation: TurnEvaluation,
         interpretation: Optional[TurnInterpretation] = None,
         resolved_misconceptions: Optional[List[str]] = None,
+        objective_id: Optional[str] = None,
     ) -> ConceptState:
         """
         Update concept state deterministically based on substantive TurnEvaluation.
@@ -129,6 +147,11 @@ class LearnerModelManager:
             concept_id = "general_understanding"
 
         state = self.get_or_create_concept_state(concept_id)
+
+        # Track assessed objective
+        if objective_id:
+            if objective_id not in state.assessed_objectives:
+                state.assessed_objectives.append(objective_id)
 
         # If interpretation indicates pure acknowledgement without answer evidence, do NOT award mastery
         if interpretation and interpretation.intent in (
@@ -173,6 +196,8 @@ class LearnerModelManager:
             # Cap or degrade mastery on misconception
             state.mastery = max(0.0, min(0.35, state.mastery * 0.7))
             state.confidence = max(0.1, state.confidence * 0.8)
+            if objective_id and objective_id in state.mastered_objectives:
+                state.mastered_objectives.remove(objective_id)
 
         elif correctness >= 0.70:
             # Substantive correct answer demonstrates understanding
@@ -190,6 +215,11 @@ class LearnerModelManager:
                     resolved_misconceptions=resolved_misconceptions,
                 )
 
+            # Objective mastery requires demonstrated score without active gaps/misconceptions
+            if objective_id and correctness >= 0.75 and not state.unresolved_gap and not state.active_misconceptions:
+                if objective_id not in state.mastered_objectives:
+                    state.mastered_objectives.append(objective_id)
+
         elif correctness >= 0.40:
             # Partial understanding
             state.evidence_count += 1
@@ -204,6 +234,8 @@ class LearnerModelManager:
                 self.model.unresolved_gaps.append(concept_id)
             state.mastery = max(0.0, state.mastery * 0.85)
             state.confidence = max(0.1, state.confidence * 0.75)
+            if objective_id and objective_id in state.mastered_objectives:
+                state.mastered_objectives.remove(objective_id)
 
         self._refresh_overall_mastery()
         return state

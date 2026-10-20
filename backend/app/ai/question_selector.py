@@ -119,10 +119,12 @@ class QuestionSelector:
                 diff = current_difficulty
 
             c_state = learner_model.get_or_create_concept(unresolved_target)
+            target_misc = None
             if c_state.active_misconceptions:
                 obj_type = ObjectiveType.RESOLVE_MISCONCEPTION
-                reason = f"Active misconception detected on concept '{node_name}': {c_state.active_misconceptions[0]}"
-                evidence = f"Learner correctly identifies and rejects the misconception on '{node_name}'."
+                target_misc = c_state.active_misconceptions[0]
+                reason = f"Active misconception detected on concept '{node_name}': {target_misc}"
+                evidence = f"resolves: {target_misc}"
             else:
                 obj_type = ObjectiveType.REINFORCE_WEAK_CONCEPT
                 reason = f"Knowledge gap detected on concept '{node_name}'."
@@ -134,6 +136,7 @@ class QuestionSelector:
                 difficulty=diff,
                 reason=reason,
                 evidence_expected=evidence,
+                success_criteria=target_misc,
             )
             u_node = concept_model.get_concept(unresolved_target)
             u_evidence = None
@@ -232,31 +235,53 @@ class QuestionSelector:
         else:
             target_diff = current_difficulty
 
-        # Determine pedagogical objective based on strategy (if provided) or difficulty and mastery
-        if strategy is not None:
-            obj_type, evidence_exp = self._resolve_strategy_objective(
-                strategy=strategy,
-                concept_node=target_concept_node,
-                concept_state=c_state,
-                target_difficulty=target_diff,
-                latest_evaluation=latest_evaluation,
+        # Determine pedagogical objective based on strategy (if provided) or curriculum objectives / difficulty
+        chosen_lo = None
+        if strategy is None and target_concept_node and getattr(target_concept_node, "learning_objectives", None):
+            for lo in target_concept_node.learning_objectives:
+                if lo.objective_id and lo.objective_id not in c_state.mastered_objectives:
+                    chosen_lo = lo
+                    break
+
+        if chosen_lo is not None:
+            obj_type = chosen_lo.objective_type
+            evidence_exp = chosen_lo.evidence_expected or chosen_lo.description
+            reason = (
+                strategy_reason.strip()
+                if strategy_reason and strategy_reason.strip()
+                else f"Targeting unmastered learning objective '{chosen_lo.objective_id}' for '{node_name}'."
             )
+            obj = chosen_lo.model_copy(update={
+                "target_concept": c_id,
+                "difficulty": target_diff,
+                "reason": reason,
+                "evidence_expected": evidence_exp,
+            })
         else:
-            obj_type, evidence_exp = self._determine_objective_type(target_concept_node, c_state, target_diff)
+            if strategy is not None:
+                obj_type, evidence_exp = self._resolve_strategy_objective(
+                    strategy=strategy,
+                    concept_node=target_concept_node,
+                    concept_state=c_state,
+                    target_difficulty=target_diff,
+                    latest_evaluation=latest_evaluation,
+                )
+            else:
+                obj_type, evidence_exp = self._determine_objective_type(target_concept_node, c_state, target_diff)
 
-        reason = (
-            strategy_reason.strip()
-            if strategy_reason and strategy_reason.strip()
-            else f"Progressing understanding of '{node_name}' at difficulty {target_diff} based on demonstrated mastery ({c_state.mastery:.2f})."
-        )
+            reason = (
+                strategy_reason.strip()
+                if strategy_reason and strategy_reason.strip()
+                else f"Progressing understanding of '{node_name}' at difficulty {target_diff} based on demonstrated mastery ({c_state.mastery:.2f})."
+            )
 
-        obj = LearningObjective(
-            objective_type=obj_type,
-            target_concept=c_id,
-            difficulty=target_diff,
-            reason=reason,
-            evidence_expected=evidence_exp,
-        )
+            obj = LearningObjective(
+                objective_type=obj_type,
+                target_concept=c_id,
+                difficulty=target_diff,
+                reason=reason,
+                evidence_expected=evidence_exp,
+            )
 
         from backend.app.ai.document_curriculum import format_concept_evidence
         cm_meta = concept_model.metadata if concept_model and concept_model.metadata else {}

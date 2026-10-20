@@ -435,6 +435,8 @@ class ConceptState(BaseModel):
     recent_scores: List[float] = Field(default_factory=list)
     unresolved_gap: bool = False
     active_misconceptions: List[str] = Field(default_factory=list)
+    assessed_objectives: List[str] = Field(default_factory=list)
+    mastered_objectives: List[str] = Field(default_factory=list)
 
 
 class LearnerModel(BaseModel):
@@ -487,6 +489,8 @@ class ConceptCoverageItem(BaseModel):
     attempt_count: int = Field(default=0, ge=0)
     unresolved_gap: bool = False
     active_misconceptions: List[str] = Field(default_factory=list)
+    assessed_objectives: List[str] = Field(default_factory=list)
+    mastered_objectives: List[str] = Field(default_factory=list)
     source_references: List[Dict[str, Any]] = Field(default_factory=list)
     has_source_evidence: bool = False
     metadata: Dict[str, Any] = Field(default_factory=dict)

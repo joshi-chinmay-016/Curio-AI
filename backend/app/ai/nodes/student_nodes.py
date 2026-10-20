@@ -256,12 +256,18 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # Answer Intelligence assessment
         aggregator = AssessmentAggregator()
+        spec = getattr(context, "question_specification", None) or (
+            getattr(context.current_state, "question_specification", None)
+            if hasattr(context, "current_state")
+            else None
+        )
         assessment = aggregator.assess(
             user_message=latest_user_msg,
             context=context,
             current_question=curr_q,
             concept_model=concept_model,
             target_concept_override=target_concept,
+            question_specification=spec,
         )
 
         # Synchronize interpretation with assessment

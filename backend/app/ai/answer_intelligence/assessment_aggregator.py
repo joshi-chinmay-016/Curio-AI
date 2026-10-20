@@ -232,7 +232,12 @@ class AssessmentAggregator:
                 recommended_learning_action="REDIRECT_TO_TARGET",
             )
 
-        obj = context.current_state.current_objective if context else None
+        spec = question_specification or (getattr(context, "question_specification", None) if context else None)
+        obj = (
+            (context.current_state.current_objective if (context and hasattr(context, "current_state")) else None)
+            or (getattr(context, "current_objective", None) if context else None)
+            or (spec.learning_objective if spec else None)
+        )
         intervention = getattr(context, "teacher_intervention", None) or (
             context.current_state.teacher_intervention if (context and hasattr(context, "current_state")) else None
         )
@@ -241,7 +246,7 @@ class AssessmentAggregator:
             concept_id=target_concept,
             concept_node=concept_node,
             objective=obj,
-            spec=question_specification,
+            spec=spec,
             question_text=q_text,
             topic=topic,
             gap=intervention_gap,
@@ -415,5 +420,21 @@ class AssessmentAggregator:
         mastery_decision = self.mastery_gate.evaluate(assessment, target_concept)
         assessment.supports_mastery = mastery_decision.supports_mastery
         assessment.metadata["mastery_decision"] = mastery_decision.model_dump()
+
+        # Check if active objective was resolving a misconception or learning objective
+        active_obj = obj or (spec.learning_objective if spec else None)
+        if active_obj:
+            if getattr(active_obj, "objective_id", None):
+                assessment.metadata["objective_id"] = active_obj.objective_id
+            obj_type_str = str(getattr(active_obj, "objective_type", "")).upper()
+            if "RESOLVE_MISCONCEPTION" in obj_type_str:
+                if assessment.correctness_score >= 0.80 and not assessment.misconception_status:
+                    target_misc = getattr(active_obj, "success_criteria", None) or (
+                        active_obj.evidence_expected.replace("resolves:", "").strip()
+                        if (getattr(active_obj, "evidence_expected", "") or "").startswith("resolves:")
+                        else None
+                    )
+                    if target_misc:
+                        assessment.metadata["resolved_misconceptions"] = [target_misc]
 
         return assessment
