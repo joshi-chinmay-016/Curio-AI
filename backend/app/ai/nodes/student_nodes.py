@@ -384,29 +384,42 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
             if m.role == Role.ASSISTANT or getattr(m, "sender", "").upper() == "AI"
         ]
         recent_c = [context.active_concept] if context.active_concept else []
+        if context.current_state.active_concept and context.current_state.active_concept not in recent_c:
+            recent_c.append(context.current_state.active_concept)
 
-        # If probing current concept or verifying understanding, preserve active_concept
-        # For VERIFY_UNDERSTANDING, avoid infinite loop by checking if concept has already reached strong mastery
+        # Answer-driven vs topic-driven concept target:
+        # Prioritize answer-driven needs when genuine (misconceptions, gaps, undefined terms, or incomplete mastery).
+        # When current concept is already mastered and free of gaps/misconceptions, release target_concept_override
+        # so QuestionSelector coverage logic can systematically advance to unassessed concepts in TopicPlan.
         cand_concept = decision.active_concept or context.active_concept
         cand_state = learner_model.concepts.get(cand_concept) if cand_concept else None
-        is_already_mastered = cand_state is not None and cand_state.mastery >= 0.80 and cand_state.attempt_count >= 2
+        is_already_mastered = (
+            cand_state is not None
+            and cand_state.mastery >= 0.75
+            and (cand_state.evidence_count >= 1 or cand_state.attempt_count >= 1)
+            and not cand_state.unresolved_gap
+            and not cand_state.active_misconceptions
+        )
 
-        is_probing_active = (
+        has_answer_driven_need = (
             decision.strategy in (
+                Strategy.CHALLENGE_MISCONCEPTION,
+                Strategy.CLARIFY_TERM,
+                Strategy.PROBE_MISSING_CONCEPT,
+                Strategy.CHALLENGE_ASSUMPTION,
+            )
+            or (cand_state is not None and (cand_state.unresolved_gap or bool(cand_state.active_misconceptions)))
+            or (not is_already_mastered and decision.strategy in (
                 Strategy.PROBE_WHY,
                 Strategy.PROBE_HOW,
-                Strategy.PROBE_MISSING_CONCEPT,
-                Strategy.CLARIFY_TERM,
-                Strategy.CHALLENGE_MISCONCEPTION,
+                Strategy.DEPTH_EXPANSION,
+                Strategy.VERIFY_UNDERSTANDING,
                 Strategy.REQUEST_EXAMPLE,
                 Strategy.TEST_EDGE_CASE,
-                Strategy.CHALLENGE_ASSUMPTION,
                 Strategy.CONNECT_CONCEPTS,
-                Strategy.DEPTH_EXPANSION,
-            )
-            or (decision.strategy == Strategy.VERIFY_UNDERSTANDING and not is_already_mastered)
+            ))
         ) and bool(cand_concept)
-        concept_target = cand_concept if is_probing_active else None
+        concept_target = cand_concept if has_answer_driven_need else None
 
         spec = selector.select_question_specification(
             concept_model=concept_model,
@@ -715,6 +728,13 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
         mastery_dict = context.current_state.concept_mastery or {}
         misconception_dict = context.current_state.misconception_counts if context.current_state.misconception_counts is not None else None
 
+    from backend.app.ai.topic_plan import TopicPlanner
+    topic_plan = TopicPlanner.build_topic_plan(
+        concept_model=concept_model,
+        learner_model=learner_model,
+        topic=context.topic if context else None,
+    )
+
     if decision.next_mode == Mode.EVALUATOR:
         state_updates = StateUpdates(
             active_concept=context.active_concept,
@@ -738,6 +758,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             question_specification=spec,
             concept_mastery=mastery_dict,
             misconception_counts=misconception_dict,
+            topic_plan=topic_plan,
         )
 
     elif decision.next_mode == Mode.TEACHER:
@@ -798,6 +819,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             question_specification=spec,
             concept_mastery=mastery_dict,
             misconception_counts=misconception_dict,
+            topic_plan=topic_plan,
         )
 
     elif decision.should_restore_interrupted_question:
@@ -854,6 +876,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             question_specification=spec,
             concept_mastery=mastery_dict,
             misconception_counts=misconception_dict,
+            topic_plan=topic_plan,
         )
 
     else:
@@ -887,6 +910,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             question_specification=spec,
             concept_mastery=mastery_dict,
             misconception_counts=misconception_dict,
+            topic_plan=topic_plan,
         )
 
-    return {"state_updates": state_updates}
+    return {"state_updates": state_updates, "topic_plan": topic_plan}

@@ -446,6 +446,130 @@ class LearnerModel(BaseModel):
         return self.concepts[concept_id]
 
 
+# =====================================================================
+# PHASE 5: TOPIC PLANNING & COMPREHENSIVE CONCEPT COVERAGE
+# =====================================================================
+
+class CoverageStatus(str, Enum):
+    """
+    Distinct pedagogical coverage states for concepts in a TopicPlan.
+    Coverage is decoupled from mastery:
+    - UNASSESSED: No meaningful evaluation evidence exists yet.
+    - IN_PROGRESS: Evidence exists, but understanding is partial, incomplete, or inconsistent.
+    - MASTERED: Demonstrates sufficient evidence meeting established mastery criteria.
+    - NEEDS_REVIEW: Previously explored concept with an active misconception, knowledge gap, or regression.
+    """
+    UNASSESSED = "UNASSESSED"
+    IN_PROGRESS = "IN_PROGRESS"
+    MASTERED = "MASTERED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
+class ConceptCoverageItem(BaseModel):
+    """
+    Represents an individual concept within the TopicPlan, its importance,
+    dependencies, learning objectives, and current coverage/mastery status.
+    """
+    concept_id: str
+    name: str
+    importance: str = "CORE"  # CORE, PREREQUISITE, ADVANCED, EXTENSION
+    difficulty_level: int = Field(default=1, ge=1, le=5)
+    prerequisites: List[str] = Field(default_factory=list)
+    sub_concepts: List[str] = Field(default_factory=list)
+    learning_objectives: List[LearningObjective] = Field(default_factory=list)
+    status: CoverageStatus = CoverageStatus.UNASSESSED
+    mastery: float = Field(default=0.0, ge=0.0, le=1.0)
+    evidence_count: int = Field(default=0, ge=0)
+    attempt_count: int = Field(default=0, ge=0)
+    unresolved_gap: bool = False
+    active_misconceptions: List[str] = Field(default_factory=list)
+
+    @property
+    def coverage_status(self) -> CoverageStatus:
+        return self.status
+
+
+class TopicPlan(BaseModel):
+    """
+    Top-level topic plan representing all concepts required to explore and understand a topic.
+    Provides deterministic querying of unassessed concepts, in-progress concepts,
+    review-needed concepts, and overall topic coverage metrics.
+    """
+    topic: str
+    topic_id: str = ""
+    topic_title: str = ""
+    topic_description: str = ""
+    concepts: List[ConceptCoverageItem] = Field(default_factory=list)
+    validation_status: ValidationStatus = ValidationStatus.VALID
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def coverage_percentage(self) -> float:
+        return round(self.coverage_summary()["coverage_ratio"] * 100.0, 1)
+
+    def get_concept(self, concept_id: str) -> Optional[ConceptCoverageItem]:
+        cid_norm = (concept_id or "").strip().lower().replace(" ", "_")
+        for c in self.concepts:
+            if c.concept_id == concept_id or c.concept_id.strip().lower().replace(" ", "_") == cid_norm:
+                return c
+            if c.name and (c.name.strip().lower() == (concept_id or "").strip().lower() or c.name.strip().lower().replace(" ", "_") == cid_norm):
+                return c
+        return None
+
+    def get_unassessed_concepts(self) -> List[ConceptCoverageItem]:
+        return [c for c in self.concepts if c.status == CoverageStatus.UNASSESSED]
+
+    def get_in_progress_concepts(self) -> List[ConceptCoverageItem]:
+        return [c for c in self.concepts if c.status == CoverageStatus.IN_PROGRESS]
+
+    def get_mastered_concepts(self) -> List[ConceptCoverageItem]:
+        return [c for c in self.concepts if c.status == CoverageStatus.MASTERED]
+
+    def get_review_needed_concepts(self) -> List[ConceptCoverageItem]:
+        return [c for c in self.concepts if c.status == CoverageStatus.NEEDS_REVIEW]
+
+    def get_eligible_concepts(self, min_prereq_mastery: float = 0.50) -> List[ConceptCoverageItem]:
+        mastery_map = {c.concept_id: c.mastery for c in self.concepts}
+        eligible: List[ConceptCoverageItem] = []
+        for c in self.concepts:
+            prereqs_satisfied = True
+            for pid in c.prerequisites:
+                if mastery_map.get(pid, 0.0) < min_prereq_mastery:
+                    prereqs_satisfied = False
+                    break
+            if prereqs_satisfied:
+                eligible.append(c)
+        return eligible
+
+    def coverage_summary(self) -> Dict[str, Any]:
+        total = len(self.concepts)
+        if total == 0:
+            return {
+                "total_concepts": 0,
+                "unassessed_count": 0,
+                "in_progress_count": 0,
+                "mastered_count": 0,
+                "needs_review_count": 0,
+                "coverage_ratio": 0.0,
+                "mastery_ratio": 0.0,
+            }
+        unassessed = len(self.get_unassessed_concepts())
+        in_progress = len(self.get_in_progress_concepts())
+        mastered = len(self.get_mastered_concepts())
+        needs_review = len(self.get_review_needed_concepts())
+        explored = total - unassessed
+        return {
+            "total_concepts": total,
+            "unassessed_count": unassessed,
+            "in_progress_count": in_progress,
+            "mastered_count": mastered,
+            "needs_review_count": needs_review,
+            "coverage_ratio": round(explored / total, 3),
+            "mastery_ratio": round(mastered / total, 3),
+        }
+
+
+
 
 
 class QuestionSpecification(BaseModel):
@@ -514,6 +638,7 @@ class SessionState(BaseModel):
     latest_interpretation: Optional[TurnInterpretation] = None
     question_specification: Optional[QuestionSpecification] = None
     learning_assessment: Optional[LearningAssessment] = None
+    topic_plan: Optional[TopicPlan] = None
 
     @field_validator("session_id", mode="before")
     @classmethod
@@ -604,6 +729,7 @@ class StateUpdates(BaseModel):
     current_objective: Optional[LearningObjective] = None
     latest_interpretation: Optional[TurnInterpretation] = None
     question_specification: Optional[QuestionSpecification] = None
+    topic_plan: Optional[TopicPlan] = None
 
     @field_validator("concept_mastery")
     @classmethod
@@ -803,6 +929,7 @@ class AIResult(BaseModel):
     concept_model: Optional[ConceptModel] = None
     learner_model: Optional[LearnerModel] = None
     learning_assessment: Optional[LearningAssessment] = None
+    topic_plan: Optional[TopicPlan] = None
 
 
 # =====================================================================

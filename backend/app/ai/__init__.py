@@ -38,7 +38,12 @@ from backend.app.ai.schemas import (
     RelationshipType,
     TopicModel,
     ValidationStatus,
+    CoverageStatus,
+    ConceptCoverageItem,
+    TopicPlan,
 )
+from backend.app.ai.topic_plan import TopicPlanner
+
 
 __all__ = [
     "CurioEngine",
@@ -76,4 +81,8 @@ __all__ = [
     "EvidenceType",
     "ValidationStatus",
     "ConstraintType",
+    "CoverageStatus",
+    "ConceptCoverageItem",
+    "TopicPlan",
+    "TopicPlanner",
 ]

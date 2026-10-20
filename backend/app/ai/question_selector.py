@@ -297,39 +297,74 @@ class QuestionSelector:
         recent_concepts: List[str],
     ) -> ConceptNode:
         """
-        Select the best concept node from the model:
-        1. Find unmastered concepts whose prerequisites are all satisfied (mastery >= 0.60).
-        2. Prefer concepts not recently tested to avoid repetition.
-        3. If all concepts are mastered, pick the highest-difficulty synthesis concept.
+        Phase 5 Coverage-Aware Concept Selection:
+        1. Construct or derive TopicPlan tracking coverage status (NEEDS_REVIEW, UNASSESSED, IN_PROGRESS, MASTERED).
+        2. Ensure prerequisite readiness (mastery >= 0.50).
+        3. Prioritize:
+           - Tier 0: Concepts needing review (unresolved gaps, active misconceptions).
+           - Tier 1: Unassessed core concepts whose prerequisites are satisfied (in topological/importance order).
+           - Tier 2: Unassessed non-core concepts whose prerequisites are satisfied.
+           - Tier 3: In-progress concepts whose prerequisites are satisfied.
+           - Tier 4: Mastered concepts (for synthesis or edge-case trade-offs).
+        4. Apply anti-repetition penalty across recent concepts to avoid monopolizing or looping.
         """
         if not concept_model.concepts:
             return ConceptNode(id="core_foundation", name="Core Foundation", difficulty_level=1)
 
-        eligible_nodes: List[ConceptNode] = []
-        for node in concept_model.concepts:
-            state = learner_model.get_or_create_concept(node.id)
-            if state.mastery < 0.85:
-                # Check prerequisites
-                prereqs_ok = True
-                for p_id in node.prerequisites:
-                    p_state = learner_model.get_or_create_concept(p_id)
-                    if p_state.mastery < 0.50:
-                        prereqs_ok = False
-                        break
-                if prereqs_ok:
-                    eligible_nodes.append(node)
+        from backend.app.ai.topic_plan import TopicPlanner, CoverageStatus
+        topic_name = getattr(concept_model, "topic", "") or "General Topic"
+        topic_plan = TopicPlanner.build_topic_plan(concept_model, learner_model, topic=topic_name)
 
+        # 1. Filter nodes whose prerequisites are satisfied
+        def prereqs_satisfied(node: ConceptNode) -> bool:
+            for p_id in (node.prerequisites or []):
+                p_state = learner_model.get_or_create_concept(p_id)
+                if p_state.mastery < 0.50:
+                    return False
+            return True
+
+        eligible_nodes = [node for node in concept_model.concepts if prereqs_satisfied(node)]
         if not eligible_nodes:
-            # All available concepts are largely mastered; pick highest difficulty node
-            return sorted(concept_model.concepts, key=lambda c: -c.difficulty_level)[0]
+            # Fallback to foundational concepts (nodes with no prerequisites)
+            foundation_nodes = [node for node in concept_model.concepts if not node.prerequisites]
+            eligible_nodes = foundation_nodes or concept_model.concepts
 
-        # Order eligible nodes: non-recent first, then lower difficulty first
-        def _score(node: ConceptNode):
-            recent_penalty = 10 if recent_concepts and recent_concepts[-1] == node.id else 0
+        # Scoring function incorporating coverage status tier and anti-repetition:
+        def _concept_selection_score(node: ConceptNode) -> tuple:
+            c_cov = topic_plan.get_concept(node.id)
+            status = c_cov.status if c_cov else CoverageStatus.UNASSESSED
             state = learner_model.get_or_create_concept(node.id)
-            return (recent_penalty, node.difficulty_level, state.mastery)
 
-        return sorted(eligible_nodes, key=_score)[0]
+            importance = getattr(node, "importance", "CORE") or "CORE"
+            is_core = importance.upper() in ("CORE", "PREREQUISITE")
+
+            if status == CoverageStatus.NEEDS_REVIEW:
+                tier = 0
+            elif status == CoverageStatus.UNASSESSED and is_core:
+                tier = 1
+            elif status == CoverageStatus.UNASSESSED:
+                tier = 2
+            elif status == CoverageStatus.IN_PROGRESS:
+                tier = 3
+            else:
+                tier = 4
+
+            # Anti-repetition penalty across recent concepts
+            recent_penalty = 0
+            if recent_concepts:
+                if recent_concepts[-1] == node.id:
+                    recent_penalty = 100
+                elif node.id in recent_concepts[-3:]:
+                    recent_penalty = 25
+
+            # Order by:
+            # 1. Tier (NEEDS_REVIEW < UNASSESSED_CORE < UNASSESSED_OTHER < IN_PROGRESS < MASTERED)
+            # 2. Anti-repetition penalty (non-recent first)
+            # 3. Difficulty level (lower/foundational first)
+            # 4. Mastery (lower mastery first)
+            return (tier, recent_penalty, node.difficulty_level, state.mastery)
+
+        return sorted(eligible_nodes, key=_concept_selection_score)[0]
 
     def _calculate_next_difficulty(
         self,
