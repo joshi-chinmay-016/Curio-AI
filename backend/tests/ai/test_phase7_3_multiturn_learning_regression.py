@@ -352,8 +352,12 @@ def test_multiturn_misconception_persists_until_supported_resolution():
         recommended_difficulty=3,
     )
 
-    # Update learner model with substantive resolution
-    learner_mgr.update_from_evaluation(cid, eval_t3)
+    # Update learner model with substantive resolution providing evidence for M1
+    learner_mgr.update_from_evaluation(
+        cid,
+        eval_t3,
+        resolved_misconceptions=["Quicksort worst case is O(n log n)"],
+    )
 
     # Verified: learner model clears the misconception and gap
     assert learner_m.concepts[cid].unresolved_gap is False

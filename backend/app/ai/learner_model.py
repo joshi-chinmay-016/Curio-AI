@@ -120,6 +120,7 @@ class LearnerModelManager:
         concept_id: str,
         evaluation: TurnEvaluation,
         interpretation: Optional[TurnInterpretation] = None,
+        resolved_misconceptions: Optional[List[str]] = None,
     ) -> ConceptState:
         """
         Update concept state deterministically based on substantive TurnEvaluation.
@@ -182,7 +183,12 @@ class LearnerModelManager:
 
             # If it was marked as a gap and now answered correctly without misconception, resolve it
             if state.unresolved_gap and correctness >= 0.80:
-                self._resolve_misconceptions(concept_id, state, evaluation=evaluation)
+                self._resolve_misconceptions(
+                    concept_id,
+                    state,
+                    evaluation=evaluation,
+                    resolved_misconceptions=resolved_misconceptions,
+                )
 
         elif correctness >= 0.40:
             # Partial understanding
@@ -251,12 +257,15 @@ class LearnerModelManager:
         state: ConceptState,
         assessment: Optional[LearningAssessment] = None,
         evaluation: Optional[TurnEvaluation] = None,
+        resolved_misconceptions: Optional[List[str]] = None,
     ) -> None:
         """
-        Precise resolution of active misconceptions for a concept.
-        Prevents answering one question from clearing multiple unresolved misconceptions
-        without evidence that each one was resolved.
+        Precise, conservative resolution of active misconceptions for a concept.
+        Prevents answering one question from clearing unresolved misconceptions
+        without evidence that each specific misconception was resolved.
         """
+        import re
+
         active = list(state.active_misconceptions or [])
         if not active:
             state.unresolved_gap = False
@@ -265,9 +274,11 @@ class LearnerModelManager:
                 self.model.unresolved_gaps.remove(concept_id)
             return
 
-        # 1. Determine explicitly resolved misconceptions from assessment metadata or attributes
+        # 1. Determine explicitly resolved misconceptions from argument, assessment metadata, or attributes
         explicit_resolved: Optional[List[str]] = None
-        if assessment is not None:
+        if resolved_misconceptions is not None:
+            explicit_resolved = list(resolved_misconceptions)
+        elif assessment is not None:
             if hasattr(assessment, "metadata") and isinstance(assessment.metadata, dict):
                 if "resolved_misconceptions" in assessment.metadata:
                     raw = assessment.metadata.get("resolved_misconceptions")
@@ -295,39 +306,52 @@ class LearnerModelManager:
                     )
                 )
                 if is_supported and getattr(ev, "expected_description", None):
-                    supported_evidence_descriptions.append(str(ev.expected_description).strip().lower())
+                    supported_evidence_descriptions.append(str(ev.expected_description))
+
+        def _normalize_text(text: str) -> str:
+            t = text.strip().lower()
+            t = re.sub(r"^[\s\"'.,;:!?]+|[\s\"'.,;:!?]+$", "", t)
+            t = re.sub(r"\s+", " ", t)
+            return t
+
+        def _matches_misconception(candidate: str, target: str) -> bool:
+            norm_c = _normalize_text(candidate)
+            norm_t = _normalize_text(target)
+            if not norm_c or not norm_t:
+                return False
+            if norm_c == norm_t:
+                return True
+            for prefix in (
+                "resolves:",
+                "refutes:",
+                "resolution of:",
+                "counter-evidence for:",
+                "resolved misconception:",
+                "refuted misconception:",
+            ):
+                if norm_c.startswith(prefix):
+                    stripped = _normalize_text(norm_c[len(prefix):])
+                    if stripped == norm_t:
+                        return True
+            return False
 
         def is_misconception_evidenced(m: str) -> bool:
-            m_norm = str(m).strip().lower()
             if explicit_resolved is not None:
                 for r in explicit_resolved:
-                    r_norm = str(r).strip().lower()
-                    if r_norm == m_norm or r_norm in m_norm or m_norm in r_norm:
+                    if _matches_misconception(str(r), m):
                         return True
             for ev_desc in supported_evidence_descriptions:
-                if ev_desc == m_norm or ev_desc in m_norm or m_norm in ev_desc:
+                if _matches_misconception(ev_desc, m):
                     return True
             return False
 
-        # 3. Apply precise resolution rules
-        if len(active) == 1:
-            # Single active misconception:
-            # If explicit_resolved was passed as empty list [], explicitly nothing was resolved
-            if explicit_resolved is not None and len(explicit_resolved) == 0:
-                pass
-            elif explicit_resolved is not None and not is_misconception_evidenced(active[0]):
-                pass
-            else:
-                # Backward-compatible: high score with evidence resolves single active misconception
-                state.active_misconceptions = []
-        else:
-            # Multiple active misconceptions:
-            # Only remove misconceptions for which specific resolution evidence is present
-            remaining = []
-            for m in active:
-                if not is_misconception_evidenced(m):
-                    remaining.append(m)
-            state.active_misconceptions = remaining
+        # 3. Apply precise resolution rules uniformly
+        # A misconception is ONLY removed if adequate resolution evidence was provided.
+        remaining = []
+        for m in active:
+            if not is_misconception_evidenced(m):
+                remaining.append(m)
+        state.active_misconceptions = remaining
 
         # 4. Synchronize unresolved_gap flag and model-level unresolved_gaps list
         if not state.active_misconceptions:

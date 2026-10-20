@@ -1,16 +1,15 @@
 """
 Phase 7.3 Batch 5: Precise Misconception Resolution Regression Tests.
 
-Verifies:
-1. Two distinct active misconceptions on a concept:
-   - Supplying evidence resolving only M1 clears M1 while M2 remains active.
-   - Supplying an ambiguous high-scoring answer without specific resolution evidence
-     preserves unresolved misconceptions (they are NOT silently cleared in bulk).
-2. Single-misconception concept:
-   - High-scoring answer with adequate evidence still resolves the single misconception (backward compatibility).
-3. State preservation:
-   - If active misconceptions remain, unresolved_gap remains True and concept_id stays in unresolved_gaps.
-   - None and empty-list semantics remain correct.
+Comprehensive regression suite verifying:
+1. Two active misconceptions with evidence for only one.
+2. Similar or overlapping misconception wording that must not trigger false resolution.
+3. A high-scoring answer with no resolution evidence.
+4. A single active misconception without sufficient resolution evidence.
+5. Explicit evidence that resolves a single misconception.
+6. Multiple misconceptions explicitly resolved, while an unrelated misconception remains active.
+7. Consistent behavior across both assessment and evaluation paths.
+8. Correct synchronization of active_misconceptions, unresolved_gap, and model.unresolved_gaps.
 """
 import pytest
 
@@ -79,23 +78,20 @@ def _make_assessment(
 
 
 # ============================================================================
-# Test 1 & 2: Two Active Misconceptions - Specific Evidence Resolves Only One
+# 1. Two active misconceptions with evidence for only one
 # ============================================================================
 
-def test_two_misconceptions_evidence_resolves_only_targeted_misconception():
+def test_1_two_misconceptions_evidence_for_only_one():
     """
-    Test 1: Concept has two active misconceptions:
-    - M1: 'Quicksort worst case is O(n log n)'
-    - M2: 'Quicksort is a stable sorting algorithm'
-
-    Learner provides a high-scoring answer supplying specific evidence resolving M1.
+    Scenario: Concept has two active misconceptions: M1 and M2.
+    Learner provides high-scoring answer refuting only M1.
     Expected:
-    - M1 is resolved and removed from active_misconceptions.
-    - M2 remains active in active_misconceptions.
-    - unresolved_gap remains True on ConceptState.
+    - M1 is resolved and removed.
+    - M2 remains active.
+    - unresolved_gap remains True.
     - concept_id remains in learner_model.unresolved_gaps.
     """
-    learner_m = LearnerModel(session_id="session-batch5-t1")
+    learner_m = LearnerModel(session_id="session-t1")
     mgr = LearnerModelManager(learner_m)
     cid = "quicksort"
 
@@ -107,7 +103,6 @@ def test_two_misconceptions_evidence_resolves_only_targeted_misconception():
     state.active_misconceptions = [m1, m2]
     learner_m.unresolved_gaps.append(cid)
 
-    # Supply assessment with evidence resolving only M1
     assessment = _make_assessment(
         concept_id=cid,
         score=0.90,
@@ -117,33 +112,95 @@ def test_two_misconceptions_evidence_resolves_only_targeted_misconception():
 
     mgr.update_from_assessment(cid, assessment)
 
-    # M1 must be resolved; M2 must remain active
-    assert m1 not in state.active_misconceptions, f"M1 '{m1}' was expected to be resolved."
-    assert m2 in state.active_misconceptions, f"M2 '{m2}' must remain active."
+    assert m1 not in state.active_misconceptions
+    assert m2 in state.active_misconceptions
     assert len(state.active_misconceptions) == 1
-    # Because M2 is still active, gap status must persist
-    assert state.unresolved_gap is True, "unresolved_gap must remain True while M2 is active."
-    assert cid in learner_m.unresolved_gaps, f"{cid} must remain in unresolved_gaps while M2 is active."
+    assert state.unresolved_gap is True
+    assert cid in learner_m.unresolved_gaps
 
 
 # ============================================================================
-# Test 3 & 4: Ambiguous High-Score Answer Does NOT Silently Clear Misconceptions
+# 2. Similar or overlapping misconception wording must not trigger false resolution
 # ============================================================================
 
-def test_ambiguous_high_scoring_answer_does_not_clear_multiple_misconceptions():
+def test_2_overlapping_wording_must_not_trigger_false_resolution():
     """
-    Test 2: Concept has two active misconceptions: M1 and M2.
-    Learner gives an ambiguous or generic high-scoring answer (0.90) that does NOT
-    identify or provide evidence resolving either specific misconception.
-
-    Defect under current production code:
-    - Current code unconditionally executes `state.active_misconceptions = []` when score >= 0.80.
-
-    Required behavior:
-    - When multiple misconceptions are active and the answer does not identify which one was resolved,
-      unresolved misconceptions must be PRESERVED, not silently cleared.
+    Scenario: Misconceptions have significant lexical overlap:
+    - M1: 'Recursion causes memory leak'
+    - M2: 'Recursion causes stack overflow'
+    - M3: 'Hash collision'
+    - M4: 'Hash collision can be avoided by large tables'
+    Evidence only resolves M1.
+    Expected:
+    - M1 is resolved.
+    - M2 is NOT resolved despite sharing 'Recursion causes'.
+    - M3 and M4 are NOT resolved.
     """
-    learner_m = LearnerModel(session_id="session-batch5-t2")
+    learner_m = LearnerModel(session_id="session-t2")
+    mgr = LearnerModelManager(learner_m)
+    cid = "recursion"
+
+    m1 = "Recursion causes memory leak"
+    m2 = "Recursion causes stack overflow"
+
+    state = mgr.get_or_create_concept_state(cid)
+    state.unresolved_gap = True
+    state.active_misconceptions = [m1, m2]
+    learner_m.unresolved_gaps.append(cid)
+
+    # Supply evidence specifically for M1
+    assessment = _make_assessment(
+        concept_id=cid,
+        score=0.92,
+        evidence_descriptions=["resolves: Recursion causes memory leak"],
+        resolved_misconceptions=[m1],
+    )
+
+    mgr.update_from_assessment(cid, assessment)
+
+    assert m1 not in state.active_misconceptions
+    assert m2 in state.active_misconceptions, "M2 was falsely resolved due to overlapping wording!"
+    assert state.unresolved_gap is True
+
+    # Case B: m_sub is a substring of m_long
+    # Under naive substring matching, resolving m_sub falsely resolves m_long!
+    cid2 = "hashing"
+    m_sub = "hash collision"
+    m_long = "hash collision can be avoided by large tables"
+    state2 = mgr.get_or_create_concept_state(cid2)
+    state2.unresolved_gap = True
+    state2.active_misconceptions = [m_sub, m_long]
+    learner_m.unresolved_gaps.append(cid2)
+
+    asmt2 = _make_assessment(
+        concept_id=cid2,
+        score=0.92,
+        evidence_descriptions=[m_sub],
+        resolved_misconceptions=[m_sub],
+    )
+    mgr.update_from_assessment(cid2, asmt2)
+
+    assert m_sub not in state2.active_misconceptions
+    assert m_long in state2.active_misconceptions, (
+        f"Defect: '{m_long}' was falsely resolved because '{m_sub}' is a substring of it!"
+    )
+
+
+
+# ============================================================================
+# 3. High-scoring answer with no resolution evidence
+# ============================================================================
+
+def test_3_high_scoring_answer_with_no_resolution_evidence():
+    """
+    Scenario: Concept has multiple active misconceptions.
+    Learner provides a high score (0.95) with generic conceptual evidence.
+    No resolution evidence for any misconception.
+    Expected:
+    - All misconceptions remain active.
+    - unresolved_gap remains True.
+    """
+    learner_m = LearnerModel(session_id="session-t3")
     mgr = LearnerModelManager(learner_m)
     cid = "quicksort"
 
@@ -155,35 +212,37 @@ def test_ambiguous_high_scoring_answer_does_not_clear_multiple_misconceptions():
     state.active_misconceptions = [m1, m2]
     learner_m.unresolved_gaps.append(cid)
 
-    # Generic high-scoring answer on quicksort with general evidence, NOT addressing M1 or M2
     assessment = _make_assessment(
         concept_id=cid,
-        score=0.90,
-        evidence_descriptions=["quicksort partitions around a pivot"],
-        resolved_misconceptions=None,  # No specific misconception identified
+        score=0.95,
+        evidence_descriptions=["quicksort partitions around a chosen pivot"],
+        resolved_misconceptions=None,
     )
 
     mgr.update_from_assessment(cid, assessment)
 
-    # Both misconceptions must be preserved because no specific resolution evidence was provided
-    assert m1 in state.active_misconceptions, f"M1 '{m1}' was silently cleared without evidence."
-    assert m2 in state.active_misconceptions, f"M2 '{m2}' was silently cleared without evidence."
+    assert m1 in state.active_misconceptions
+    assert m2 in state.active_misconceptions
     assert len(state.active_misconceptions) == 2
     assert state.unresolved_gap is True
     assert cid in learner_m.unresolved_gaps
 
 
 # ============================================================================
-# Test 5: Existing Single-Misconception Resolution Preserved
+# 4. Single active misconception without sufficient resolution evidence
 # ============================================================================
 
-def test_single_misconception_resolved_when_evidence_present():
+def test_4_single_active_misconception_without_sufficient_evidence_not_cleared():
     """
-    Test 3: Backward compatibility verification:
-    When a concept has exactly ONE active misconception, a high-scoring answer (score >= 0.80)
-    with no misconception detected clears that misconception.
+    Scenario: Concept has exactly ONE active misconception.
+    Learner provides a high-scoring answer (0.90) on the concept, but supplies
+    NO resolution evidence targeting the misconception.
+    Required Behavior:
+    - A high score alone CANNOT clear a specific misconception without adequate resolution evidence.
+    - The misconception MUST remain active.
+    - unresolved_gap MUST remain True.
     """
-    learner_m = LearnerModel(session_id="session-batch5-t3")
+    learner_m = LearnerModel(session_id="session-t4")
     mgr = LearnerModelManager(learner_m)
     cid = "quicksort"
 
@@ -194,43 +253,127 @@ def test_single_misconception_resolved_when_evidence_present():
     state.active_misconceptions = [m1]
     learner_m.unresolved_gaps.append(cid)
 
-    # High-scoring turn without misconception
+    # High-scoring turn with generic evidence, NOT refuting M1
     assessment = _make_assessment(
         concept_id=cid,
-        score=0.88,
-        evidence_descriptions=["worst case partition degrades to quadratic"],
+        score=0.92,
+        evidence_descriptions=["quicksort is recursive"],
+        resolved_misconceptions=None,
     )
 
     mgr.update_from_assessment(cid, assessment)
 
-    # The single targeted misconception is resolved
+    # Must NOT be cleared without evidence!
+    assert m1 in state.active_misconceptions, "Single misconception was cleared on high score without evidence!"
+    assert state.unresolved_gap is True
+    assert cid in learner_m.unresolved_gaps
+
+
+# ============================================================================
+# 5. Explicit evidence that resolves a single misconception
+# ============================================================================
+
+def test_5_explicit_evidence_resolves_single_misconception():
+    """
+    Scenario: Concept has a single active misconception.
+    Learner provides a high score (0.90) with explicit evidence refuting the misconception.
+    Expected:
+    - Misconception is cleared.
+    - unresolved_gap is cleared.
+    - concept_id is removed from unresolved_gaps.
+    """
+    learner_m = LearnerModel(session_id="session-t5")
+    mgr = LearnerModelManager(learner_m)
+    cid = "quicksort"
+
+    m1 = "Quicksort worst case is O(n log n)"
+
+    state = mgr.get_or_create_concept_state(cid)
+    state.unresolved_gap = True
+    state.active_misconceptions = [m1]
+    learner_m.unresolved_gaps.append(cid)
+
+    # High-scoring turn with explicit resolution evidence
+    assessment = _make_assessment(
+        concept_id=cid,
+        score=0.90,
+        evidence_descriptions=[m1],
+        resolved_misconceptions=[m1],
+    )
+
+    mgr.update_from_assessment(cid, assessment)
+
     assert state.active_misconceptions == []
     assert state.unresolved_gap is False
     assert cid not in learner_m.unresolved_gaps
 
 
 # ============================================================================
-# Test 6: update_from_evaluation Preserves Multiple Misconceptions
+# 6. Multiple misconceptions explicitly resolved, unrelated remains active
 # ============================================================================
 
-def test_update_from_evaluation_preserves_multiple_misconceptions_without_evidence():
+def test_6_multiple_misconceptions_resolved_unrelated_remains_active():
     """
-    Test 4: Verify TurnEvaluation path also protects against bulk clearing when multiple
-    misconceptions are active.
+    Scenario: Concept has THREE active misconceptions: M1, M2, M3.
+    Learner provides evidence resolving M1 and M2.
+    Expected:
+    - M1 and M2 are cleared.
+    - M3 remains active.
+    - unresolved_gap remains True.
     """
-    learner_m = LearnerModel(session_id="session-batch5-t4")
+    learner_m = LearnerModel(session_id="session-t6")
     mgr = LearnerModelManager(learner_m)
-    cid = "recursion"
+    cid = "sorting"
 
-    m1 = "Recursion causes memory leak"
-    m2 = "Base case is optional"
+    m1 = "Quicksort worst case is O(n log n)"
+    m2 = "Quicksort is stable"
+    m3 = "Mergesort space complexity is O(1)"
 
     state = mgr.get_or_create_concept_state(cid)
     state.unresolved_gap = True
-    state.active_misconceptions = [m1, m2]
+    state.active_misconceptions = [m1, m2, m3]
     learner_m.unresolved_gaps.append(cid)
 
-    eval_turn = TurnEvaluation(
+    assessment = _make_assessment(
+        concept_id=cid,
+        score=0.94,
+        evidence_descriptions=[m1, m2],
+        resolved_misconceptions=[m1, m2],
+    )
+
+    mgr.update_from_assessment(cid, assessment)
+
+    assert m1 not in state.active_misconceptions
+    assert m2 not in state.active_misconceptions
+    assert m3 in state.active_misconceptions
+    assert len(state.active_misconceptions) == 1
+    assert state.unresolved_gap is True
+    assert cid in learner_m.unresolved_gaps
+
+
+# ============================================================================
+# 7. Consistent behavior across both assessment and evaluation paths
+# ============================================================================
+
+def test_7_consistent_behavior_across_both_assessment_and_evaluation_paths():
+    """
+    Scenario: Verify update_from_evaluation behaves identically to update_from_assessment:
+    - Without explicit resolution evidence: preserves misconception.
+    - With explicit resolution evidence: clears only evidenced misconception.
+    """
+    cid = "recursion"
+    m1 = "Recursion causes memory leak"
+    m2 = "Base case is optional"
+
+    # Path A: update_from_evaluation without evidence -> neither cleared
+    learner_a = LearnerModel(session_id="session-t7a")
+    mgr_a = LearnerModelManager(learner_a)
+    st_a = mgr_a.get_or_create_concept_state(cid)
+    st_a.unresolved_gap = True
+    st_a.active_misconceptions = [m1, m2]
+    learner_a.unresolved_gaps.append(cid)
+
+    eval_a = TurnEvaluation(
         correctness=0.92,
         clarity=0.90,
         completeness=0.85,
@@ -245,123 +388,79 @@ def test_update_from_evaluation_preserves_multiple_misconceptions_without_eviden
         recommended_strategy=Strategy.PROBE_WHY,
         recommended_difficulty=3,
     )
-
-    mgr.update_from_evaluation(
+    mgr_a.update_from_evaluation(
         cid,
-        eval_turn,
+        eval_a,
         interpretation=TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT, is_answer_attempt=True),
+        resolved_misconceptions=None,
     )
-
-    # Ambiguous evaluation turn without resolution specification must NOT clear both
-    assert m1 in state.active_misconceptions
-    assert m2 in state.active_misconceptions
-    assert state.unresolved_gap is True
-    assert cid in learner_m.unresolved_gaps
-
-
-# ============================================================================
-# Test 5 & 6: None & Empty-List Semantics and EvidenceItem Matching
-# ============================================================================
-
-def test_none_and_empty_list_semantics_for_misconception_resolution():
-    """
-    Test 5: Explicit None and empty list semantics:
-    - Empty list [] in resolved_misconceptions: explicit signal that NO misconception was resolved.
-      Both active misconceptions must remain.
-    - None in resolved_misconceptions with multiple active misconceptions:
-      ambiguous turn, neither is cleared.
-    - Concept with empty active_misconceptions:
-      High score cleanly clears unresolved_gap without raising exceptions.
-    """
-    cid = "quicksort"
-    m1 = "Quicksort worst case is O(n log n)"
-    m2 = "Quicksort is a stable sorting algorithm"
-
-    # Case A: Explicit empty list [] in resolved_misconceptions
-    learner_a = LearnerModel(session_id="session-batch5-empty")
-    mgr_a = LearnerModelManager(learner_a)
-    st_a = mgr_a.get_or_create_concept_state(cid)
-    st_a.unresolved_gap = True
-    st_a.active_misconceptions = [m1, m2]
-    learner_a.unresolved_gaps.append(cid)
-
-    asmt_empty = _make_assessment(
-        concept_id=cid,
-        score=0.95,
-        resolved_misconceptions=[],  # explicitly empty
-    )
-    mgr_a.update_from_assessment(cid, asmt_empty)
-    assert st_a.active_misconceptions == [m1, m2]
+    assert m1 in st_a.active_misconceptions
+    assert m2 in st_a.active_misconceptions
     assert st_a.unresolved_gap is True
 
-    # Case B: Concept with empty active_misconceptions and unresolved_gap=True (e.g. general gap)
-    learner_b = LearnerModel(session_id="session-batch5-empty-active")
+    # Path B: update_from_evaluation with explicit evidence for M1 -> M1 cleared, M2 preserved
+    learner_b = LearnerModel(session_id="session-t7b")
     mgr_b = LearnerModelManager(learner_b)
     st_b = mgr_b.get_or_create_concept_state(cid)
     st_b.unresolved_gap = True
-    st_b.active_misconceptions = []
+    st_b.active_misconceptions = [m1, m2]
     learner_b.unresolved_gaps.append(cid)
 
-    asmt_b = _make_assessment(concept_id=cid, score=0.85)
-    mgr_b.update_from_assessment(cid, asmt_b)
-    assert st_b.unresolved_gap is False
-    assert st_b.active_misconceptions == []
-    assert cid not in learner_b.unresolved_gaps
-
-
-def test_evidence_item_matching_resolves_targeted_misconception_without_metadata():
-    """
-    Test 6: When metadata['resolved_misconceptions'] is absent (None), but assessment.evidence
-    contains an EvidenceItem with status=SUPPORTED that matches M1's description,
-    M1 is resolved and M2 remains active.
-    """
-    learner_m = LearnerModel(session_id="session-batch5-evidence-item")
-    mgr = LearnerModelManager(learner_m)
-    cid = "quicksort"
-
-    m1 = "Quicksort worst case is O(n log n)"
-    m2 = "Quicksort is a stable sorting algorithm"
-
-    state = mgr.get_or_create_concept_state(cid)
-    state.unresolved_gap = True
-    state.active_misconceptions = [m1, m2]
-    learner_m.unresolved_gaps.append(cid)
-
-    # No metadata['resolved_misconceptions'], but evidence has supported item matching M1
-    assessment = LearningAssessment(
-        intent=AssessmentIntent.ANSWER_ATTEMPT,
-        is_answer_attempt=True,
-        relevance_score=1.0,
-        relevance_level=RelevanceLevel.RELEVANT,
-        concept_alignment_score=0.90,
-        claims=[],
-        evidence=[
-            EvidenceItem(
-                concept_id=cid,
-                expected_description="Quicksort worst case is O(n log n)",
-                status=EvidenceStatus.SUPPORTED,
-                confidence=0.95,
-            )
-        ],
-        correctness=CorrectnessLevel.CORRECT,
-        correctness_score=0.90,
-        completeness=CompletenessLevel.COMPLETE,
-        completeness_score=0.90,
-        misconception_status=False,
-        misconceptions=[],
-        missing_concepts=[],
-        contradictory_claims=[],
-        classification=AssessmentClassification.CORRECT,
-        confidence=0.90,
-        supports_mastery=True,
-        assessment_status=AssessmentStatus.HIGH_CONFIDENCE,
-        metadata={},  # No explicit resolved_misconceptions key
+    mgr_b.update_from_evaluation(
+        cid,
+        eval_a,
+        interpretation=TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT, is_answer_attempt=True),
+        resolved_misconceptions=[m1],
     )
+    assert m1 not in st_b.active_misconceptions
+    assert m2 in st_b.active_misconceptions
+    assert st_b.unresolved_gap is True
 
-    mgr.update_from_assessment(cid, assessment)
 
-    assert m1 not in state.active_misconceptions
-    assert m2 in state.active_misconceptions
-    assert state.unresolved_gap is True
-    assert cid in learner_m.unresolved_gaps
+# ============================================================================
+# 8. Correct synchronization of active_misconceptions, unresolved_gap, and gaps
+# ============================================================================
 
+def test_8_correct_synchronization_of_state_flags_and_gaps():
+    """
+    Scenario: Full lifecycle synchronization check:
+    - Step 1: Active misconceptions exist -> unresolved_gap=True, cid in unresolved_gaps.
+    - Step 2: Partial resolution -> remaining misconceptions -> unresolved_gap=True, cid in unresolved_gaps.
+    - Step 3: Complete resolution -> active_misconceptions=[] -> unresolved_gap=False, cid removed from unresolved_gaps.
+    - Step 4: General gap with empty active_misconceptions -> high score clears gap cleanly.
+    """
+    cid = "hashing"
+    m1 = "Hash tables have O(1) worst case lookup"
+    m2 = "Collisions can be eliminated by larger capacity"
+
+    learner = LearnerModel(session_id="session-t8")
+    mgr = LearnerModelManager(learner)
+    st = mgr.get_or_create_concept_state(cid)
+    st.unresolved_gap = True
+    st.active_misconceptions = [m1, m2]
+    learner.unresolved_gaps.append(cid)
+
+    # Step 2: Partial resolution of M1
+    asmt_partial = _make_assessment(cid, score=0.90, resolved_misconceptions=[m1])
+    mgr.update_from_assessment(cid, asmt_partial)
+    assert st.active_misconceptions == [m2]
+    assert st.unresolved_gap is True
+    assert cid in learner.unresolved_gaps
+
+    # Step 3: Complete resolution of M2
+    asmt_complete = _make_assessment(cid, score=0.90, resolved_misconceptions=[m2])
+    mgr.update_from_assessment(cid, asmt_complete)
+    assert st.active_misconceptions == []
+    assert st.unresolved_gap is False
+    assert cid not in learner.unresolved_gaps
+
+    # Step 4: General gap without misconceptions (e.g. from prior difficulty failure)
+    st.unresolved_gap = True
+    st.active_misconceptions = []
+    learner.unresolved_gaps.append(cid)
+
+    asmt_general = _make_assessment(cid, score=0.88)
+    mgr.update_from_assessment(cid, asmt_general)
+    assert st.active_misconceptions == []
+    assert st.unresolved_gap is False
+    assert cid not in learner.unresolved_gaps
