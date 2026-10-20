@@ -469,11 +469,13 @@ class DecisionEngine:
         elif context.current_state.consecutive_failures >= 2 and evaluation.correctness < 0.5:
             trigger_c = True
 
-        # Trigger D: Clear major misconception or total failure to understand
+        # Trigger D: Major misconception or failure to understand when repeated or explicitly recommended
         trigger_d = (
-            (len(evaluation.misconceptions) > 0 and evaluation.correctness < 0.35)
-            or evaluation.correctness < 0.25
-            or evaluation.recommended_strategy == Strategy.TEACH_GAP
+            evaluation.recommended_strategy == Strategy.TEACH_GAP
+            or (context.current_state.consecutive_failures >= 1 and (
+                (len(evaluation.misconceptions) > 0 and evaluation.correctness < 0.35)
+                or evaluation.correctness < 0.25
+            ))
         )
 
         if trigger_a or trigger_b or trigger_c or trigger_d:

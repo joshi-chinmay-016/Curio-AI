@@ -12,6 +12,7 @@ export interface StoredTeacherIntervention {
   gap: string;
   attemptCount: number;
   verificationRequired: boolean;
+  verificationQuestionAsked?: boolean;
 }
 
 export interface StoredMessage {
@@ -28,6 +29,14 @@ export interface StoredMessage {
   isRestored?: boolean;
   evaluation?: TurnEvaluationData;
   decision?: LearningDecisionData;
+}
+
+export interface InjectedMistakeState {
+  active: boolean;
+  turn: number;
+  misconception: string;
+  concept: string;
+  counterReason: string;
 }
 
 export interface StoredSession {
@@ -48,6 +57,8 @@ export interface StoredSession {
   currentQuestion?: StoredQuestion;
   interruptedQuestion?: StoredQuestion;
   teacherIntervention?: StoredTeacherIntervention;
+  injectedMistake?: InjectedMistakeState;
+  lastMistakeInjectedTurn?: number;
   consecutiveSuccesses: number;
   consecutiveFailures: number;
   messages: StoredMessage[];

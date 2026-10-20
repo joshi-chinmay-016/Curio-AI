@@ -49,6 +49,7 @@ def get_embedding_model():
         try:
             # Enforce offline mode to prevent HuggingFace hub network timeouts
             os.environ["HF_HUB_OFFLINE"] = "1"
+            # pyrefly: ignore[missing-import]
             from sentence_transformers import SentenceTransformer
             _EMBEDDING_MODEL = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", local_files_only=True)
             logger.info("Loaded offline SentenceTransformer 'all-MiniLM-L6-v2' successfully.")
@@ -138,6 +139,9 @@ class SemanticEmbeddingProvider(BaseAssessmentProvider):
         if len(clean) < 3:
             return RelevanceLevel.IRRELEVANT, 0.0
 
+        if self._model is None:
+            return self.fallback.assess_relevance(user_message, question, target_concept, topic, expected)
+
         concept_anchor = f"{target_concept.replace('_', ' ')} in {topic}. {question}"
         components = getattr(expected, "core_components", []) or getattr(expected, "constraints", [])
         if components:
@@ -214,6 +218,9 @@ class SemanticEmbeddingProvider(BaseAssessmentProvider):
         concept_model: Optional[ConceptModel] = None,
     ) -> float:
         """Measure semantic alignment between learner claims and concept definition."""
+        if self._model is None:
+            return self.fallback.align_concepts(claims, concept_node, target_concept, concept_model)
+
         if not claims or not concept_node:
             return 0.0
 
@@ -247,6 +254,9 @@ class SemanticEmbeddingProvider(BaseAssessmentProvider):
         Match claims against expected evidence items using dense vector similarity
         and negation consistency checks.
         """
+        if self._model is None:
+            return self.fallback.match_evidence(claims, expected)
+
         constraint_texts = getattr(expected, "core_components", []) or getattr(expected, "constraints", [])
         if not claims or not constraint_texts:
             return []
@@ -316,6 +326,9 @@ class SemanticEmbeddingProvider(BaseAssessmentProvider):
         Detect specific misconceptions by projecting learner claims against known
         anti-patterns and common misconceptions.
         """
+        if self._model is None:
+            return self.fallback.detect_misconceptions(user_message, claims, expected)
+
         misconceptions = expected.common_misconceptions
         if not misconceptions or not user_message:
             return []

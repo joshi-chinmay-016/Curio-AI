@@ -577,7 +577,14 @@ class MockLLMProvider(BaseLLMProvider):
         if "clarify_term" in prompt_lower:
             return "What do you mean by that term in simple words?"
         elif "challenge_misconception" in prompt_lower:
-            return "If binary search works on any array, how would you know which half to discard if the array is unsorted?"
+            import re
+            m_top = re.search(r"topic:\s*['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+            top_str = m_top.group(1).strip() if m_top else ""
+            if "binary search" in top_str.lower() or "binary search" in prompt_lower:
+                return "If binary search works on any array, how would you know which half to discard if the array is unsorted?"
+            elif top_str:
+                return f"Wait, wouldn't that cause unexpected issues in edge cases for {top_str}?"
+            return "If that assumption is made, how would that work when edge cases occur?"
         elif "probe_missing_concept" in prompt_lower:
             return "How does the base case fit into that process?"
         elif "probe_how" in prompt_lower:

@@ -30,13 +30,21 @@ const EXPLICIT_TEACH_OR_STUCK_PHRASES = [
   "i don't know",
   "i do not know",
   "idk",
+  "dunno",
   "i'm stuck",
   "im stuck",
   "i am stuck",
+  "stuck",
+  "totally stuck",
+  "completely stuck",
   "i'm confused",
   "im confused",
   "i am confused",
   "i have no idea",
+  "have no clue",
+  "no clue",
+  "not sure",
+  "i'm not sure",
   "i don't get why",
   "i don't get it",
   "i do not get",
@@ -52,6 +60,9 @@ const EXPLICIT_TEACH_OR_STUCK_PHRASES = [
   "teach me about the mechanism",
   "can you teach me that",
   "teach me that",
+  "i am lost",
+  "im lost",
+  "i'm lost",
 ];
 
 const NON_ANSWER_ACKNOWLEDGMENTS = [
@@ -62,18 +73,54 @@ const NON_ANSWER_ACKNOWLEDGMENTS = [
   "yep",
   "sure",
   "alright",
-  "i understand",
-  "got it",
-  "understood",
   "k",
   "yup",
   "right",
+];
+
+const READINESS_OR_TEACH_PHRASES = [
+  "i understand",
+  "i got it",
+  "got it",
+  "understood",
+  "i get it now",
+  "get it now",
+  "i understand now",
+  "i think i understand",
+  "i think i get it",
+  "let me teach",
+  "i want to teach",
+  "wanna teach",
+  "i wanna teach",
+  "can i teach",
+  "ready to teach",
+  "i am ready to teach",
+  "i'm ready to teach",
+  "im ready to teach",
+  "switch to student",
+  "toggle to student",
+  "back to student",
+  "ready for questions",
+  "ask me a question",
+  "ask me questions",
+  "test me",
+  "verify me",
+  "i am ready",
+  "i'm ready",
+  "im ready",
+  "ready",
 ];
 
 function hasExplicitTeachOrStuckSignal(text: string): boolean {
   if (!text) return false;
   const clean = text.toLowerCase().trim();
   return EXPLICIT_TEACH_OR_STUCK_PHRASES.some((phrase) => clean.includes(phrase));
+}
+
+function isReadinessOrTeachSignal(text: string): boolean {
+  if (!text) return false;
+  const clean = text.toLowerCase().trim().replace(/[.,!?;:]/g, "");
+  return READINESS_OR_TEACH_PHRASES.some((p) => clean === p || clean.startsWith(p) || clean.includes(p));
 }
 
 function isQuestionOrTeachRequest(text: string): boolean {
@@ -543,41 +590,51 @@ export class LocalSessionRepository implements SessionRepository {
       turnNumber
     );
 
-    // In Student Mode, attempt to enrich with backend guest AI endpoint if available
-    if (session.currentMode === "STUDENT" && decision.next_mode === "STUDENT" && !isQuestionOrTeachRequest(userMsgText)) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
-        const res = await fetch(`${apiUrl}/ai/guest-student-turn`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            topic: session.topic,
-            user_answer: userMsgText,
-            turn_number: turnNumber,
-            current_difficulty: session.difficulty,
-            previous_questions: session.messages
-              .filter((m) => m.sender === "AI")
-              .map((m) => m.content),
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const guestData = await res.json();
-          if (
-            guestData.ai_response &&
-            !isQuestionTooSimilar(guestData.ai_response, session.messages.filter((m) => m.sender === "AI").map((m) => m.content))
-          ) {
-            aiResponseContent = guestData.ai_response;
-            if (guestData.evaluation) evaluation = { ...evaluation, ...guestData.evaluation };
-            if (guestData.decision) decision = { ...decision, ...guestData.decision };
+    // Attempt to enrich with backend guest AI endpoint if available
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+      const isReadiness = session.currentMode === "TEACHER" && isReadinessOrTeachSignal(userMsgText);
+      const isAnsweringVerif = session.currentMode === "TEACHER" && !isReadiness && !isQuestionOrTeachRequest(userMsgText);
+
+      const res = await fetch(`${apiUrl}/ai/guest-student-turn`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: session.topic,
+          user_answer: userMsgText,
+          turn_number: turnNumber,
+          current_difficulty: session.difficulty,
+          previous_questions: session.messages
+            .filter((m) => m.sender === "AI")
+            .map((m) => m.content),
+          mode: session.currentMode,
+          gap: session.teacherIntervention?.gap || session.activeConcept,
+          interrupted_question: session.interruptedQuestion,
+          injected_mistake: session.injectedMistake,
+          teacher_attempt_count: session.teacherIntervention?.attemptCount || 1,
+          is_stuck_request: hasExplicitTeachOrStuckSignal(userMsgText),
+          is_readiness_signal: isReadiness,
+          is_answering_verification: isAnsweringVerif,
+          consecutive_failures: session.consecutiveFailures,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const guestData = await res.json();
+        if (guestData.ai_response) {
+          aiResponseContent = guestData.ai_response;
+          if (guestData.evaluation) evaluation = { ...evaluation, ...guestData.evaluation };
+          if (guestData.decision) decision = { ...decision, ...guestData.decision };
+          if (guestData.injected_mistake !== undefined) {
+            session.injectedMistake = guestData.injected_mistake;
           }
         }
-      } catch {
-        // Fall back seamlessly to local engine without delay
       }
+    } catch {
+      // Fall back seamlessly to local engine without delay
     }
 
     const prevMode = session.currentMode;
@@ -775,35 +832,40 @@ export class LocalSessionRepository implements SessionRepository {
         return { evaluation: evalData, decision: decData, aiResponseContent: responseText };
       }
 
-      // 2. User gives a generic non-answer acknowledgment ("yes", "ok", "sure", "i understand")
-      if (isNonAnswer) {
+      // 2. User gives readiness signal ("i understand", "got it", "let me teach") or generic acknowledgment
+      const isReadiness = isReadinessOrTeachSignal(userAnswer);
+      if (isReadiness || (isNonAnswer && !session.teacherIntervention?.verificationQuestionAsked)) {
         const evalData: TurnEvaluationData = {
-          correctness: 0.2,
-          clarity: 0.5,
-          completeness: 0.1,
+          correctness: 0.3,
+          clarity: 0.8,
+          completeness: 0.2,
           depth: 0.1,
-          relevance: 0.6,
-          stuck_probability: 0.6,
+          relevance: 0.8,
+          stuck_probability: 0.15,
           misconceptions: [],
           missing_concepts: [gap],
           undefined_terms: [],
           mastered_concepts: [],
           knowledge_gap: gap,
-          recommended_strategy: "PROBE_WHY",
+          recommended_strategy: "VERIFY_UNDERSTANDING",
           recommended_difficulty: currentDiff,
         };
         const decData: LearningDecisionData = {
           next_mode: "TEACHER",
-          strategy: "PROBE_WHY",
+          strategy: "VERIFY_UNDERSTANDING",
           difficulty: currentDiff,
           confidence: currentConf,
-          reason: `Learner provided acknowledgment without demonstrating understanding. Prompting for explanation in own words.`,
+          reason: `Learner indicated readiness ('${userAnswer}'). Posing verification problem on gap '${gap}' before concluding teacher mode.`,
           active_concept: gap,
           should_offer_termination: false,
           should_restore_interrupted_question: false,
         };
 
-        const promptText = `To make sure we've locked this concept in before returning to our questions:\n\nIn your own words, how would you explain the core mechanism of **${gap}**?`;
+        const vQuestion = this.generateVerificationQuestionForGap(topic, gap);
+        const promptText = `Awesome! Before we jump back into student mode, let's verify that quickly so we know you've got this locked in:\n\n${vQuestion}`;
+        if (session.teacherIntervention) {
+          session.teacherIntervention.verificationQuestionAsked = true;
+        }
         return { evaluation: evalData, decision: decData, aiResponseContent: promptText };
       }
 
@@ -939,8 +1001,84 @@ export class LocalSessionRepository implements SessionRepository {
     }
 
     // -----------------------------------------------------------------------
-    // B. IN STUDENT MODE: Evaluate Learner's Answer against Topic Plan & Invariants
+    // B. IN STUDENT MODE: Check previous injected mistake & evaluate answer
     // -----------------------------------------------------------------------
+    if (session.injectedMistake?.active) {
+      const inj = session.injectedMistake;
+      const lowerAns = userAnswer.toLowerCase();
+      const isRefuted =
+        lowerAns.includes("no") ||
+        lowerAns.includes("not") ||
+        lowerAns.includes("false") ||
+        lowerAns.includes("incorrect") ||
+        lowerAns.includes("doesn't") ||
+        lowerAns.includes("cannot") ||
+        lowerAns.includes("wrong") ||
+        lowerAns.includes("actually") ||
+        lowerAns.includes("instead");
+
+      session.injectedMistake = undefined;
+      if (isRefuted) {
+        // Master teacher caught the student's injected misconception!
+        const evalData: TurnEvaluationData = {
+          correctness: 0.95,
+          clarity: 0.9,
+          completeness: 0.9,
+          depth: 0.85,
+          relevance: 1.0,
+          stuck_probability: 0.05,
+          misconceptions: [],
+          missing_concepts: [],
+          undefined_terms: [],
+          mastered_concepts: [`${topic} - ${inj.concept}`],
+          knowledge_gap: null,
+          recommended_strategy: "DEPTH_EXPANSION",
+          recommended_difficulty: Math.min(5, currentDiff + 1),
+        };
+        const decData: LearningDecisionData = {
+          next_mode: "STUDENT",
+          strategy: "DEPTH_EXPANSION",
+          difficulty: Math.min(5, currentDiff + 1),
+          confidence: Math.min(100, currentConf + 10),
+          reason: `Learner brilliantly caught injected subtle misconception on '${inj.concept}'.`,
+          active_concept: inj.concept,
+          should_offer_termination: false,
+          should_restore_interrupted_question: false,
+        };
+        const praiseResponse = `Whoa, great catch! You're totally right that ${inj.counterReason || "that assumption fails in that edge case"}. That was a tricky edge case I was wondering about!\n\nSo how do we handle cases where the input is partially ordered?`;
+        return { evaluation: evalData, decision: decData, aiResponseContent: praiseResponse };
+      } else {
+        // Teacher missed the misconception: Curio raises a student doubt
+        const doubtQ = `Wait, really? But doesn't ${inj.counterReason || "that break the complexity guarantee"}? Wouldn't that mean we have to do extra work?`;
+        const evalData: TurnEvaluationData = {
+          correctness: 0.60,
+          clarity: 0.7,
+          completeness: 0.6,
+          depth: 0.5,
+          relevance: 0.95,
+          stuck_probability: 0.20,
+          misconceptions: [],
+          missing_concepts: [],
+          undefined_terms: [],
+          mastered_concepts: [],
+          knowledge_gap: null,
+          recommended_strategy: "CHALLENGE_MISCONCEPTION",
+          recommended_difficulty: currentDiff,
+        };
+        const decData: LearningDecisionData = {
+          next_mode: "STUDENT",
+          strategy: "CHALLENGE_MISCONCEPTION",
+          difficulty: currentDiff,
+          confidence: currentConf,
+          reason: `Learner accepted subtle edge case premise. Raising student doubt to explore boundaries.`,
+          active_concept: inj.concept,
+          should_offer_termination: false,
+          should_restore_interrupted_question: false,
+        };
+        return { evaluation: evalData, decision: decData, aiResponseContent: doubtQ };
+      }
+    }
+
     if (!session.topicPlan) {
       session.topicPlan = buildDefaultTopicPlan(topic, session.documentId || undefined);
     }
@@ -982,8 +1120,12 @@ export class LocalSessionRepository implements SessionRepository {
       undefined_terms: analysis.undefinedTerms,
       mastered_concepts: analysis.isStrong ? [`${topic} - ${currentObjective.title}`] : [],
       knowledge_gap: analysis.knowledgeGap,
-      recommended_strategy: isExplicitStuck || analysis.isMajorMisconception
+      recommended_strategy: isExplicitStuck
         ? "TEACH_GAP"
+        : analysis.isMajorMisconception && session.consecutiveFailures >= 1
+        ? "TEACH_GAP"
+        : analysis.isMajorMisconception
+        ? "CHALLENGE_MISCONCEPTION"
         : analysis.selectedStrategy,
       recommended_difficulty: analysis.isStrong && analysis.turnQuality >= 0.80 ? Math.min(5, currentDiff + 1) : currentDiff,
     };
@@ -992,9 +1134,9 @@ export class LocalSessionRepository implements SessionRepository {
     // C. DECISION HIERARCHY
     // -----------------------------------------------------------------------
     const triggerA = isExplicitStuck;
-    const triggerB = stuckProb >= 0.75 && (analysis.correctness < 0.5 || !!analysis.knowledgeGap);
+    const triggerB = stuckProb >= 0.75 && (analysis.correctness < 0.5 || !!analysis.knowledgeGap) && session.consecutiveFailures >= 1;
     const triggerC = session.consecutiveFailures >= 2 && analysis.correctness < 0.4;
-    const triggerD = analysis.isMajorMisconception && analysis.correctness < 0.25;
+    const triggerD = analysis.isMajorMisconception && session.consecutiveFailures >= 1;
 
     if (triggerA || triggerB || triggerC || triggerD) {
       // TRANSITION TO TEACHER MODE
@@ -1014,7 +1156,7 @@ export class LocalSessionRepository implements SessionRepository {
           triggerA
             ? "explicit stuck signal"
             : triggerD
-            ? "clear major misconception detected"
+            ? "repeated misconception detected"
             : triggerC
             ? "repeated failure on the concept"
             : "high stuck probability"
@@ -1029,6 +1171,59 @@ export class LocalSessionRepository implements SessionRepository {
     }
 
     // REMAIN IN STUDENT MODE
+    // If learner made a mistake on turn 1, prioritize challenging misconception as a student!
+    if (analysis.isMajorMisconception && session.consecutiveFailures === 0) {
+      const activeMisc = analysis.misconceptions[0] || `${topic} misconception`;
+      const decData: LearningDecisionData = {
+        next_mode: "STUDENT",
+        strategy: "CHALLENGE_MISCONCEPTION",
+        difficulty: currentDiff,
+        confidence: Math.max(15, currentConf - 5),
+        reason: `Misconception detected: '${activeMisc}'. Challenging as a curious student to give user a chance to rectify.`,
+        active_concept: activeMisc,
+        should_offer_termination: false,
+        should_restore_interrupted_question: false,
+      };
+
+      const challengeQuestion = `Wait, hold on — if ${analysis.misconceptions[0] ? `we say "${analysis.misconceptions[0]}"` : "that is the case"}, wouldn't that cause unexpected issues in edge cases? Can you help me understand how that works?`;
+      return { evaluation: evalData, decision: decData, aiResponseContent: challengeQuestion };
+    }
+
+    // PROACTIVE DYNAMIC MISTAKE INJECTION:
+    // When questioning reaches hard (difficulty >= 3) and learner demonstrates strong understanding
+    const isEligibleForMistakeInjection =
+      currentDiff >= 3 &&
+      analysis.isStrong &&
+      analysis.misconceptions.length === 0 &&
+      turnNumber >= 3 &&
+      turnNumber % 3 === 0 &&
+      (!session.lastMistakeInjectedTurn || turnNumber - session.lastMistakeInjectedTurn >= 3);
+
+    if (isEligibleForMistakeInjection) {
+      const { misconceptionQ, counterReason } = this.generateSubtleMisconception(topic, currentObjective.title);
+      session.injectedMistake = {
+        active: true,
+        turn: turnNumber,
+        misconception: misconceptionQ,
+        concept: currentObjective.title,
+        counterReason,
+      };
+      session.lastMistakeInjectedTurn = turnNumber;
+
+      const decData: LearningDecisionData = {
+        next_mode: "STUDENT",
+        strategy: "TEST_EDGE_CASE",
+        difficulty: currentDiff,
+        confidence: Math.min(100, currentConf + 5),
+        reason: `Injecting subtle edge-case misconception to test deep understanding of ${currentObjective.title}.`,
+        active_concept: currentObjective.title,
+        should_offer_termination: false,
+        should_restore_interrupted_question: false,
+      };
+
+      return { evaluation: evalData, decision: decData, aiResponseContent: misconceptionQ };
+    }
+
     // Difficulty progression: increases ONLY when learner demonstrates consistent mastery (turnQuality >= 0.80 and no critical misconceptions)
     let nextDiff = currentDiff;
     if (analysis.turnQuality >= 0.80 && analysis.misconceptions.length === 0 && analysis.isStrong) {
@@ -1689,6 +1884,57 @@ export class LocalSessionRepository implements SessionRepository {
   // =========================================================================
   // Content Generation Helpers (Socratic, Teacher, Verification)
   // =========================================================================
+  private generateVerificationQuestionForGap(topic: string, gap: string): string {
+    const tLower = topic.toLowerCase();
+    const gLower = gap.toLowerCase();
+
+    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("asgi") || gLower.includes("uvicorn")) {
+      return "What is the primary role of the ASGI server (such as Uvicorn) before the request reaches the FastAPI application?";
+    }
+    if (tLower.includes("binary search") || gLower.includes("binary search")) {
+      return "If the target is smaller than the middle element in a sorted list, why can we safely ignore every element in the right half?";
+    }
+    if (tLower.includes("quicksort") || tLower.includes("quick sort") || gLower.includes("partition")) {
+      return "During partitioning in QuickSort, what invariant must be true for all elements placed to the left of the pivot?";
+    }
+    if (tLower.includes("photosynthesis") || gLower.includes("photosynthesis")) {
+      return "What is the actual chemical form into which light energy is first converted during the light-dependent reactions?";
+    }
+    return `In your own words, what is the single most important rule or condition required for **${gap}** in **${topic}** to execute correctly, and why?`;
+  }
+
+  private generateSubtleMisconception(topic: string, concept: string): { misconceptionQ: string; counterReason: string } {
+    const tLower = topic.toLowerCase();
+    if (tLower.includes("binary search")) {
+      return {
+        misconceptionQ: "Wait, so if we have an unsorted array, we can just sort it first and then binary search, and the entire operation is always O(log n), right?",
+        counterReason: "sorting takes O(n log n) by itself, which dominates the overall time complexity",
+      };
+    }
+    if (tLower.includes("quicksort") || tLower.includes("quick sort")) {
+      return {
+        misconceptionQ: "Wait, so if an array is already sorted, QuickSort with the first element as pivot will run in its best-case O(n log n) time, right?",
+        counterReason: "picking the first element on an already sorted array creates completely unbalanced partitions, causing worst-case O(n²) time",
+      };
+    }
+    if (tLower.includes("fastapi") || tLower.includes("async") || tLower.includes("python")) {
+      return {
+        misconceptionQ: "Wait, so since async functions in FastAPI don't block the event loop, running a heavy CPU calculation inside `async def` will never slow down other users, right?",
+        counterReason: "a CPU-bound synchronous loop inside an async function blocks the single Python event loop thread completely",
+      };
+    }
+    if (tLower.includes("photosynthesis")) {
+      return {
+        misconceptionQ: "Wait, so does photosynthesis stop completely in the dark, meaning the Calvin cycle cannot run even for a moment at night, right?",
+        counterReason: "the Calvin cycle can briefly run as long as ATP and NADPH accumulated during the light reactions are still available",
+      };
+    }
+    return {
+      misconceptionQ: `Wait, so if we apply **${topic}** under boundary edge cases, does that guarantee the exact same performance without any additional trade-offs, right?`,
+      counterReason: `edge case constraints introduce trade-offs that prevent identical performance guarantees`,
+    };
+  }
+
   private generateTeacherResponseForQuestion(topic: string, gap: string, userQuestion: string): string {
     const qLower = userQuestion.toLowerCase();
     const tLower = topic.toLowerCase();

@@ -36,7 +36,7 @@ Provide a JSON object matching TurnEvaluation:
 - depth (float, 0.0 to 1.0): Does it explain underlying reasons or mechanisms?
 - relevance (float, 0.0 to 1.0): Is it relevant to the question and topic?
 - stuck_probability (float, 0.0 to 1.0): High (>= 0.75) if the learner expresses confusion, says "I don't know", "not sure", "no idea", "stuck", asks for help, asks to be taught ("teach me", "can you teach me", "walk me through"), asks how it works, or asks a question instead of answering.
-- misconceptions (list of str): Specific erroneous beliefs or false assumptions expressed in the answer.
+- misconceptions (list of str): Specific EXPLICIT erroneous beliefs or false claims stated by the learner. CRITICAL: A brief, high-level, or introductory summary (e.g., stating the general purpose on turn 1 without listing all prerequisites or edge cases) is SOUND and must NOT be marked as a misconception! Omissions or missing preconditions belong in missing_concepts, NEVER misconceptions.
 - missing_concepts (list of str): Essential concepts or components omitted from the answer.
 - undefined_terms (list of str): Technical jargon or terms used by the learner that were not explained or defined.
 - mastered_concepts (list of str): Specific concepts the learner demonstrated clear understanding of in this turn. NOTE: Never include concepts if the learner did not provide a substantive, correct explanation (never for "ok", "yes", "teach me", "i understand", questions, or struggle).
