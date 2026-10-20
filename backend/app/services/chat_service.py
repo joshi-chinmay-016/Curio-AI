@@ -705,10 +705,10 @@ class ChatService:
         else:
             new_mastered = list(existing_mastered)
 
-        # Unresolved misconceptions: merge if updates provided, else preserve existing
+        # Unresolved misconceptions: replace if updates provided (not None), else preserve existing
         existing_misconceptions = db_session.state.unresolved_misconceptions or []
         if updates.unresolved_misconceptions is not None:
-            new_misconceptions = list(dict.fromkeys(existing_misconceptions + updates.unresolved_misconceptions))
+            new_misconceptions = list(dict.fromkeys(updates.unresolved_misconceptions))
         else:
             new_misconceptions = list(existing_misconceptions)
 
