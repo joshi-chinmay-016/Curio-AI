@@ -574,37 +574,40 @@ class DecisionEngine:
             strategy = Strategy.PROBE_MISSING_CONCEPT
             active_concept = evaluation.missing_concepts[0]
             reason = f"Missing concept '{active_concept}' identified. Probing prerequisite/component."
-        # 5. Correct answer missing concrete example
+        # 7. Correct answer missing concrete example
         elif evaluation.recommended_strategy == Strategy.REQUEST_EXAMPLE or (needs_example and current_difficulty == 3):
             strategy = Strategy.REQUEST_EXAMPLE
             reason = f"Explanation for '{active_concept}' provides mechanics but lacks a concrete example. Requesting realistic application scenario."
-        # 6. Edge cases and failure limits
+        # 8. Edge cases and failure limits
         elif evaluation.recommended_strategy == Strategy.TEST_EDGE_CASE or (needs_edge_case and current_difficulty == 4 and is_strong):
             strategy = Strategy.TEST_EDGE_CASE
             reason = f"Probing boundary conditions, failure limits, and edge cases for '{active_concept}'."
-        # 7. Concept synthesis and architectural trade-offs
+        # 9. Concept synthesis and architectural trade-offs
         elif evaluation.recommended_strategy == Strategy.CONNECT_CONCEPTS or (needs_synthesis and current_difficulty >= 5 and is_strong):
             strategy = Strategy.CONNECT_CONCEPTS
             reason = f"Connecting concepts and probing system trade-offs for '{active_concept}'."
-        # 8. Depth expansion for correct but incomplete explanations
+        # 10. Depth expansion for correct but incomplete explanations
         elif evaluation.recommended_strategy == Strategy.DEPTH_EXPANSION or (
-            evaluation.correctness >= 0.65 and evaluation.completeness < 0.70 and not is_strong
+            evaluation.correctness >= 0.65
+            and evaluation.completeness < 0.70
+            and not is_strong
+            and evaluation.recommended_strategy not in (Strategy.PROBE_HOW, Strategy.PROBE_WHY)
         ):
             strategy = Strategy.DEPTH_EXPANSION
             reason = f"Explanation for '{active_concept}' is partially correct but incomplete. Probing deeper technical components."
-        # 9. Explicit or evidence-based mechanism probe (How)
+        # 11. Explicit or evidence-based mechanism probe (How)
         elif evaluation.recommended_strategy == Strategy.PROBE_HOW or (
             evaluation.depth < 0.60 and evaluation.completeness < 0.70
         ):
             strategy = Strategy.PROBE_HOW
             reason = f"Mechanism gap identified for '{active_concept}'. Probing step-by-step process (how)."
-        # 10. Explicit or evidence-based causal reasoning probe (Why)
+        # 12. Explicit or evidence-based causal reasoning probe (Why)
         elif evaluation.recommended_strategy == Strategy.PROBE_WHY or (
             evaluation.correctness >= 0.70 and evaluation.depth < 0.80 and not is_strong
         ):
             strategy = Strategy.PROBE_WHY
             reason = f"Reasoning gap identified for '{active_concept}'. Probing underlying cause/rationale (why)."
-        # 11. Strong understanding advancement by difficulty tier
+        # 13. Strong understanding advancement by difficulty tier
         elif is_strong:
             if current_difficulty < 5 and evaluation.recommended_strategy == Strategy.INCREASE_DIFFICULTY:
                 strategy = Strategy.INCREASE_DIFFICULTY
@@ -624,7 +627,7 @@ class DecisionEngine:
             else:
                 strategy = Strategy.CONNECT_CONCEPTS
                 reason = f"Advanced understanding demonstrated on '{active_concept}'. Probing architectural trade-offs."
-        # 12. General verification fallback
+        # 14. General verification fallback
         else:
             strategy = Strategy.VERIFY_UNDERSTANDING
             reason = f"Partial answer for '{active_concept}'. Verifying understanding with concrete explanation."
@@ -674,10 +677,7 @@ class DecisionEngine:
         # Difficulty Transitions (Section 4)
         # Driven strictly by demonstrated evidence, concept coverage, and misconception absence.
         if has_misconception:
-            if evaluation.correctness < 0.40 or evaluation.stuck_probability >= 0.50:
-                next_difficulty = max(1, current_difficulty - 1)
-            else:
-                next_difficulty = current_difficulty
+            next_difficulty = current_difficulty
         elif is_major_gap:
             next_difficulty = max(1, current_difficulty - 1)
         elif is_strong:

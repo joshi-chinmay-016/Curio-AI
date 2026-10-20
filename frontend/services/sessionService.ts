@@ -38,12 +38,12 @@ export function getRegisteredSessionTopic(sessionId: string): string | null {
 }
 
 export function generateInitialQuestion(topicName: string): ChatMessage {
-  const cleanTopic = topicName.trim();
+  const cleanTopic = topicName.trim() || "this topic";
   return {
     id: "m_1",
     role: "curio",
     type: "question",
-    content: `Hi! I'm Curio. You're going to teach me about **${cleanTopic}** today!\n\nTo start off, can you explain in simple words: **what is ${cleanTopic}**, and what core problem or mechanism does it address?`,
+    content: `Hi! I'm Curio. You're going to teach me about **${cleanTopic}** today!\n\nCan you explain in simple terms: what is **${cleanTopic}**?`,
     timestamp: new Date().toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",

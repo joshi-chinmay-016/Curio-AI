@@ -7,6 +7,8 @@ import {
   ChatTurnResponse,
   TurnEvaluationData,
   LearningDecisionData,
+  StoredTopicPlan,
+  StoredTopicObjective,
 } from "./types";
 import { SessionMode } from "@/types/session";
 
@@ -120,9 +122,268 @@ function safeSetStorage(sessions: Record<string, StoredSession>) {
   }
 }
 
+export function isQuestionTooSimilar(candidate: string, previousQuestions: string[]): boolean {
+  if (!candidate || previousQuestions.length === 0) return false;
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[*_#`~?.,!:;()\-]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  const cNorm = normalize(candidate);
+  const cWords = cNorm.split(" ").filter((w) => w.length > 3);
+  const uniqueCWords = cWords.filter((w, idx) => cWords.indexOf(w) === idx);
+
+  for (let i = 0; i < previousQuestions.length; i++) {
+    const prev = previousQuestions[i];
+    const pNorm = normalize(prev);
+    if (cNorm === pNorm) return true;
+    const pWords = pNorm.split(" ").filter((w) => w.length > 3);
+    const uniquePWords = pWords.filter((w, idx) => pWords.indexOf(w) === idx);
+    if (uniqueCWords.length === 0 || uniquePWords.length === 0) continue;
+
+    let overlap = 0;
+    for (let j = 0; j < uniqueCWords.length; j++) {
+      if (uniquePWords.indexOf(uniqueCWords[j]) !== -1) {
+        overlap++;
+      }
+    }
+    const totalWords = uniqueCWords.length + uniquePWords.length - overlap;
+    if (totalWords > 0 && overlap / totalWords >= 0.38) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function generateInitialStudentQuestion(topic: string): string {
-  const clean = topic.trim();
-  return `Hi! I'm Curio. You're going to teach me about **${clean}** today!\n\nTo start off, can you explain in simple words: **what is ${clean}**, and what core problem or mechanism does it address?`;
+  const clean = topic.trim() || "this topic";
+  return `Hi! I'm Curio. You're going to teach me about **${clean}** today!\n\nCan you explain in simple terms: what is **${clean}**?`;
+}
+
+export function buildDefaultTopicPlan(topic: string, documentId?: string): StoredTopicPlan {
+  const clean = topic.trim() || "General Concept";
+  const lower = clean.toLowerCase();
+
+  // If grounded in an uploaded PDF/document
+  if (documentId) {
+    return {
+      topic: clean,
+      currentObjectiveId: "doc_overview",
+      objectives: [
+        {
+          id: "doc_overview",
+          category: "definition",
+          title: `Core Subject & Main Concept in Document: ${clean}`,
+          difficultyLevel: 1,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "doc_prerequisites",
+          category: "prerequisite",
+          title: `Prerequisites, Conditions & Assumptions Stated in Document`,
+          difficultyLevel: 2,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "doc_mechanisms",
+          category: "mechanism",
+          title: `Step-by-Step Mechanisms & Processes in Document`,
+          difficultyLevel: 2,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "doc_complexity",
+          category: "complexity",
+          title: `Quantitative Outcomes, Metrics & Performance in Document`,
+          difficultyLevel: 3,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "doc_edge_cases",
+          category: "edge_cases",
+          title: `Documented Constraints, Edge Cases & Boundary Limits`,
+          difficultyLevel: 4,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "doc_trade_offs",
+          category: "trade_offs",
+          title: `Conclusions, Practical Applications & Comparative Trade-offs`,
+          difficultyLevel: 5,
+          status: "UNEXPLORED",
+        },
+      ],
+    };
+  }
+
+  // QuickSort & Partitioning curriculum
+  if (lower.includes("quicksort") || lower.includes("quick sort") || lower.includes("partition")) {
+    return {
+      topic: clean,
+      currentObjectiveId: "definition",
+      objectives: [
+        {
+          id: "definition",
+          category: "definition",
+          title: "Definition & Divide-and-Conquer Concept of QuickSort",
+          difficultyLevel: 1,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "mechanism",
+          category: "mechanism",
+          title: "Partitioning Mechanism & Pivot Element Selection",
+          difficultyLevel: 2,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "application",
+          category: "application",
+          title: "Concrete Walkthrough of Partitioning on a Small Array",
+          difficultyLevel: 3,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "prerequisite",
+          category: "prerequisite",
+          title: "Recursive Sub-arrays & Base Case Termination",
+          difficultyLevel: 3,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "complexity",
+          category: "complexity",
+          title: "Average Time Complexity O(n log n) vs Worst-Case O(n²)",
+          difficultyLevel: 4,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "edge_cases",
+          category: "edge_cases",
+          title: "Edge Cases (Already Sorted Array, All Identical Values, Pivot Pitfalls)",
+          difficultyLevel: 4,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "trade_offs",
+          category: "trade_offs",
+          title: "QuickSort vs MergeSort (In-Place Memory, Cache Locality & Stability)",
+          difficultyLevel: 5,
+          status: "UNEXPLORED",
+        },
+      ],
+    };
+  }
+
+  // Binary Search curriculum
+  if (lower.includes("binary search")) {
+    return {
+      topic: clean,
+      currentObjectiveId: "definition",
+      objectives: [
+        {
+          id: "definition",
+          category: "definition",
+          title: "Definition & Purpose of Binary Search",
+          difficultyLevel: 1,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "mechanism",
+          category: "mechanism",
+          title: "Step-by-Step Halving & Midpoint Comparison",
+          difficultyLevel: 2,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "prerequisite",
+          category: "prerequisite",
+          title: "Sorted Order Invariant Requirement",
+          difficultyLevel: 2,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "complexity",
+          category: "complexity",
+          title: "Logarithmic Time Complexity O(log n) & Space Complexity",
+          difficultyLevel: 3,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "edge_cases",
+          category: "edge_cases",
+          title: "Edge Cases (Element Not Present, Empty List, Duplicates)",
+          difficultyLevel: 4,
+          status: "UNEXPLORED",
+        },
+        {
+          id: "trade_offs",
+          category: "trade_offs",
+          title: "Trade-offs & Alternatives (vs Linear Search & Hash Maps, Cost of Sorting)",
+          difficultyLevel: 5,
+          status: "UNEXPLORED",
+        },
+      ],
+    };
+  }
+
+  // Universal curriculum for any topic in the world
+  return {
+    topic: clean,
+    currentObjectiveId: "definition",
+    objectives: [
+      {
+        id: "definition",
+        category: "definition",
+        title: `Definition and Core Concept of ${clean}`,
+        difficultyLevel: 1,
+        status: "UNEXPLORED",
+      },
+      {
+        id: "mechanism",
+        category: "mechanism",
+        title: `Step-by-Step Mechanism and Process of ${clean}`,
+        difficultyLevel: 2,
+        status: "UNEXPLORED",
+      },
+      {
+        id: "prerequisite",
+        category: "prerequisite",
+        title: `Foundational Prerequisites and Invariants Required for ${clean}`,
+        difficultyLevel: 2,
+        status: "UNEXPLORED",
+      },
+      {
+        id: "application",
+        category: "application",
+        title: `Concrete Practical Application or Real-World Scenario of ${clean}`,
+        difficultyLevel: 3,
+        status: "UNEXPLORED",
+      },
+      {
+        id: "complexity",
+        category: "complexity",
+        title: `Efficiency, Performance Limits, and Resource Costs of ${clean}`,
+        difficultyLevel: 4,
+        status: "UNEXPLORED",
+      },
+      {
+        id: "edge_cases",
+        category: "edge_cases",
+        title: `Boundary Conditions, Failure Modes, and Edge Cases in ${clean}`,
+        difficultyLevel: 4,
+        status: "UNEXPLORED",
+      },
+      {
+        id: "trade_offs",
+        category: "trade_offs",
+        title: `Architectural Trade-offs, Constraints, and Comparisons for ${clean}`,
+        difficultyLevel: 5,
+        status: "UNEXPLORED",
+      },
+    ],
+  };
 }
 
 export class LocalSessionRepository implements SessionRepository {
@@ -154,6 +415,8 @@ export class LocalSessionRepository implements SessionRepository {
       type: "question",
     };
 
+    const topicPlan = buildDefaultTopicPlan(cleanTopic, documentId);
+
     const session: StoredSession = {
       sessionId,
       topic: cleanTopic,
@@ -171,6 +434,7 @@ export class LocalSessionRepository implements SessionRepository {
       consecutiveSuccesses: 0,
       consecutiveFailures: 0,
       messages: [initialMessage],
+      topicPlan,
     };
 
     const storage = safeGetStorage();
@@ -182,7 +446,13 @@ export class LocalSessionRepository implements SessionRepository {
 
   async getSession(sessionId: string): Promise<StoredSession | null> {
     const storage = safeGetStorage();
-    return storage[sessionId] || null;
+    const session = storage[sessionId] || null;
+    if (session && !session.topicPlan) {
+      session.topicPlan = buildDefaultTopicPlan(session.topic, session.documentId || undefined);
+      storage[sessionId] = session;
+      safeSetStorage(storage);
+    }
+    return session;
   }
 
   async listSessions(): Promise<SessionRepositorySummary[]> {
@@ -267,11 +537,48 @@ export class LocalSessionRepository implements SessionRepository {
     session.messages.push(userStoredMsg);
 
     // Run Pedagogical Evaluation & Decision Engine
-    const { evaluation, decision, aiResponseContent } = this.evaluateAndDecide(
+    let { evaluation, decision, aiResponseContent } = this.evaluateAndDecide(
       session,
       userMsgText,
       turnNumber
     );
+
+    // In Student Mode, attempt to enrich with backend guest AI endpoint if available
+    if (session.currentMode === "STUDENT" && decision.next_mode === "STUDENT" && !isQuestionOrTeachRequest(userMsgText)) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+        const res = await fetch(`${apiUrl}/ai/guest-student-turn`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: session.topic,
+            user_answer: userMsgText,
+            turn_number: turnNumber,
+            current_difficulty: session.difficulty,
+            previous_questions: session.messages
+              .filter((m) => m.sender === "AI")
+              .map((m) => m.content),
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const guestData = await res.json();
+          if (
+            guestData.ai_response &&
+            !isQuestionTooSimilar(guestData.ai_response, session.messages.filter((m) => m.sender === "AI").map((m) => m.content))
+          ) {
+            aiResponseContent = guestData.ai_response;
+            if (guestData.evaluation) evaluation = { ...evaluation, ...guestData.evaluation };
+            if (guestData.decision) decision = { ...decision, ...guestData.decision };
+          }
+        }
+      } catch {
+        // Fall back seamlessly to local engine without delay
+      }
+    }
 
     const prevMode = session.currentMode;
 
@@ -632,57 +939,71 @@ export class LocalSessionRepository implements SessionRepository {
     }
 
     // -----------------------------------------------------------------------
-    // B. IN STUDENT MODE: Evaluate Learner's Answer
+    // B. IN STUDENT MODE: Evaluate Learner's Answer against Topic Plan & Invariants
     // -----------------------------------------------------------------------
-    const { correctness, misconceptions, missingConcepts, knowledgeGap, isMajorMisconception, isPartial, isStrong } =
-      this.analyzeAnswerSemantics(topic, userAnswer, isExplicitStuck);
+    if (!session.topicPlan) {
+      session.topicPlan = buildDefaultTopicPlan(topic, session.documentId || undefined);
+    }
 
-    const stuckProb = isExplicitStuck ? 0.95 : isMajorMisconception ? 0.75 : isPartial ? 0.2 : 0.05;
+    const currentObjective =
+      session.topicPlan.objectives.find((o) => o.id === session.topicPlan?.currentObjectiveId) ||
+      session.topicPlan.objectives[0];
+
+    const analysis = this.analyzeAnswerSemantics(
+      topic,
+      userAnswer,
+      isExplicitStuck,
+      currentDiff,
+      turnNumber,
+      currentObjective
+    );
+
+    // Update topic plan objective status based on demonstrated mastery
+    if (analysis.isObjectiveMastered && currentObjective) {
+      currentObjective.status = "MASTERED";
+    }
+
+    // Determine the next objective to investigate in the curriculum
+    const nextObjective =
+      session.topicPlan.objectives.find((o) => o.status !== "MASTERED") || currentObjective;
+    session.topicPlan.currentObjectiveId = nextObjective.id;
+
+    const stuckProb = isExplicitStuck ? 0.95 : analysis.isMajorMisconception ? 0.75 : analysis.isPartial ? 0.2 : 0.05;
 
     const evalData: TurnEvaluationData = {
-      correctness,
-      clarity: isStrong ? 0.9 : isPartial ? 0.7 : 0.4,
-      completeness: isStrong ? 0.9 : isPartial ? 0.5 : 0.2,
-      depth: isStrong ? 0.85 : isPartial ? 0.4 : 0.1,
-      relevance: isExplicitStuck ? 0.3 : 0.9,
+      correctness: analysis.correctness,
+      clarity: analysis.clarity,
+      completeness: analysis.completeness,
+      depth: analysis.depth,
+      relevance: isExplicitStuck ? 0.3 : 0.95,
       stuck_probability: stuckProb,
-      misconceptions,
-      missing_concepts: missingConcepts,
-      undefined_terms: [],
-      mastered_concepts: isStrong ? [`${topic} core principles`] : [],
-      knowledge_gap: knowledgeGap,
-      recommended_strategy: isExplicitStuck || isMajorMisconception
+      misconceptions: analysis.misconceptions,
+      missing_concepts: analysis.missingConcepts,
+      undefined_terms: analysis.undefinedTerms,
+      mastered_concepts: analysis.isStrong ? [`${topic} - ${currentObjective.title}`] : [],
+      knowledge_gap: analysis.knowledgeGap,
+      recommended_strategy: isExplicitStuck || analysis.isMajorMisconception
         ? "TEACH_GAP"
-        : isPartial
-        ? "PROBE_WHY"
-        : "INCREASE_DIFFICULTY",
-      recommended_difficulty: isStrong ? Math.min(5, currentDiff + 1) : currentDiff,
+        : analysis.selectedStrategy,
+      recommended_difficulty: analysis.isStrong && analysis.turnQuality >= 0.80 ? Math.min(5, currentDiff + 1) : currentDiff,
     };
 
     // -----------------------------------------------------------------------
     // C. DECISION HIERARCHY
     // -----------------------------------------------------------------------
     const triggerA = isExplicitStuck;
-    const triggerB = stuckProb >= 0.75 && (correctness < 0.5 || !!knowledgeGap);
-    const triggerC = session.consecutiveFailures >= 1 && correctness < 0.5;
-    const triggerD = isMajorMisconception || correctness < 0.25;
+    const triggerB = stuckProb >= 0.75 && (analysis.correctness < 0.5 || !!analysis.knowledgeGap);
+    const triggerC = session.consecutiveFailures >= 2 && analysis.correctness < 0.4;
+    const triggerD = analysis.isMajorMisconception && analysis.correctness < 0.25;
 
     if (triggerA || triggerB || triggerC || triggerD) {
       // TRANSITION TO TEACHER MODE
-      let identifiedGap = knowledgeGap || misconceptions[0];
+      let identifiedGap = analysis.knowledgeGap || analysis.misconceptions[0];
       if (!identifiedGap) {
-        if (cleanAns.includes("mechanism")) {
-          identifiedGap = `${topic} request handling mechanism`;
-        } else if (cleanAns.includes("middleware")) {
-          identifiedGap = `${topic} middleware architecture`;
-        } else if (cleanAns.includes("asgi") || cleanAns.includes("server")) {
-          identifiedGap = `${topic} ASGI server role`;
-        } else {
-          identifiedGap = `${topic} core mechanism`;
-        }
+        identifiedGap = `${topic} core mechanism`;
       }
 
-      const nextDiff = isMajorMisconception ? Math.max(1, currentDiff - 1) : currentDiff;
+      const nextDiff = analysis.isMajorMisconception ? Math.max(1, currentDiff - 1) : currentDiff;
 
       const decData: LearningDecisionData = {
         next_mode: "TEACHER",
@@ -707,315 +1028,502 @@ export class LocalSessionRepository implements SessionRepository {
       return { evaluation: evalData, decision: decData, aiResponseContent: teacherResponse };
     }
 
-    if (isPartial) {
-      // PARTIAL UNDERSTANDING -> Stay in Student Mode, probe specific missing reasoning
-      const decData: LearningDecisionData = {
-        next_mode: "STUDENT",
-        strategy: "PROBE_WHY",
-        difficulty: currentDiff,
-        confidence: Math.round(currentConf + 3),
-        reason: `Partial answer. Probing missing reasoning for '${missingConcepts[0] || topic}'.`,
-        active_concept: missingConcepts[0] || topic,
-        should_offer_termination: false,
-        should_restore_interrupted_question: false,
-      };
-
-      const probeResponse = this.generateProbingQuestion(topic, missingConcepts[0] || topic, userAnswer);
-      return { evaluation: evalData, decision: decData, aiResponseContent: probeResponse };
+    // REMAIN IN STUDENT MODE
+    // Difficulty progression: increases ONLY when learner demonstrates consistent mastery (turnQuality >= 0.80 and no critical misconceptions)
+    let nextDiff = currentDiff;
+    if (analysis.turnQuality >= 0.80 && analysis.misconceptions.length === 0 && analysis.isStrong) {
+      nextDiff = Math.min(5, currentDiff + 1);
+    } else if (session.consecutiveFailures >= 2) {
+      nextDiff = Math.max(1, currentDiff - 1);
     }
 
-    // STRONGLY CORRECT -> Stay in Student Mode, increase difficulty or probe deeper
-    const nextDiff = session.consecutiveSuccesses >= 1 ? Math.min(5, currentDiff + 1) : currentDiff;
+    const allObjectivesMastered = session.topicPlan.objectives.every((o) => o.status === "MASTERED");
+
     const decData: LearningDecisionData = {
       next_mode: "STUDENT",
-      strategy: nextDiff > currentDiff ? "INCREASE_DIFFICULTY" : "PROBE_WHY",
+      strategy: analysis.selectedStrategy,
       difficulty: nextDiff,
-      confidence: Math.min(100, Math.round(currentConf + 8)),
-      reason: "Strong understanding demonstrated. Advancing inquiry in Student Mode.",
-      active_concept: topic,
-      should_offer_termination: currentConf >= 75,
+      confidence: Math.min(100, Math.round(currentConf + (analysis.isStrong ? 8 : analysis.isPartial ? 3 : -2))),
+      reason: analysis.isStrong
+        ? `Strong understanding demonstrated for ${currentObjective.title} (Turn Quality: ${(analysis.turnQuality * 100).toFixed(0)}%).`
+        : `Student inquiry continuing with strategy ${analysis.selectedStrategy} on ${currentObjective.title}.`,
+      active_concept: analysis.undefinedTerms[0] || analysis.misconceptions[0] || currentObjective.title,
+      should_offer_termination: allObjectivesMastered && currentConf >= 85,
       should_restore_interrupted_question: false,
     };
 
-    const studentFollowup = this.generateStudentFollowup(topic, turnNumber, nextDiff);
-    return { evaluation: evalData, decision: decData, aiResponseContent: studentFollowup };
+    const studentQuestion = this.generateStudentQuestion(
+      topic,
+      analysis.selectedStrategy,
+      nextDiff,
+      userAnswer,
+      analysis.undefinedTerms,
+      analysis.misconceptions,
+      turnNumber,
+      session.messages.filter((m) => m.sender === "AI").map((m) => m.content),
+      currentObjective,
+      nextObjective,
+      analysis.isObjectiveMastered
+    );
+
+    return { evaluation: evalData, decision: decData, aiResponseContent: studentQuestion };
   }
 
   // =========================================================================
-  // Semantic Analysis Helper
+  // Semantic Analysis & Undefined Term Detection (Universal for Any Topic)
   // =========================================================================
+  private detectUndefinedTerms(topic: string, answer: string): string[] {
+    const clean = answer.trim();
+    const lower = clean.toLowerCase();
+    const undefinedTerms: string[] = [];
+
+    // 1. Single letter variables in formulas or equations (e.g. V = IR, V=IR, F=ma, E=mc^2)
+    const formulaMatch = clean.match(/\b([A-Za-z])\s*=\s*([A-Za-z0-9\s*^+-]+)/);
+    if (formulaMatch) {
+      if (clean.includes("V") && !lower.includes("voltage")) undefinedTerms.push("V");
+      if (clean.includes("I") && !lower.includes("current")) undefinedTerms.push("I");
+      if (clean.includes("R") && !lower.includes("resistance")) undefinedTerms.push("R");
+      if (clean.includes("E") && clean.includes("m") && !lower.includes("energy")) undefinedTerms.push("E");
+      if (clean.includes("F") && clean.includes("a") && !lower.includes("force")) undefinedTerms.push("F");
+    }
+
+    // 2. Technical acronyms or notations used without unpacking
+    const technicalSymbols = [
+      { token: "O(log n)", term: "O(log n)", keywords: ["logarithmic", "time complexity", "big o"] },
+      { token: "O(n)", term: "O(n)", keywords: ["linear time", "time complexity", "big o"] },
+      { token: "O(1)", term: "O(1)", keywords: ["constant time", "time complexity", "big o"] },
+      { token: "ASGI", term: "ASGI", keywords: ["asynchronous server gateway interface"] },
+      { token: "WSGI", term: "WSGI", keywords: ["web server gateway interface"] },
+      { token: "TCP", term: "TCP", keywords: ["transmission control protocol"] },
+      { token: "UDP", term: "UDP", keywords: ["user datagram protocol"] },
+      { token: "DNS", term: "DNS", keywords: ["domain name system"] },
+      { token: "DOM", term: "DOM", keywords: ["document object model"] },
+      { token: "stack frame", term: "stack frame", keywords: ["call stack", "activation record", "stack memory"] },
+    ];
+
+    for (const item of technicalSymbols) {
+      if (clean.includes(item.token) || lower.includes(item.token.toLowerCase())) {
+        const isExplained = item.keywords.some((kw) => lower.includes(kw));
+        if (!isExplained && !undefinedTerms.includes(item.term)) {
+          undefinedTerms.push(item.term);
+        }
+      }
+    }
+
+    return undefinedTerms;
+  }
+
   private analyzeAnswerSemantics(
     topic: string,
     answer: string,
-    isExplicitStuck: boolean
+    isExplicitStuck: boolean,
+    currentDiff: number = 1,
+    turnNumber: number = 1,
+    currentObjective?: StoredTopicObjective
   ): {
     correctness: number;
+    clarity: number;
+    completeness: number;
+    depth: number;
+    independence: number;
+    turnQuality: number;
+    undefinedTerms: string[];
     misconceptions: string[];
     missingConcepts: string[];
     knowledgeGap: string | null;
     isMajorMisconception: boolean;
     isPartial: boolean;
     isStrong: boolean;
+    selectedStrategy: string;
+    isObjectiveMastered: boolean;
   } {
     if (isExplicitStuck) {
       return {
         correctness: 0.0,
+        clarity: 0.5,
+        completeness: 0.0,
+        depth: 0.0,
+        independence: 0.0,
+        turnQuality: 0.075,
+        undefinedTerms: [],
         misconceptions: [],
         missingConcepts: [`Core prerequisite of ${topic}`],
         knowledgeGap: `Learner requested teaching / does not know how ${topic} works`,
         isMajorMisconception: false,
         isPartial: false,
         isStrong: false,
+        selectedStrategy: "TEACH_GAP",
+        isObjectiveMastered: false,
       };
     }
 
     const clean = answer.toLowerCase().trim();
     const tLower = topic.toLowerCase();
+    const words = clean.split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
 
-    // 1. Topic: FastAPI
-    if (tLower.includes("fastapi")) {
-      if (clean.includes("database") || clean.includes("is a db") || clean.includes("opens tcp") || clean.includes("stores data in tables")) {
-        return {
-          correctness: 0.1,
-          misconceptions: ["Confuses FastAPI with a database or believes it opens TCP connections directly"],
-          missingConcepts: ["ASGI interface", "Uvicorn server role"],
-          knowledgeGap: "Does not understand that FastAPI is an ASGI application framework, not a database or raw socket server",
-          isMajorMisconception: true,
-          isPartial: false,
-          isStrong: false,
-        };
+    // Detect undefined terms (Priority 1)
+    const undefinedTerms = this.detectUndefinedTerms(topic, answer);
+
+    // Detect misconceptions (Priority 2)
+    const misconceptions: string[] = [];
+    if (tLower.includes("binary search") || tLower.includes("search")) {
+      // 1. Time complexity misconception (e.g. user says O(n) or linear for binary search)
+      if (
+        (clean.includes("o(n)") || clean.includes("order of n") || (clean.includes("linear") && !clean.includes("linear search") && !clean.includes("not linear"))) &&
+        !clean.includes("o(log n)") && !clean.includes("o(logn)") && !clean.includes("logarithmic")
+      ) {
+        misconceptions.push("Claims binary search has linear O(n) time complexity instead of logarithmic O(log n)");
       }
-      if (clean.includes("faster") || clean.includes("speed") || clean.includes("async") || clean.includes("handles requests")) {
-        if (!clean.includes("asgi") && !clean.includes("uvicorn") && !clean.includes("server") && !clean.includes("socket")) {
-          return {
-            correctness: 0.55,
-            misconceptions: [],
-            missingConcepts: ["ASGI server bridge mechanism"],
-            knowledgeGap: "States performance benefits but does not explain how the ASGI server bridges requests to the FastAPI application",
-            isMajorMisconception: false,
-            isPartial: true,
-            isStrong: false,
-          };
+      // 2. Unsorted order misconception
+      if (
+        clean.includes("unsorted") &&
+        !clean.includes("not unsorted") &&
+        !clean.includes("cannot be unsorted") &&
+        !clean.includes("must not be unsorted") &&
+        !clean.includes("doesn't work on unsorted")
+      ) {
+        misconceptions.push("Belief that binary search works on unsorted arrays");
+      }
+      // 3. Linear search checking one by one
+      if (clean.includes("one by one") || clean.includes("every element")) {
+        misconceptions.push("Confuses binary search with linear search (checking each element one by one)");
+      }
+    }
+
+    if (tLower.includes("ohm")) {
+      if (clean.includes("v = i/r") || clean.includes("v=i/r") || clean.includes("i = vr") || clean.includes("i=vr")) {
+        misconceptions.push("Inverted mathematical formula for Ohm's Law (V = IR)");
+      }
+    }
+
+    if (tLower.includes("recursion")) {
+      if (clean.includes("no base case") || clean.includes("without base case") || clean.includes("base case is optional")) {
+        misconceptions.push("Belief that recursion can terminate correctly without a base case");
+      }
+    }
+
+    if (clean.includes("magic") || clean.includes("infinite speed") || clean.includes("never uses memory")) {
+      misconceptions.push(`Unrealistic premise or physical impossibility regarding ${topic}`);
+    }
+
+    const hasMisconception = misconceptions.length > 0;
+    const isMajorMisconception = false; // Keep in student mode to challenge doubt first
+
+    // Base scoring dimensions
+    let correctness = 0.85;
+    let completeness = 0.5;
+    let depth = 0.4;
+    let clarity = 0.85;
+
+    // Short formula answer with undefined variables (e.g. V = IR)
+    if (undefinedTerms.length > 0) {
+      correctness = 0.95;
+      completeness = 0.25;
+      clarity = 0.35;
+      depth = 0.20;
+    } else if (hasMisconception) {
+      correctness = 0.30;
+      completeness = 0.35;
+      depth = 0.25;
+      clarity = 0.80;
+    } else if (wordCount < 4) {
+      correctness = 0.40;
+      completeness = 0.20;
+      depth = 0.15;
+      clarity = 0.50;
+    } else {
+      // Analyze depth & completeness based on explanation detail
+      const hasMechanisms = clean.includes("because") || clean.includes("how") || clean.includes("step") ||
+        clean.includes("compare") || clean.includes("middle") || clean.includes("sorted") ||
+        clean.includes("half") || clean.includes("process") || clean.includes("return") ||
+        clean.includes("calls") || clean.includes("divides") || clean.includes("executes") ||
+        clean.includes("current") || clean.includes("voltage") || clean.includes("resistance");
+
+      const hasExamples = clean.includes("for example") || clean.includes("example") ||
+        clean.includes("such as") || clean.includes("suppose") || clean.includes("like [") ||
+        /\b\d+\b/.test(clean);
+
+      const hasComplexityOrEdge = clean.includes("o(") || clean.includes("complexity") ||
+        clean.includes("empty") || clean.includes("boundary") || clean.includes("worst case") ||
+        clean.includes("best case") || clean.includes("trade-off") || clean.includes("limit") ||
+        clean.includes("log n") || clean.includes("logarithmic");
+
+      if (hasMechanisms && wordCount >= 8) {
+        depth = 0.75;
+        completeness = 0.75;
+        correctness = 0.92;
+      }
+      if (hasExamples && wordCount >= 12) {
+        depth = 0.85;
+        completeness = 0.85;
+        correctness = 0.95;
+      }
+      if (hasComplexityOrEdge && wordCount >= 6) {
+        depth = 0.85;
+        completeness = 0.85;
+        correctness = 0.92;
+      }
+      if (wordCount < 10 && !hasMechanisms && !hasComplexityOrEdge) {
+        completeness = 0.45;
+        depth = 0.30;
+      }
+    }
+
+    const independence = isExplicitStuck ? 0.0 : 1.0;
+    // Turn Quality formula: 0.30 * Correctness + 0.20 * Completeness + 0.15 * Clarity + 0.20 * Depth + 0.15 * Independence
+    const turnQuality =
+      0.30 * correctness +
+      0.20 * completeness +
+      0.15 * clarity +
+      0.20 * depth +
+      0.15 * independence;
+
+    // Evaluate whether the current curriculum objective is mastered (Universal for ANY topic in the world)
+    let isObjectiveMastered = false;
+    if (currentObjective && !hasMisconception && undefinedTerms.length === 0) {
+      const cat = currentObjective.category;
+
+      if (cat === "definition") {
+        const hasDefSignals =
+          clean.includes("is a") ||
+          clean.includes("is an") ||
+          clean.includes("algorithm") ||
+          clean.includes("technique") ||
+          clean.includes("method") ||
+          clean.includes("process") ||
+          clean.includes("way to") ||
+          clean.includes("used to") ||
+          clean.includes("used for") ||
+          clean.includes("concept") ||
+          clean.includes("pattern") ||
+          clean.includes("system") ||
+          clean.includes("structure") ||
+          clean.includes("means") ||
+          clean.includes("refers to") ||
+          clean.includes("approach") ||
+          wordCount >= 5;
+        if (hasDefSignals) {
+          isObjectiveMastered = true;
+        }
+      } else if (cat === "mechanism") {
+        // Universal action & operational indicators across sorting, systems, web, science, general
+        const hasActions =
+          // Sorting / partitioning / data structures
+          clean.includes("pivot") ||
+          clean.includes("partition") ||
+          clean.includes("swap") ||
+          clean.includes("smaller") ||
+          clean.includes("larger") ||
+          clean.includes("left") ||
+          clean.includes("right") ||
+          clean.includes("pointer") ||
+          clean.includes("recurs") ||
+          clean.includes("split") ||
+          clean.includes("merge") ||
+          clean.includes("sort") ||
+          // Search & traversal
+          clean.includes("half") ||
+          clean.includes("middle") ||
+          clean.includes("divide") ||
+          clean.includes("mid") ||
+          clean.includes("compare") ||
+          clean.includes("traverse") ||
+          clean.includes("visit") ||
+          // Systems, web, protocols
+          clean.includes("listen") ||
+          clean.includes("socket") ||
+          clean.includes("send") ||
+          clean.includes("receive") ||
+          clean.includes("route") ||
+          clean.includes("middleware") ||
+          clean.includes("handler") ||
+          clean.includes("parse") ||
+          clean.includes("serialize") ||
+          // General operation sequences
+          clean.includes("step") ||
+          clean.includes("first") ||
+          clean.includes("then") ||
+          clean.includes("after") ||
+          clean.includes("calls") ||
+          clean.includes("executes") ||
+          clean.includes("passes") ||
+          clean.includes("transforms") ||
+          clean.includes("converts") ||
+          clean.includes("creates") ||
+          clean.includes("moves") ||
+          clean.includes("checks") ||
+          clean.includes("filters") ||
+          clean.includes("calculates") ||
+          clean.includes("produces") ||
+          clean.includes("returns") ||
+          clean.includes("works by") ||
+          wordCount >= 8;
+        if (hasActions) {
+          isObjectiveMastered = true;
+        }
+      } else if (cat === "prerequisite") {
+        const hasPrereq =
+          clean.includes("require") ||
+          clean.includes("need") ||
+          clean.includes("must") ||
+          clean.includes("condition") ||
+          clean.includes("order") ||
+          clean.includes("sort") ||
+          clean.includes("valid") ||
+          clean.includes("input") ||
+          clean.includes("base case") ||
+          clean.includes("invariant") ||
+          clean.includes("before") ||
+          clean.includes("assume") ||
+          clean.includes("prerequisite") ||
+          clean.includes("start with") ||
+          clean.includes("initial") ||
+          wordCount >= 6;
+        if (hasPrereq) {
+          isObjectiveMastered = true;
+        }
+      } else if (cat === "complexity") {
+        const hasComplexity =
+          clean.includes("o(") ||
+          clean.includes("o (") ||
+          clean.includes("complexity") ||
+          clean.includes("time") ||
+          clean.includes("space") ||
+          clean.includes("log") ||
+          clean.includes("linear") ||
+          clean.includes("quadratic") ||
+          clean.includes("constant") ||
+          clean.includes("fast") ||
+          clean.includes("slow") ||
+          clean.includes("speed") ||
+          clean.includes("memory") ||
+          clean.includes("worst case") ||
+          clean.includes("best case") ||
+          clean.includes("average case") ||
+          clean.includes("efficient") ||
+          clean.includes("halving") ||
+          wordCount >= 5;
+        if (hasComplexity) {
+          isObjectiveMastered = true;
+        }
+      } else if (cat === "edge_cases") {
+        const hasEdge =
+          clean.includes("empty") ||
+          clean.includes("not found") ||
+          clean.includes("missing") ||
+          clean.includes("duplicate") ||
+          clean.includes("boundary") ||
+          clean.includes("edge") ||
+          clean.includes("null") ||
+          clean.includes("single") ||
+          clean.includes("already sorted") ||
+          clean.includes("reverse") ||
+          clean.includes("zero") ||
+          clean.includes("negative") ||
+          clean.includes("crash") ||
+          clean.includes("fail") ||
+          clean.includes("identical") ||
+          clean.includes("base case") ||
+          clean.includes("pointer") ||
+          clean.includes("-1") ||
+          wordCount >= 5;
+        if (hasEdge) {
+          isObjectiveMastered = true;
+        }
+      } else if (cat === "trade_offs") {
+        const hasTradeOff =
+          clean.includes("trade") ||
+          clean.includes("cost") ||
+          clean.includes("better") ||
+          clean.includes("worse") ||
+          clean.includes("compare") ||
+          clean.includes("vs") ||
+          clean.includes("versus") ||
+          clean.includes("advantage") ||
+          clean.includes("disadvantage") ||
+          clean.includes("alternative") ||
+          clean.includes("prefer") ||
+          clean.includes("instead of") ||
+          clean.includes("overhead") ||
+          clean.includes("stable") ||
+          clean.includes("in-place") ||
+          clean.includes("hash") ||
+          clean.includes("linear") ||
+          wordCount >= 5;
+        if (hasTradeOff) {
+          isObjectiveMastered = true;
+        }
+      } else if (cat === "application") {
+        const hasApp =
+          clean.includes("example") ||
+          clean.includes("instance") ||
+          clean.includes("suppose") ||
+          clean.includes("say we") ||
+          clean.includes("consider") ||
+          clean.includes("like [") ||
+          clean.includes("walkthrough") ||
+          /\b\d+\b/.test(clean) ||
+          wordCount >= 8;
+        if (hasApp) {
+          isObjectiveMastered = true;
         }
       }
-      if ((clean.includes("asgi") || clean.includes("uvicorn") || clean.includes("server")) && (clean.includes("socket") || clean.includes("network") || clean.includes("route") || clean.includes("pydantic") || clean.includes("middleware"))) {
-        return {
-          correctness: 0.95,
-          misconceptions: [],
-          missingConcepts: [],
-          knowledgeGap: null,
-          isMajorMisconception: false,
-          isPartial: false,
-          isStrong: true,
-        };
-      }
     }
 
-    // 2. Topic: Binary Search
-    if (tLower.includes("binary search")) {
-      // Major misconception: checks one by one / linear search / unsorted
-      if (clean.includes("one by one") || clean.includes("every element") || clean.includes("linear") || clean.includes("checks all")) {
-        return {
-          correctness: 0.1,
-          misconceptions: ["Confuses binary search with linear search (checking every element one by one)"],
-          missingConcepts: ["Divide and conquer", "Half space elimination"],
-          knowledgeGap: "Does not understand that binary search eliminates half the search space using sorted ordering",
-          isMajorMisconception: true,
-          isPartial: false,
-          isStrong: false,
-        };
-      }
-      if (clean.includes("unsorted") || clean.includes("any order") || clean.includes("random")) {
-        return {
-          correctness: 0.2,
-          misconceptions: ["Belief that binary search works on unsorted arrays"],
-          missingConcepts: ["Sorted order invariant"],
-          knowledgeGap: "Fails to recognize why monotonic ordering is required for binary comparison",
-          isMajorMisconception: true,
-          isPartial: false,
-          isStrong: false,
-        };
-      }
-      // Partial: mentions efficiency or middle but misses halving/sorting
-      if (clean.includes("efficient") || clean.includes("fast") || clean.includes("middle") || clean.includes("faster")) {
-        if (!clean.includes("half") && !clean.includes("eliminate") && !clean.includes("left or right") && !clean.includes("greater") && !clean.includes("smaller")) {
-          return {
-            correctness: 0.55,
-            misconceptions: [],
-            missingConcepts: ["Half-array elimination mechanism"],
-            knowledgeGap: "States efficiency but does not explain how comparing with the middle element eliminates half",
-            isMajorMisconception: false,
-            isPartial: true,
-            isStrong: false,
-          };
-        }
-      }
-      // Strong
-      if ((clean.includes("half") || clean.includes("eliminate") || clean.includes("discard")) && (clean.includes("sort") || clean.includes("middle") || clean.includes("order"))) {
-        return {
-          correctness: 0.95,
-          misconceptions: [],
-          missingConcepts: [],
-          knowledgeGap: null,
-          isMajorMisconception: false,
-          isPartial: false,
-          isStrong: true,
-        };
-      }
-    }
+    const isStrong = (turnQuality >= 0.78 || isObjectiveMastered) && !hasMisconception && undefinedTerms.length === 0;
+    const isPartial = !isStrong && !hasMisconception && !isExplicitStuck;
 
-    // 3. Topic: Photosynthesis
-    if (tLower.includes("photosynthesis")) {
-      // Major misconception: plants eat sunlight directly / turns light directly into oxygen
-      if (clean.includes("eat sunlight") || clean.includes("eats sunlight") || clean.includes("turns light directly into oxygen") || clean.includes("light into oxygen directly")) {
-        return {
-          correctness: 0.1,
-          misconceptions: ["Belief that plants eat sunlight or directly transform photons into oxygen atoms"],
-          missingConcepts: ["Chemical energy storage (ATP/NADPH, glucose)", "Water photolysis"],
-          knowledgeGap: "Misunderstands light energy conversion into chemical bonds and the source of released oxygen (water)",
-          isMajorMisconception: true,
-          isPartial: false,
-          isStrong: false,
-        };
-      }
-      // Partial: mentions light and sugar/food but misses conversion mechanism
-      if (clean.includes("sunlight") || clean.includes("food") || clean.includes("sugar") || clean.includes("glucose")) {
-        if (!clean.includes("chlorophyll") && !clean.includes("chemical energy") && !clean.includes("co2") && !clean.includes("water") && !clean.includes("atp")) {
-          return {
-            correctness: 0.6,
-            misconceptions: [],
-            missingConcepts: ["Chemical energy conversion mechanism", "Role of water and CO2"],
-            knowledgeGap: "Mentions basic inputs/outputs but misses the transformation of light energy into chemical energy",
-            isMajorMisconception: false,
-            isPartial: true,
-            isStrong: false,
-          };
-        }
-      }
-      // Strong
-      if ((clean.includes("light energy") || clean.includes("photons")) && (clean.includes("chemical energy") || clean.includes("glucose") || clean.includes("atp")) && (clean.includes("water") || clean.includes("co2") || clean.includes("chloroplast"))) {
-        return {
-          correctness: 0.95,
-          misconceptions: [],
-          missingConcepts: [],
-          knowledgeGap: null,
-          isMajorMisconception: false,
-          isPartial: false,
-          isStrong: true,
-        };
-      }
-    }
+    // Strategy Selection according to 8 Priorities:
+    let selectedStrategy = "DEPTH_EXPANSION";
+    let knowledgeGap: string | null = null;
+    const missingConcepts: string[] = [];
 
-    // 4. Topic: Operating Systems
-    if (tLower.includes("operating system") || tLower === "os") {
-      if (clean.includes("cpu stores all files") || clean.includes("memory never erases") || clean.includes("ram is permanent") || clean.includes("cpu is the hard drive")) {
-        return {
-          correctness: 0.1,
-          misconceptions: ["Confusing volatile memory/CPU registers with persistent secondary storage"],
-          missingConcepts: ["Virtual memory", "File system abstraction", "Storage hierarchy"],
-          knowledgeGap: "Fails to distinguish CPU execution from persistent storage and volatile RAM",
-          isMajorMisconception: true,
-          isPartial: false,
-          isStrong: false,
-        };
-      }
-      if (clean.includes("hardware") && (clean.includes("process") || clean.includes("memory") || clean.includes("scheduling") || clean.includes("abstraction"))) {
-        return {
-          correctness: 0.95,
-          misconceptions: [],
-          missingConcepts: [],
-          knowledgeGap: null,
-          isMajorMisconception: false,
-          isPartial: false,
-          isStrong: true,
-        };
-      }
-    }
-
-    // 5. Topic: Python decorators
-    if (tLower.includes("decorator")) {
-      if (clean.includes("css") || clean.includes("color") || clean.includes("visual") || clean.includes("style") || clean.includes("font")) {
-        return {
-          correctness: 0.1,
-          misconceptions: ["Confusing Python function decorators with visual CSS styling"],
-          missingConcepts: ["Higher-order functions", "Closures", "Function wrapping"],
-          knowledgeGap: "Does not understand that decorators are higher-order functions wrapping callables",
-          isMajorMisconception: true,
-          isPartial: false,
-          isStrong: false,
-        };
-      }
-      if (clean.includes("higher-order") || clean.includes("takes a function") || (clean.includes("wrap") && (clean.includes("arguments") || clean.includes("behavior")))) {
-        return {
-          correctness: 0.95,
-          misconceptions: [],
-          missingConcepts: [],
-          knowledgeGap: null,
-          isMajorMisconception: false,
-          isPartial: false,
-          isStrong: true,
-        };
-      }
-    }
-
-    // 6. Generic Fallback Semantic Analysis
-    if (clean.includes("infinite") || clean.includes("never drops") || clean.includes("magic") || clean.includes("stores all files permanently")) {
-      return {
-        correctness: 0.1,
-        misconceptions: [`Fundamental contradiction regarding ${topic}`],
-        missingConcepts: [`Realistic constraints of ${topic}`],
-        knowledgeGap: `Fundamental misconception on constraints of ${topic}`,
-        isMajorMisconception: true,
-        isPartial: false,
-        isStrong: false,
-      };
-    }
-
-    const wordCount = clean.split(/\s+/).length;
-    if (wordCount < 4) {
-      return {
-        correctness: 0.2,
-        misconceptions: [],
-        missingConcepts: [`Detailed mechanism of ${topic}`],
-        knowledgeGap: `Answer too brief to demonstrate understanding of ${topic}`,
-        isMajorMisconception: false,
-        isPartial: true,
-        isStrong: false,
-      };
-    }
-
-    if (clean.includes("not sure") || clean.includes("maybe") || clean.includes("i think so") || clean.includes("guess")) {
-      return {
-        correctness: 0.45,
-        misconceptions: [],
-        missingConcepts: [`Definitive reasoning for ${topic}`],
-        knowledgeGap: "Uncertain reasoning",
-        isMajorMisconception: false,
-        isPartial: true,
-        isStrong: false,
-      };
-    }
-
-    if (wordCount >= 15 && (clean.includes("because") || clean.includes("means that") || clean.includes("mechanism") || clean.includes("therefore") || clean.includes("invariant") || clean.includes("process"))) {
-      return {
-        correctness: 0.9,
-        misconceptions: [],
-        missingConcepts: [],
-        knowledgeGap: null,
-        isMajorMisconception: false,
-        isPartial: false,
-        isStrong: true,
-      };
+    if (undefinedTerms.length > 0) {
+      selectedStrategy = "CLARIFY_TERM";
+      knowledgeGap = `Undefined term: ${undefinedTerms.join(", ")}`;
+    } else if (hasMisconception) {
+      selectedStrategy = "CHALLENGE_MISCONCEPTION";
+      knowledgeGap = misconceptions[0];
+    } else if (isObjectiveMastered) {
+      // Current objective mastered: progress to next topic area
+      selectedStrategy = "CONNECT_CONCEPTS";
+    } else if (currentDiff === 1 && completeness < 0.60) {
+      selectedStrategy = "PROBE_HOW";
+      knowledgeGap = `Mechanism of ${topic}`;
+      missingConcepts.push(`Mechanism of ${topic}`);
+    } else if (currentDiff === 2 && depth < 0.65) {
+      selectedStrategy = "PROBE_WHY";
+      knowledgeGap = `Causal rationale for ${topic}`;
+      missingConcepts.push(`Underlying cause or rationale of ${topic}`);
+    } else if ((currentDiff === 2 && isStrong) || (currentDiff === 3 && depth < 0.70)) {
+      selectedStrategy = "REQUEST_EXAMPLE";
+    } else if (currentDiff === 3 && isStrong) {
+      selectedStrategy = "TEST_EDGE_CASE";
+    } else if (currentDiff === 4 && depth < 0.75) {
+      selectedStrategy = "CHALLENGE_ASSUMPTION";
+    } else if (currentDiff >= 4 && isStrong) {
+      selectedStrategy = "CONNECT_CONCEPTS";
+    } else {
+      selectedStrategy = isStrong ? "CONNECT_CONCEPTS" : "PROBE_HOW";
     }
 
     return {
-      correctness: 0.65,
-      misconceptions: [],
-      missingConcepts: [`Underlying rationale for ${topic}`],
-      knowledgeGap: "Partial explanation without deep underlying rationale",
-      isMajorMisconception: false,
-      isPartial: true,
-      isStrong: false,
+      correctness,
+      clarity,
+      completeness,
+      depth,
+      independence,
+      turnQuality,
+      undefinedTerms,
+      misconceptions,
+      missingConcepts,
+      knowledgeGap,
+      isMajorMisconception,
+      isPartial,
+      isStrong,
+      selectedStrategy,
+      isObjectiveMastered,
     };
   }
 
@@ -1243,31 +1751,235 @@ export class LocalSessionRepository implements SessionRepository {
     return `Let's break this down more simply:\n\nBefore any operation can succeed, the foundation must be in place. If we attempt the operation without satisfying the prerequisite, the outcome is undefined or incorrect.\n\n**Verification:**\nWhy must the prerequisite condition be checked before the main operation begins?`;
   }
 
-  private generateProbingQuestion(topic: string, missingConcept: string, learnerAnswer: string): string {
-    const tLower = topic.toLowerCase();
+  private generateStudentQuestion(
+    topic: string,
+    strategy: string,
+    difficulty: number,
+    learnerAnswer: string,
+    undefinedTerms: string[],
+    misconceptions: string[],
+    turnNumber: number,
+    previousAIQuestions: string[],
+    currentObjective?: StoredTopicObjective,
+    nextObjective?: StoredTopicObjective,
+    isObjectiveMastered?: boolean
+  ): string {
+    const cleanTopic = topic.trim();
+    const cleanAnswer = learnerAnswer.trim();
+    const lowerAnswer = cleanAnswer.toLowerCase();
+    const tLower = cleanTopic.toLowerCase();
 
-    if (tLower.includes("fastapi")) {
-      return `I see what you mean about the performance benefits! To make sure I understand the full picture: how does **FastAPI** receive and handle incoming HTTP requests from the client? What role does the ASGI server play?`;
+    // Helper to pick the first candidate that hasn't been asked yet
+    const pickUnique = (candidates: string[]): string | null => {
+      for (const cand of candidates) {
+        if (!isQuestionTooSimilar(cand, previousAIQuestions)) {
+          return cand;
+        }
+      }
+      return null;
+    };
+
+    // 1. CHALLENGE_MISCONCEPTION: Curious, skeptical student doubts directly addressing the user's statement
+    if (strategy === "CHALLENGE_MISCONCEPTION" && misconceptions.length > 0) {
+      const misc = misconceptions[0];
+      const miscCandidates: string[] = [];
+
+      if (misc.includes("O(n)") || lowerAnswer.includes("o(n)") || lowerAnswer.includes("linear")) {
+        miscCandidates.push(`Wait, you mentioned the time complexity is O(n), but if we cut the remaining elements in half at every comparison, why would it take O(n) rather than O(log n)?`);
+        miscCandidates.push(`Wait, wouldn't O(n) mean checking every element linearly—how does halving each step still take linear time?`);
+      }
+      if (misc.includes("unsorted") || lowerAnswer.includes("unsorted")) {
+        miscCandidates.push(`Wait, if the elements aren't sorted, how can we know for sure whether our target is in the left half or the right half after checking the middle?`);
+        miscCandidates.push(`Hold on, without sorted order, wouldn't discarding a half accidentally throw away the element we are searching for?`);
+      }
+      if (misc.includes("one by one") || lowerAnswer.includes("one by one")) {
+        miscCandidates.push(`Wait, wouldn't checking each element one by one just be linear search—how does dividing in half avoid having to inspect every item?`);
+      }
+      if (misc.includes("Ohm") || misc.includes("formula")) {
+        miscCandidates.push(`Wait, if current is constant and resistance increases, why would voltage decrease according to V = IR?`);
+      }
+      if (misc.includes("base case")) {
+        miscCandidates.push(`Wait, if there is no base case, how does the function ever stop calling itself without crashing the stack?`);
+      }
+
+      miscCandidates.push(`Wait, I have a doubt about that: you explained that "${cleanAnswer.length > 45 ? cleanAnswer.substring(0, 45) + "..." : cleanAnswer}", but why would that hold true in **${cleanTopic}**?`);
+      miscCandidates.push(`Hold on, does "${cleanAnswer.length > 40 ? cleanAnswer.substring(0, 40) + "..." : cleanAnswer}" always apply, or could that fail in some cases?`);
+
+      const chosen = pickUnique(miscCandidates);
+      if (chosen) return chosen;
     }
 
+    // 2. CLARIFY_TERM: Student asks to unpack an undefined symbol or technical term
+    if (strategy === "CLARIFY_TERM" && undefinedTerms.length > 0) {
+      const term = undefinedTerms[0];
+      const termCandidates = [
+        `I understand that, but what exactly does "${term}" represent here?`,
+        `Wait, could you clarify what "${term}" means in this context so I don't get confused?`,
+        `Could you explain what "${term}" stands for and what role it plays here?`,
+      ];
+      const chosen = pickUnique(termCandidates);
+      if (chosen) return chosen;
+    }
+
+    // Determine the active objective we are exploring
+    const targetObj = (isObjectiveMastered ? nextObjective : currentObjective) || nextObjective || currentObjective;
+    const cat = targetObj ? targetObj.category : "mechanism";
+
+    // 3. TOPIC-SPECIFIC INQUIRIES (QuickSort & Partitioning)
+    if (tLower.includes("quicksort") || tLower.includes("quick sort") || tLower.includes("partition")) {
+      const qsCandidates: string[] = [];
+
+      // If user mentioned pivot or partition
+      if (lowerAnswer.includes("pivot") || lowerAnswer.includes("partition") || cat === "mechanism") {
+        if (!lowerAnswer.includes("how to choose") && !lowerAnswer.includes("select")) {
+          qsCandidates.push(`Wait, how do we actually decide which element becomes the pivot in the first place—and does it matter if we pick the first element versus a random one?`);
+        }
+        if (!lowerAnswer.includes("sorted position") && !lowerAnswer.includes("final position")) {
+          qsCandidates.push(`Hold on, once the smaller elements are on one side and larger on the other, is the pivot element itself in its permanent sorted position?`);
+        }
+        qsCandidates.push(`How does the partitioning step actually swap and rearrange elements around the pivot under the hood?`);
+      }
+
+      // If looking for an example
+      if (strategy === "REQUEST_EXAMPLE" || cat === "application") {
+        qsCandidates.push(`Could you walk me through a quick example with a small list like [5, 2, 9, 1, 7] so I can see what the array looks like after that first partition pass?`);
+        qsCandidates.push(`Can you show me a concrete example tracing how the pointers swap elements around the pivot from start to finish?`);
+      }
+
+      // If looking at prerequisite / recursion / base case
+      if (cat === "prerequisite" || lowerAnswer.includes("recursive") || lowerAnswer.includes("left and right")) {
+        qsCandidates.push(`Wait, once the pivot is in place and it repeats on the left and right partitions, how does the recursion know when to stop—what is the base case?`);
+        qsCandidates.push(`What specific input condition or base case prevents QuickSort from continuing to recurse forever?`);
+      }
+
+      // If looking at complexity
+      if (cat === "complexity" || lowerAnswer.includes("o(") || lowerAnswer.includes("time") || lowerAnswer.includes("fast")) {
+        qsCandidates.push(`What causes QuickSort to degrade to its worst-case O(n²) time complexity, and how do we prevent that from happening?`);
+        qsCandidates.push(`Why is the average time complexity of QuickSort O(n log n)—where does that log n factor come from?`);
+      }
+
+      // If looking at edge cases
+      if (cat === "edge_cases") {
+        qsCandidates.push(`What happens in edge cases—like if the array is already sorted, or if all elements are completely identical?`);
+        qsCandidates.push(`What happens if we pass an empty array or an array with only one element to QuickSort?`);
+      }
+
+      // If looking at trade-offs
+      if (cat === "trade_offs") {
+        qsCandidates.push(`Why is QuickSort so popular in practice compared to MergeSort if MergeSort has a guaranteed O(n log n) worst case?`);
+        qsCandidates.push(`Does QuickSort require extra memory for helper arrays, or is it an in-place sorting algorithm?`);
+      }
+
+      const chosen = pickUnique(qsCandidates);
+      if (chosen) return chosen;
+    }
+
+    // 4. TOPIC-SPECIFIC INQUIRIES (Binary Search)
     if (tLower.includes("binary search")) {
-      return `I see the efficiency part! But what specific information does the **sorted order** give us when we compare our target with the middle element? Why couldn't we do that on an unsorted list?`;
+      const bsCandidates: string[] = [];
+      if (cat === "mechanism" || strategy === "PROBE_HOW") {
+        bsCandidates.push(`How does binary search actually calculate the middle index and discard half of the array step-by-step?`);
+        bsCandidates.push(`When we compare the target with the middle element, how do the start and end pointers adjust?`);
+      }
+      if (cat === "prerequisite" || strategy === "PROBE_WHY") {
+        bsCandidates.push(`That makes sense! But why is sorted order strictly required beforehand—why couldn't we do that on an unsorted list?`);
+      }
+      if (cat === "application" || strategy === "REQUEST_EXAMPLE") {
+        bsCandidates.push(`Can you walk me through a simple, concrete example with actual numbers (like searching for 7 in [1, 3, 5, 7, 9]) to show how it narrows down?`);
+      }
+      if (cat === "complexity") {
+        bsCandidates.push(`How does halving the search space at each step lead to O(log n) time complexity, and how does that compare to checking one by one?`);
+      }
+      if (cat === "edge_cases") {
+        bsCandidates.push(`What happens in edge cases—like if the target element isn't in the list at all, or if the list is completely empty?`);
+      }
+      if (cat === "trade_offs") {
+        bsCandidates.push(`What are the trade-offs—when would someone prefer a hash table or linear search over binary search?`);
+      }
+      const chosen = pickUnique(bsCandidates);
+      if (chosen) return chosen;
     }
 
-    if (tLower.includes("photosynthesis")) {
-      return `Good start! You mentioned the basic inputs. Can you walk me through what happens to the light energy after chlorophyll absorbs it? How does it actually become chemical energy?`;
+    // 5. UNIVERSAL CURRICULUM QUESTIONS (Works for ANY Topic in the World)
+    const universalCandidates: string[] = [];
+
+    // Category: Mechanism / Probe How
+    if (cat === "mechanism" || strategy === "PROBE_HOW") {
+      universalCandidates.push(`Wait, how does that core process actually work step-by-step under the hood in **${cleanTopic}**?`);
+      universalCandidates.push(`Hold on, when that happens, what is the exact mechanism that executes that operation?`);
+      universalCandidates.push(`Could you unpack how **${cleanTopic}** actually transforms the input or moves through its steps?`);
+      universalCandidates.push(`What are the individual steps that take place when **${cleanTopic}** runs from start to finish?`);
     }
 
-    return `I see what you mean! To make sure I understand the full picture: how does **${topic}** handle **${missingConcept}**? What is the step-by-step mechanism?`;
-  }
+    // Category: Application / Request Example
+    if (cat === "application" || strategy === "REQUEST_EXAMPLE") {
+      universalCandidates.push(`Could you walk me through a simple, concrete example so I can picture how **${cleanTopic}** works in practice?`);
+      universalCandidates.push(`Can you show me a concrete scenario or walkthrough of **${cleanTopic}** with real values so I can trace it?`);
+      universalCandidates.push(`Could you give me a practical real-world example to illustrate why that happens?`);
+    }
 
-  private generateStudentFollowup(topic: string, turnNumber: number, difficulty: number): string {
-    const questions = [
-      `That makes total sense! Now suppose the data contains duplicate values or boundary cases. How does **${topic}** handle that?`,
-      `Interesting! What are the primary trade-offs or constraints when applying **${topic}** compared to alternative approaches?`,
-      `Can you give me a concrete example or code snippet illustrating how **${topic}** executes step-by-step in practice?`,
-      `Great explanation! If the system scale increases tenfold, where is the first bottleneck or failure point in **${topic}**?`,
+    // Category: Prerequisite / Probe Why
+    if (cat === "prerequisite" || strategy === "PROBE_WHY") {
+      universalCandidates.push(`That makes sense! But what foundational conditions, inputs, or prerequisites must be in place before **${cleanTopic}** can work?`);
+      universalCandidates.push(`What happens if the prerequisite conditions aren't satisfied before starting **${cleanTopic}**?`);
+      universalCandidates.push(`Why is that specific requirement or invariant necessary for **${cleanTopic}** to function correctly?`);
+    }
+
+    // Category: Complexity / Performance
+    if (cat === "complexity" || strategy === "DEPTH_EXPANSION") {
+      universalCandidates.push(`How does **${cleanTopic}** scale as the size or workload grows to millions, and what are its biggest resource bottlenecks?`);
+      universalCandidates.push(`What is the efficiency of **${cleanTopic}** in terms of time, memory, or processing power, and what causes it to slow down?`);
+      universalCandidates.push(`What is the difference between the best-case, average-case, and worst-case performance of **${cleanTopic}**?`);
+    }
+
+    // Category: Edge Cases / Boundaries
+    if (cat === "edge_cases" || strategy === "TEST_EDGE_CASE") {
+      universalCandidates.push(`What edge cases, boundary conditions, or failure modes should we be most careful about with **${cleanTopic}**?`);
+      universalCandidates.push(`What happens in the worst-case scenario or when an unexpected input is given to **${cleanTopic}**?`);
+      universalCandidates.push(`How does **${cleanTopic}** handle empty inputs, duplicate data, or extreme limits without failing?`);
+    }
+
+    // Category: Trade-offs / Synthesis
+    if (cat === "trade_offs" || strategy === "CONNECT_CONCEPTS") {
+      universalCandidates.push(`What are the major trade-offs and limitations of **${cleanTopic}** compared to alternative approaches?`);
+      universalCandidates.push(`Under what specific circumstances would you recommend NOT using **${cleanTopic}**, and what would you use instead?`);
+      universalCandidates.push(`How does **${cleanTopic}** compare to other common solutions in terms of simplicity, performance, and reliability?`);
+    }
+
+    // Category: Definition
+    if (cat === "definition") {
+      universalCandidates.push(`Can you explain the core definition and primary purpose of **${cleanTopic}** in simple terms?`);
+      universalCandidates.push(`What fundamental problem does **${cleanTopic}** solve, and why is it important?`);
+    }
+
+    // 6. Dynamic Entity-Based Student Doubts (If user mentioned specific actions/nouns)
+    if (lowerAnswer.includes("because") || lowerAnswer.includes("so that") || lowerAnswer.includes("means that")) {
+      universalCandidates.push(`Wait, I have a doubt about that reasoning: why does that guarantee correctness in **${cleanTopic}**?`);
+      universalCandidates.push(`Hold on, does that reasoning always hold true, or are there situations where that assumption breaks down in **${cleanTopic}**?`);
+    }
+
+    // Pick first non-repeating candidate
+    const chosenUniversal = pickUnique(universalCandidates);
+    if (chosenUniversal) return chosenUniversal;
+
+    // 7. Ultimate Guaranteed Non-Repeating Fallback with Turn-Based Variation
+    const fallbackPool = [
+      `Wait, could you walk me through a simple concrete example of **${cleanTopic}** so I can see it in action?`,
+      `Hold on, what is the single biggest pitfall or mistake people make when working with **${cleanTopic}**?`,
+      `How does **${cleanTopic}** handle edge cases or unexpected boundary conditions in practice?`,
+      `What are the key trade-offs in terms of speed and memory when using **${cleanTopic}**?`,
+      `If you had to summarize the most critical concept behind **${cleanTopic}**, what would it be and why?`,
+      `Could you show me what happens under the hood during the most important step of **${cleanTopic}**?`,
+      `When would an alternative approach be preferable over **${cleanTopic}** in a real-world system?`,
     ];
-    return questions[(turnNumber - 1) % questions.length];
+
+    for (const fb of fallbackPool) {
+      if (!isQuestionTooSimilar(fb, previousAIQuestions)) {
+        return fb;
+      }
+    }
+
+    // Absolute fallback with turn differentiator
+    return `Can you explain the next key aspect of **${cleanTopic}** and how it fits into the overall process?`;
   }
 }

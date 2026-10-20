@@ -51,6 +51,21 @@ export interface StoredSession {
   consecutiveSuccesses: number;
   consecutiveFailures: number;
   messages: StoredMessage[];
+  topicPlan?: StoredTopicPlan;
+}
+
+export interface StoredTopicObjective {
+  id: string;
+  category: "definition" | "prerequisite" | "mechanism" | "complexity" | "edge_cases" | "application" | "trade_offs";
+  title: string;
+  difficultyLevel: number;
+  status: "UNEXPLORED" | "IN_PROGRESS" | "MASTERED";
+}
+
+export interface StoredTopicPlan {
+  topic: string;
+  objectives: StoredTopicObjective[];
+  currentObjectiveId: string;
 }
 
 export interface TurnEvaluationData {
