@@ -105,6 +105,29 @@ def clean_text(text: str) -> str:
     )
 
 
+def is_too_similar_to_history(candidate: str, history: List[str]) -> bool:
+    if not history:
+        return False
+    c_norm = re.sub(r'[^a-z0-9 ]', '', candidate.lower()).strip()
+    if not c_norm:
+        return True
+    c_words = set(c_norm.split())
+    for prev in history:
+        p_norm = re.sub(r'[^a-z0-9 ]', '', prev.lower()).strip()
+        if not p_norm:
+            continue
+        if c_norm == p_norm:
+            return True
+        if len(c_norm) > 20 and len(p_norm) > 20 and (c_norm in p_norm or p_norm in c_norm):
+            return True
+        p_words = set(p_norm.split())
+        overlap = len(c_words.intersection(p_words))
+        total = len(c_words.union(p_words))
+        if total > 0 and (overlap / total) >= 0.35:
+            return True
+    return False
+
+
 @router.post("/ai/guest-student-turn", response_model=GuestTurnResponse)
 def guest_student_turn(req: GuestTurnRequest):
     topic = req.topic.strip() or "General Topic"
@@ -117,13 +140,17 @@ def guest_student_turn(req: GuestTurnRequest):
     current_gap = req.gap or f"{topic} core mechanism"
     interrupted_q_content = req.interrupted_question.get("content") if req.interrupted_question else f"Now, how does {topic} execute in practice?"
 
+    is_explicit_stuck = req.is_stuck_request or any(phrase in user_answer.lower() for phrase in [
+        "i'm stuck", "im stuck", "i am stuck", "can you teach me", "teach me", "can you explain", "don't know", "dont know", "help me"
+    ])
+
     # =========================================================================
     # 1. TEACHER MODE HANDLING
     # =========================================================================
-    if current_mode == "TEACHER":
+    if current_mode == "TEACHER" or is_explicit_stuck:
         # Case A: User gives readiness signal ("I understand", "Got it", "Let me teach")
         # NEVER accept empty acknowledgements without verification!
-        if req.is_readiness_signal:
+        if req.is_readiness_signal and not is_explicit_stuck:
             verify_prompt = f"""You are Curio in Teacher Mode.
 Topic: {topic}
 The learner was stuck on this gap: "{current_gap}".
@@ -584,7 +611,16 @@ Requirements:
             injected_mistake=injected_meta,
         )
 
-    # STANDARD STUDENT INQUIRY (Phase 1 mastered student mode)
+    # STANDARD STUDENT INQUIRY (Mastered Student Mode)
+    level_objectives = {
+        1: "Level 1 (Definition & Purpose): Focus on basic meaning, what core problem it solves, and foundational terms. If abstract, ask for simple intuition.",
+        2: "Level 2 (Mechanism & Prerequisites): Focus on HOW and WHY it works step-by-step, and what preconditions or invariants must be met.",
+        3: "Level 3 (Application & Concrete Walkthrough): Request a concrete example or numerical step-by-step walkthrough in action.",
+        4: "Level 4 (Edge Cases & Boundaries): Ask about edge cases, extreme inputs, empty collections, duplicates, or failure modes.",
+        5: "Level 5 (Synthesis & Trade-offs): Compare with alternatives, analyze time/space efficiency, and explore trade-offs.",
+    }
+    current_level_desc = level_objectives.get(req.current_difficulty, level_objectives[1])
+
     prompt = f"""Topic you are learning: {topic}
 
 Questions you already asked previously:
@@ -594,13 +630,17 @@ The teacher (user) just explained:
 "{user_answer}"
 
 Turn number: {req.turn_number}
-Current difficulty level: {req.current_difficulty}/5
+Current pedagogical target: {current_level_desc}
 
 Respond as Curio the curious student:
-- React to what the teacher just explained.
-- Ask strictly ONE follow-up student doubt, request for an example, or deep question.
-- Never repeat any previous questions.
-- Keep it natural, inquisitive, and concise (1-2 sentences)."""
+1. Two complementary questioning mechanisms:
+   - Answer-driven: React warmly to what the teacher just explained. If something is high-level, unclear, or mentions a technical term, raise a genuine student doubt.
+   - Topic-driven: Systematically explore {topic} according to the pedagogical target above.
+2. Strict invariants:
+   - Ask strictly ONE clear student question (exactly ONE question mark '?').
+   - Never repeat or rephrase any previous questions.
+   - Never lecture, teach, or reveal solutions. You are the student learning from them.
+   - Keep your tone natural, inquisitive, and concise (1 to 2 sentences)."""
 
     try:
         raw_response = provider.generate_text(f"{STUDENT_SYSTEM_PROMPT}\n\n{prompt}")
@@ -613,6 +653,41 @@ Respond as Curio the curious student:
     except Exception as e:
         logger.warning("Groq guest generation failed (%s). Using fallback question.", e)
         ai_question = f"Wait, could you walk me through a simple concrete example of how {topic} works in practice?"
+
+    # STRICT ANTI-REPETITION ENFORCEMENT
+    if is_too_similar_to_history(ai_question, req.previous_questions):
+        logger.info("Generated question is too similar to past questions. Attempting alternative.")
+        retry_prompt = f"""You already asked questions too similar to: "{ai_question}".
+Never repeat previous questions! Ask a completely DIFFERENT student question about {topic} targeting: {current_level_desc}.
+Strictly ONE question mark."""
+        try:
+            raw_retry = provider.generate_text(f"{STUDENT_SYSTEM_PROMPT}\n\n{retry_prompt}")
+            ai_retry = clean_text(raw_retry)
+            if ai_retry.count("?") > 1:
+                ai_retry = ai_retry.split("?")[0].strip() + "?"
+            if not ai_retry.endswith("?"):
+                ai_retry += "?"
+            if not is_too_similar_to_history(ai_retry, req.previous_questions):
+                ai_question = ai_retry
+        except Exception:
+            pass
+
+    # If still repeating, pick a guaranteed novel question from the universal pool
+    if is_too_similar_to_history(ai_question, req.previous_questions):
+        universal_pool = [
+            f"Wait, how does that core process actually work step-by-step under the hood in {topic}?",
+            f"Could you walk me through a simple, concrete example so I can picture how {topic} works in practice?",
+            f"What foundational conditions, inputs, or prerequisites must be in place before {topic} can work?",
+            f"How does {topic} scale as the workload grows, and what are its biggest resource bottlenecks?",
+            f"What edge cases, boundary conditions, or failure modes should we be most careful about with {topic}?",
+            f"What are the major trade-offs and limitations of {topic} compared to alternative approaches?",
+            f"Hold on, what is the single biggest pitfall or mistake people make when working with {topic}?",
+            f"Under what specific circumstances would you recommend NOT using {topic}, and what would you use instead?",
+        ]
+        for cand in universal_pool:
+            if not is_too_similar_to_history(cand, req.previous_questions):
+                ai_question = cand
+                break
 
     correctness = 0.85 if word_count >= 5 else 0.50
     completeness = min(1.0, max(0.3, word_count / 20.0))

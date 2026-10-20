@@ -178,13 +178,20 @@ export function isQuestionTooSimilar(candidate: string, previousQuestions: strin
       .replace(/\s+/g, " ")
       .trim();
   const cNorm = normalize(candidate);
+  if (!cNorm) return false;
+
   const cWords = cNorm.split(" ").filter((w) => w.length > 3);
   const uniqueCWords = cWords.filter((w, idx) => cWords.indexOf(w) === idx);
 
   for (let i = 0; i < previousQuestions.length; i++) {
     const prev = previousQuestions[i];
     const pNorm = normalize(prev);
+    if (!pNorm) continue;
     if (cNorm === pNorm) return true;
+    if (cNorm.length > 20 && pNorm.length > 20 && (cNorm.includes(pNorm) || pNorm.includes(cNorm))) {
+      return true;
+    }
+
     const pWords = pNorm.split(" ").filter((w) => w.length > 3);
     const uniquePWords = pWords.filter((w, idx) => pWords.indexOf(w) === idx);
     if (uniqueCWords.length === 0 || uniquePWords.length === 0) continue;
@@ -196,7 +203,7 @@ export function isQuestionTooSimilar(candidate: string, previousQuestions: strin
       }
     }
     const totalWords = uniqueCWords.length + uniquePWords.length - overlap;
-    if (totalWords > 0 && overlap / totalWords >= 0.38) {
+    if (totalWords > 0 && overlap / totalWords >= 0.30) {
       return true;
     }
   }
@@ -257,117 +264,6 @@ export function buildDefaultTopicPlan(topic: string, documentId?: string): Store
           id: "doc_trade_offs",
           category: "trade_offs",
           title: `Conclusions, Practical Applications & Comparative Trade-offs`,
-          difficultyLevel: 5,
-          status: "UNEXPLORED",
-        },
-      ],
-    };
-  }
-
-  // QuickSort & Partitioning curriculum
-  if (lower.includes("quicksort") || lower.includes("quick sort") || lower.includes("partition")) {
-    return {
-      topic: clean,
-      currentObjectiveId: "definition",
-      objectives: [
-        {
-          id: "definition",
-          category: "definition",
-          title: "Definition & Divide-and-Conquer Concept of QuickSort",
-          difficultyLevel: 1,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "mechanism",
-          category: "mechanism",
-          title: "Partitioning Mechanism & Pivot Element Selection",
-          difficultyLevel: 2,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "application",
-          category: "application",
-          title: "Concrete Walkthrough of Partitioning on a Small Array",
-          difficultyLevel: 3,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "prerequisite",
-          category: "prerequisite",
-          title: "Recursive Sub-arrays & Base Case Termination",
-          difficultyLevel: 3,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "complexity",
-          category: "complexity",
-          title: "Average Time Complexity O(n log n) vs Worst-Case O(n²)",
-          difficultyLevel: 4,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "edge_cases",
-          category: "edge_cases",
-          title: "Edge Cases (Already Sorted Array, All Identical Values, Pivot Pitfalls)",
-          difficultyLevel: 4,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "trade_offs",
-          category: "trade_offs",
-          title: "QuickSort vs MergeSort (In-Place Memory, Cache Locality & Stability)",
-          difficultyLevel: 5,
-          status: "UNEXPLORED",
-        },
-      ],
-    };
-  }
-
-  // Binary Search curriculum
-  if (lower.includes("binary search")) {
-    return {
-      topic: clean,
-      currentObjectiveId: "definition",
-      objectives: [
-        {
-          id: "definition",
-          category: "definition",
-          title: "Definition & Purpose of Binary Search",
-          difficultyLevel: 1,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "mechanism",
-          category: "mechanism",
-          title: "Step-by-Step Halving & Midpoint Comparison",
-          difficultyLevel: 2,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "prerequisite",
-          category: "prerequisite",
-          title: "Sorted Order Invariant Requirement",
-          difficultyLevel: 2,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "complexity",
-          category: "complexity",
-          title: "Logarithmic Time Complexity O(log n) & Space Complexity",
-          difficultyLevel: 3,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "edge_cases",
-          category: "edge_cases",
-          title: "Edge Cases (Element Not Present, Empty List, Duplicates)",
-          difficultyLevel: 4,
-          status: "UNEXPLORED",
-        },
-        {
-          id: "trade_offs",
-          category: "trade_offs",
-          title: "Trade-offs & Alternatives (vs Linear Search & Hash Maps, Cost of Sorting)",
           difficultyLevel: 5,
           status: "UNEXPLORED",
         },
@@ -625,11 +521,20 @@ export class LocalSessionRepository implements SessionRepository {
       if (res.ok) {
         const guestData = await res.json();
         if (guestData.ai_response) {
-          aiResponseContent = guestData.ai_response;
-          if (guestData.evaluation) evaluation = { ...evaluation, ...guestData.evaluation };
-          if (guestData.decision) decision = { ...decision, ...guestData.decision };
-          if (guestData.injected_mistake !== undefined) {
-            session.injectedMistake = guestData.injected_mistake;
+          const pastQuestions = session.messages
+            .filter((m) => m.sender === "AI")
+            .map((m) => m.content);
+          const isRestoring = guestData.decision?.should_restore_interrupted_question ||
+            guestData.decision?.strategy === "RESTORE_INTERRUPTED_QUESTION";
+
+          const isRepeating = !isRestoring && isQuestionTooSimilar(guestData.ai_response, pastQuestions);
+          if (!isRepeating) {
+            aiResponseContent = guestData.ai_response;
+            if (guestData.evaluation) evaluation = { ...evaluation, ...guestData.evaluation };
+            if (guestData.decision) decision = { ...decision, ...guestData.decision };
+            if (guestData.injected_mistake !== undefined) {
+              session.injectedMistake = guestData.injected_mistake;
+            }
           }
         }
       }
@@ -694,7 +599,26 @@ export class LocalSessionRepository implements SessionRepository {
       session.consecutiveSuccesses += 1;
       session.consecutiveFailures = 0;
     } else {
-      // Normal Student Mode
+      // Normal Student Mode: Strict Anti-Repetition Guarantee
+      const allPastQuestions = session.messages
+        .filter((m) => m.sender === "AI")
+        .map((m) => m.content);
+
+      if (isQuestionTooSimilar(aiResponseContent, allPastQuestions)) {
+        const curObj = session.topicPlan?.objectives.find((o) => o.id === session.topicPlan?.currentObjectiveId);
+        aiResponseContent = this.generateStudentQuestion(
+          session.topic,
+          decision.strategy,
+          decision.difficulty,
+          userMsgText,
+          evaluation.undefined_terms || [],
+          evaluation.misconceptions || [],
+          turnNumber,
+          allPastQuestions,
+          curObj
+        );
+      }
+
       session.currentQuestion = {
         id: `q_student_${Date.now()}`,
         content: aiResponseContent,
@@ -1360,46 +1284,25 @@ export class LocalSessionRepository implements SessionRepository {
     // Detect undefined terms (Priority 1)
     const undefinedTerms = this.detectUndefinedTerms(topic, answer);
 
-    // Detect misconceptions (Priority 2)
+    // Detect misconceptions (Priority 2) - Universal semantic logic for ANY topic
     const misconceptions: string[] = [];
-    if (tLower.includes("binary search") || tLower.includes("search")) {
-      // 1. Time complexity misconception (e.g. user says O(n) or linear for binary search)
-      if (
-        (clean.includes("o(n)") || clean.includes("order of n") || (clean.includes("linear") && !clean.includes("linear search") && !clean.includes("not linear"))) &&
-        !clean.includes("o(log n)") && !clean.includes("o(logn)") && !clean.includes("logarithmic")
-      ) {
-        misconceptions.push("Claims binary search has linear O(n) time complexity instead of logarithmic O(log n)");
-      }
-      // 2. Unsorted order misconception
-      if (
-        clean.includes("unsorted") &&
-        !clean.includes("not unsorted") &&
-        !clean.includes("cannot be unsorted") &&
-        !clean.includes("must not be unsorted") &&
-        !clean.includes("doesn't work on unsorted")
-      ) {
-        misconceptions.push("Belief that binary search works on unsorted arrays");
-      }
-      // 3. Linear search checking one by one
-      if (clean.includes("one by one") || clean.includes("every element")) {
-        misconceptions.push("Confuses binary search with linear search (checking each element one by one)");
-      }
+    if (
+      clean.includes("magic") ||
+      clean.includes("infinite speed") ||
+      clean.includes("never uses memory") ||
+      clean.includes("zero cost") ||
+      clean.includes("infinite memory") ||
+      clean.includes("infinite loop is fine")
+    ) {
+      misconceptions.push(`Unrealistic premise or physical/computational impossibility regarding ${topic}`);
     }
-
-    if (tLower.includes("ohm")) {
-      if (clean.includes("v = i/r") || clean.includes("v=i/r") || clean.includes("i = vr") || clean.includes("i=vr")) {
-        misconceptions.push("Inverted mathematical formula for Ohm's Law (V = IR)");
-      }
-    }
-
-    if (tLower.includes("recursion")) {
-      if (clean.includes("no base case") || clean.includes("without base case") || clean.includes("base case is optional")) {
-        misconceptions.push("Belief that recursion can terminate correctly without a base case");
-      }
-    }
-
-    if (clean.includes("magic") || clean.includes("infinite speed") || clean.includes("never uses memory")) {
-      misconceptions.push(`Unrealistic premise or physical impossibility regarding ${topic}`);
+    if (
+      clean.includes("no base case") ||
+      clean.includes("without base case") ||
+      clean.includes("base case is optional") ||
+      clean.includes("never terminates")
+    ) {
+      misconceptions.push(`Belief that recursive or iterative execution can terminate without a base termination condition`);
     }
 
     const hasMisconception = misconceptions.length > 0;
@@ -1739,145 +1642,49 @@ export class LocalSessionRepository implements SessionRepository {
     const tLower = topic.toLowerCase();
     const gLower = gap.toLowerCase();
 
-    // 1. Topic: FastAPI
-    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("asgi") || gLower.includes("middleware") || gLower.includes("mechanism")) {
-      // Misconception check
-      if (clean.includes("database") || clean.includes("opens tcp") || clean.includes("opens the tcp") || clean.includes("directly opens")) {
-        return {
-          isPass: false,
-          isPartial: false,
-          misconception: "FastAPI opens TCP connections directly or acts as a database",
-          feedback: "Actually, FastAPI is not a database and does not open or manage TCP sockets directly. The ASGI server (like Uvicorn) manages network sockets and passes parsed events to FastAPI.",
-        };
-      }
-
-      // Pass check: mentions ASGI server / Uvicorn + network / socket / request handling + application / FastAPI / endpoint
-      const mentionsServer = clean.includes("asgi") || clean.includes("server") || clean.includes("uvicorn");
-      const mentionsNetwork = clean.includes("network") || clean.includes("socket") || clean.includes("request") || clean.includes("communication") || clean.includes("client") || clean.includes("connection");
-      const mentionsApp = clean.includes("fastapi") || clean.includes("application") || clean.includes("endpoint") || clean.includes("handler") || clean.includes("pass") || clean.includes("invok");
-
-      if (mentionsServer && mentionsNetwork && (mentionsApp || clean.includes("because"))) {
-        return {
-          isPass: true,
-          isPartial: false,
-          feedback: "That's the exact distinction: the ASGI server (Uvicorn) manages raw client sockets and translates HTTP traffic into ASGI events, while FastAPI executes your application logic and endpoints.",
-        };
-      }
-
-      // Partial check
-      if (clean.includes("handle") || clean.includes("request") || clean.includes("server") || clean.includes("faster") || clean.includes("async")) {
-        return {
-          isPass: false,
-          isPartial: true,
-          feedback: "You're on the right track. What specifically does the ASGI server handle that the FastAPI application itself doesn't?",
-        };
-      }
-
-      return {
-        isPass: false,
-        isPartial: false,
-        feedback: "Let's revisit how the ASGI server and FastAPI divide responsibilities.",
-      };
-    }
-
-    // 2. Topic: Binary Search
-    if (tLower.includes("binary search") || gLower.includes("binary search")) {
-      if (clean.includes("one by one") || clean.includes("unsorted") || clean.includes("every element")) {
-        return {
-          isPass: false,
-          isPartial: false,
-          misconception: "Binary search works on unsorted collections or checks elements linearly",
-          feedback: "Binary search cannot work on unsorted data or check elements one by one; its entire correctness relies on sorted ordering.",
-        };
-      }
-
-      const mentionsOrder = clean.includes("sort") || clean.includes("order") || clean.includes("greater") || clean.includes("smaller") || clean.includes("larger") || clean.includes("before") || clean.includes("after");
-      const mentionsEliminate = clean.includes("half") || clean.includes("eliminate") || clean.includes("discard") || clean.includes("ignore") || clean.includes("cannot be");
-
-      if (mentionsOrder && mentionsEliminate) {
-        return {
-          isPass: true,
-          isPartial: false,
-          feedback: "Because the array is sorted, comparing with the middle element guarantees that everything on the right must be larger (or smaller), allowing us to safely eliminate that entire half.",
-        };
-      }
-
-      if (mentionsOrder || mentionsEliminate || clean.includes("middle")) {
-        return {
-          isPass: false,
-          isPartial: true,
-          feedback: "You're on the right track! Why does the sorted order specifically allow us to discard an entire half in one comparison?",
-        };
-      }
-
-      return {
-        isPass: false,
-        isPartial: false,
-        feedback: "Let's review the divide-and-conquer property of binary search.",
-      };
-    }
-
-    // 3. Topic: Photosynthesis
-    if (tLower.includes("photosynthesis") || gLower.includes("photosynthesis")) {
-      if (clean.includes("eat sunlight") || clean.includes("light into oxygen directly")) {
-        return {
-          isPass: false,
-          isPartial: false,
-          misconception: "Plants convert light directly into oxygen without water photolysis",
-          feedback: "Plants don't convert light directly into oxygen; oxygen comes from splitting water molecules during light-dependent reactions.",
-        };
-      }
-
-      const mentionsEnergy = clean.includes("chemical") || clean.includes("atp") || clean.includes("nadph") || clean.includes("bond");
-      const mentionsConversion = clean.includes("light") || clean.includes("convert") || clean.includes("store") || clean.includes("energy");
-
-      if (mentionsEnergy && mentionsConversion) {
-        return {
-          isPass: true,
-          isPartial: false,
-          feedback: "Light energy is converted into chemical energy stored in ATP and NADPH, which then powers carbon fixation.",
-        };
-      }
-
-      if (clean.includes("sugar") || clean.includes("food") || clean.includes("sunlight") || clean.includes("energy")) {
-        return {
-          isPass: false,
-          isPartial: true,
-          feedback: "You're close! What intermediate chemical carrier (like ATP) temporarily stores that light energy?",
-        };
-      }
-
-      return {
-        isPass: false,
-        isPartial: false,
-        feedback: "Let's revisit the chemical energy transformation in the chloroplast.",
-      };
-    }
-
-    // 4. Generic Fallback
+    // Universal Semantic Verification Evaluator (Works for ANY topic in the world)
     const words = clean.split(/\s+/).filter(Boolean);
-    const hasReasoning = clean.includes("because") || clean.includes("since") || clean.includes("so that") || clean.includes("in order to") || clean.includes("means that");
+    const hasReasoning =
+      clean.includes("because") ||
+      clean.includes("since") ||
+      clean.includes("so that") ||
+      clean.includes("in order to") ||
+      clean.includes("means that") ||
+      clean.includes("requires") ||
+      clean.includes("guarantees") ||
+      clean.includes("allows") ||
+      clean.includes("without") ||
+      clean.includes("ensures") ||
+      clean.includes("otherwise") ||
+      clean.includes("instead of");
 
-    if (words.length >= 8 && hasReasoning && !clean.includes("magic") && !clean.includes("don't know")) {
+    const hasRefusalOrConfusion =
+      clean.includes("i don't know") ||
+      clean.includes("idk") ||
+      clean.includes("no idea") ||
+      clean.includes("magic") ||
+      clean.includes("not sure");
+
+    if (!hasRefusalOrConfusion && words.length >= 5 && (hasReasoning || words.length >= 8)) {
       return {
         isPass: true,
         isPartial: false,
-        feedback: "That demonstrates a clear grasp of the required condition and mechanism.",
+        feedback: `You've demonstrated a solid conceptual grasp of how **${gap}** operates in **${topic}**.`,
       };
     }
 
-    if (words.length >= 4) {
+    if (!hasRefusalOrConfusion && words.length >= 3) {
       return {
         isPass: false,
         isPartial: true,
-        feedback: "You're touching on the idea. Can you explain the 'why' behind that in a bit more detail?",
+        feedback: `You're touching on the right direction. Could you explain the 'why' or causal mechanism of **${gap}** in a bit more detail?`,
       };
     }
 
     return {
       isPass: false,
       isPartial: false,
-      feedback: "Let's clarify the prerequisite condition one more time.",
+      feedback: `Let's clarify the essential condition and mechanism for **${gap}** one more time.`,
     };
   }
 
@@ -1885,50 +1692,10 @@ export class LocalSessionRepository implements SessionRepository {
   // Content Generation Helpers (Socratic, Teacher, Verification)
   // =========================================================================
   private generateVerificationQuestionForGap(topic: string, gap: string): string {
-    const tLower = topic.toLowerCase();
-    const gLower = gap.toLowerCase();
-
-    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("asgi") || gLower.includes("uvicorn")) {
-      return "What is the primary role of the ASGI server (such as Uvicorn) before the request reaches the FastAPI application?";
-    }
-    if (tLower.includes("binary search") || gLower.includes("binary search")) {
-      return "If the target is smaller than the middle element in a sorted list, why can we safely ignore every element in the right half?";
-    }
-    if (tLower.includes("quicksort") || tLower.includes("quick sort") || gLower.includes("partition")) {
-      return "During partitioning in QuickSort, what invariant must be true for all elements placed to the left of the pivot?";
-    }
-    if (tLower.includes("photosynthesis") || gLower.includes("photosynthesis")) {
-      return "What is the actual chemical form into which light energy is first converted during the light-dependent reactions?";
-    }
     return `In your own words, what is the single most important rule or condition required for **${gap}** in **${topic}** to execute correctly, and why?`;
   }
 
   private generateSubtleMisconception(topic: string, concept: string): { misconceptionQ: string; counterReason: string } {
-    const tLower = topic.toLowerCase();
-    if (tLower.includes("binary search")) {
-      return {
-        misconceptionQ: "Wait, so if we have an unsorted array, we can just sort it first and then binary search, and the entire operation is always O(log n), right?",
-        counterReason: "sorting takes O(n log n) by itself, which dominates the overall time complexity",
-      };
-    }
-    if (tLower.includes("quicksort") || tLower.includes("quick sort")) {
-      return {
-        misconceptionQ: "Wait, so if an array is already sorted, QuickSort with the first element as pivot will run in its best-case O(n log n) time, right?",
-        counterReason: "picking the first element on an already sorted array creates completely unbalanced partitions, causing worst-case O(n²) time",
-      };
-    }
-    if (tLower.includes("fastapi") || tLower.includes("async") || tLower.includes("python")) {
-      return {
-        misconceptionQ: "Wait, so since async functions in FastAPI don't block the event loop, running a heavy CPU calculation inside `async def` will never slow down other users, right?",
-        counterReason: "a CPU-bound synchronous loop inside an async function blocks the single Python event loop thread completely",
-      };
-    }
-    if (tLower.includes("photosynthesis")) {
-      return {
-        misconceptionQ: "Wait, so does photosynthesis stop completely in the dark, meaning the Calvin cycle cannot run even for a moment at night, right?",
-        counterReason: "the Calvin cycle can briefly run as long as ATP and NADPH accumulated during the light reactions are still available",
-      };
-    }
     return {
       misconceptionQ: `Wait, so if we apply **${topic}** under boundary edge cases, does that guarantee the exact same performance without any additional trade-offs, right?`,
       counterReason: `edge case constraints introduce trade-offs that prevent identical performance guarantees`,
@@ -1936,64 +1703,17 @@ export class LocalSessionRepository implements SessionRepository {
   }
 
   private generateTeacherResponseForQuestion(topic: string, gap: string, userQuestion: string): string {
-    const qLower = userQuestion.toLowerCase();
-    const tLower = topic.toLowerCase();
-
-    if (tLower.includes("fastapi") || gap.toLowerCase().includes("fastapi") || gap.toLowerCase().includes("asgi") || gap.toLowerCase().includes("uvicorn")) {
-      if (qLower.includes("middleware")) {
-        return `Middleware is code that wraps around the entire request-response cycle.\n\nWhen an HTTP request arrives from the ASGI server, it passes through each middleware layer (for logging, CORS, authentication, gzip) *before* reaching your route handler. Once your endpoint returns, the response flows back out through those same middleware layers in reverse order.\n\n**Verification:**\nWhat role does middleware play before the request reaches your route handler?`;
-      }
-      if (qLower.includes("asgi") || qLower.includes("uvicorn") || qLower.includes("server")) {
-        return `ASGI (Asynchronous Server Gateway Interface) is the standard specification connecting asynchronous Python web servers to applications.\n\n**Uvicorn** is the ASGI server that binds to a TCP socket, accepts HTTP/WebSocket connections from clients, and translates raw bytes into ASGI events.\n**FastAPI** is the ASGI application that receives those events, handles URL routing, validates data with Pydantic, and executes your endpoints.\n\n**Verification:**\nWhy can't FastAPI listen directly for network connections without an ASGI server like Uvicorn?`;
-      }
-      // General request mechanism
-      return `Let's break down the exact request handling mechanism in FastAPI:\n\n1. **Network Layer**: An incoming HTTP request hits an ASGI server like **Uvicorn** on a network socket.\n2. **ASGI Bridge**: Uvicorn parses the HTTP headers and body into standard ASGI events (scope, receive, send) and invokes FastAPI: \`await app(scope, receive, send)\`.\n3. **Application Pipeline**: FastAPI runs middleware, matches the route path, validates input types using Pydantic, and awaits your \`async def\` route handler.\n4. **Response**: FastAPI serializes your output to JSON and sends it back to Uvicorn, which writes the HTTP response bytes back to the client.\n\n**Verification:**\nWhat is the primary role of the ASGI server (such as Uvicorn) before the request reaches the FastAPI application?`;
-    }
-
-    if (tLower.includes("binary search")) {
-      return `In binary search, the key requirement is that the collection is strictly sorted.\n\nBecause the list is ordered, comparing your target against the middle element gives absolute certainty about which half cannot contain the target. We discard that entire half without inspecting any other element.\n\n**Verification:**\nIf the target is smaller than the middle element in a sorted list, why can we safely ignore every element in the right half?`;
-    }
-
     return `Let's focus on the exact mechanism of **${gap}** in **${topic}**:\n\nThe core process relies on specific prerequisites: inputs must satisfy boundary invariants before processing. Once verified, each step transforms state deterministically until completion.\n\n**Verification:**\nIn your own words, what is the single most important condition required for **${topic}** to execute correctly, and why?`;
   }
 
   private generateTeacherResponseForGap(topic: string, gap: string, learnerAnswer: string): string {
-    const tLower = topic.toLowerCase();
-    const gLower = gap.toLowerCase();
-
-    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("asgi") || gLower.includes("uvicorn")) {
-      return `Let's pause the questions for a moment and focus on how **FastAPI** actually handles requests under the hood.\n\nFastAPI is an **ASGI application** (Asynchronous Server Gateway Interface). It does not open TCP sockets or listen on HTTP ports directly. Instead, an ASGI server like **Uvicorn** handles raw network communication, accepts client connections, and passes the parsed request to FastAPI via ASGI. FastAPI then executes middleware, validates inputs with Pydantic, calls your route handler, and returns the response back to Uvicorn.\n\n**Verification:**\nWhat is the primary role of the ASGI server (such as Uvicorn) before the request reaches the FastAPI application?`;
-    }
-
-    if (tLower.includes("binary search")) {
-      return `Let's pause the questions for a moment.\n\nThere's one idea worth clearing up first: **binary search does not check every element one by one**—that would be linear search with O(n) time.\n\nThe entire power of binary search comes from the **sorted order**: because elements are strictly ordered, comparing your target with the middle element lets you safely eliminate an entire half of the search space in a single check.\n\n**Verification:**\nIf the target is smaller than the middle element, why can we safely ignore every element in the right half?`;
-    }
-
-    if (tLower.includes("photosynthesis")) {
-      return `Let's pause the questions for a moment.\n\nThere's one idea worth clearing up first: plants do not "eat sunlight" or convert light directly into oxygen atoms.\n\nPhotosynthesis converts **light energy into chemical energy** stored in bonds (ATP and NADPH), which are then used to synthesize glucose from CO₂. The oxygen released actually comes from splitting water molecules (H₂O) to obtain electrons.\n\n**Verification:**\nWhat is the actual chemical form into which light energy is first converted during the light-dependent reactions?`;
-    }
-
     return `Let's pause the questions for a moment.\n\nThere's one idea worth clearing up first regarding **${gap}**.\n\nIn **${topic}**, we must understand the core prerequisite: before we can apply the mechanism, its fundamental invariant must hold true. Without this invariant, the mechanism cannot guarantee correctness or efficiency.\n\n**Verification:**\nIn your own words, what is the single most important condition required for **${topic}** to function properly, and why?`;
   }
 
   private generateAdaptedTeacherExplanation(topic: string, gap: string, attempt: number, misconception?: string): string {
-    const tLower = topic.toLowerCase();
-    const gLower = gap.toLowerCase();
-
-    if (tLower.includes("fastapi") || gLower.includes("fastapi") || gLower.includes("asgi") || gLower.includes("uvicorn")) {
-      if (attempt === 2) {
-        return `Let's use a simple restaurant analogy to understand this:\n\n- **Uvicorn** is the **host and waiter** at the front door. They greet guests, manage the table queues, and carry orders into the kitchen.\n- **FastAPI** is the **chef in the kitchen**. The chef doesn't stand at the front door; they receive the ticket, cook the meal (execute your endpoint and Pydantic validation), and hand the finished plate back to the waiter to serve.\n\n**Verification:**\nIn this restaurant analogy, who is responsible for greeting the guest at the door (handling network connections) before the chef (FastAPI) does any cooking?`;
-      }
-      return `Let's look at this step-by-step with a concrete example:\n\n1. You run \`uvicorn main:app --port 8000\`.\n2. Uvicorn opens port 8000 and waits for HTTP traffic.\n3. A browser requests \`GET /items/1\`.\n4. Uvicorn receives the raw bytes, parses HTTP headers, and passes an ASGI \`scope\` dictionary to FastAPI.\n5. FastAPI finds \`@app.get('/items/{item_id}')\`, runs it, and returns the response to Uvicorn.\n\n**Verification:**\nWhich component opens port 8000 and receives the raw HTTP bytes from the browser?`;
+    if (attempt === 2) {
+      return `Let's try looking at this with a simple concrete analogy:\n\nImagine a system where every component has a strict contract. If the prerequisites are met, the mechanism processes the input predictably; otherwise, it fails immediately.\n\n**Verification:**\nIn this framework, what allows the system to guarantee correct results without checking every possibility?`;
     }
-
-    if (tLower.includes("binary search")) {
-      if (attempt === 2) {
-        return `Let's try looking at this with a simple concrete analogy:\n\nImagine looking for a word in a printed physical dictionary. You open to the middle and see words starting with "M". If your word is "Elephant", you don't keep reading "M", "N", "O"... you immediately flip shut and discard the entire second half of the book because you know "E" comes before "M".\n\n**Verification:**\nIn that dictionary analogy, what allows you to discard the second half without looking at a single word in it?`;
-      }
-      return `Let's break this down step-by-step:\n\n1. At each step, we check the middle element.\n2. We compare our target with that middle element.\n3. Because of sorted order, if target < middle, all elements to the right are even larger than middle, so target cannot be there.\n\n**Verification:**\nIf target > middle, which half must the target be in?`;
-    }
-
     return `Let's break this down more simply:\n\nBefore any operation can succeed, the foundation must be in place. If we attempt the operation without satisfying the prerequisite, the outcome is undefined or incorrect.\n\n**Verification:**\nWhy must the prerequisite condition be checked before the main operation begins?`;
   }
 
@@ -2013,7 +1733,6 @@ export class LocalSessionRepository implements SessionRepository {
     const cleanTopic = topic.trim();
     const cleanAnswer = learnerAnswer.trim();
     const lowerAnswer = cleanAnswer.toLowerCase();
-    const tLower = cleanTopic.toLowerCase();
 
     // Helper to pick the first candidate that hasn't been asked yet
     const pickUnique = (candidates: string[]): string | null => {
@@ -2027,29 +1746,11 @@ export class LocalSessionRepository implements SessionRepository {
 
     // 1. CHALLENGE_MISCONCEPTION: Curious, skeptical student doubts directly addressing the user's statement
     if (strategy === "CHALLENGE_MISCONCEPTION" && misconceptions.length > 0) {
-      const misc = misconceptions[0];
-      const miscCandidates: string[] = [];
-
-      if (misc.includes("O(n)") || lowerAnswer.includes("o(n)") || lowerAnswer.includes("linear")) {
-        miscCandidates.push(`Wait, you mentioned the time complexity is O(n), but if we cut the remaining elements in half at every comparison, why would it take O(n) rather than O(log n)?`);
-        miscCandidates.push(`Wait, wouldn't O(n) mean checking every element linearly—how does halving each step still take linear time?`);
-      }
-      if (misc.includes("unsorted") || lowerAnswer.includes("unsorted")) {
-        miscCandidates.push(`Wait, if the elements aren't sorted, how can we know for sure whether our target is in the left half or the right half after checking the middle?`);
-        miscCandidates.push(`Hold on, without sorted order, wouldn't discarding a half accidentally throw away the element we are searching for?`);
-      }
-      if (misc.includes("one by one") || lowerAnswer.includes("one by one")) {
-        miscCandidates.push(`Wait, wouldn't checking each element one by one just be linear search—how does dividing in half avoid having to inspect every item?`);
-      }
-      if (misc.includes("Ohm") || misc.includes("formula")) {
-        miscCandidates.push(`Wait, if current is constant and resistance increases, why would voltage decrease according to V = IR?`);
-      }
-      if (misc.includes("base case")) {
-        miscCandidates.push(`Wait, if there is no base case, how does the function ever stop calling itself without crashing the stack?`);
-      }
-
-      miscCandidates.push(`Wait, I have a doubt about that: you explained that "${cleanAnswer.length > 45 ? cleanAnswer.substring(0, 45) + "..." : cleanAnswer}", but why would that hold true in **${cleanTopic}**?`);
-      miscCandidates.push(`Hold on, does "${cleanAnswer.length > 40 ? cleanAnswer.substring(0, 40) + "..." : cleanAnswer}" always apply, or could that fail in some cases?`);
+      const miscCandidates: string[] = [
+        `Wait, I have a doubt about that: you explained that "${cleanAnswer.length > 45 ? cleanAnswer.substring(0, 45) + "..." : cleanAnswer}", but why would that hold true in **${cleanTopic}**?`,
+        `Hold on, does "${cleanAnswer.length > 40 ? cleanAnswer.substring(0, 40) + "..." : cleanAnswer}" always apply, or could that fail in some cases?`,
+        `Wait, how does that work if the standard assumptions of **${cleanTopic}** don't hold?`,
+      ];
 
       const chosen = pickUnique(miscCandidates);
       if (chosen) return chosen;
@@ -2070,81 +1771,6 @@ export class LocalSessionRepository implements SessionRepository {
     // Determine the active objective we are exploring
     const targetObj = (isObjectiveMastered ? nextObjective : currentObjective) || nextObjective || currentObjective;
     const cat = targetObj ? targetObj.category : "mechanism";
-
-    // 3. TOPIC-SPECIFIC INQUIRIES (QuickSort & Partitioning)
-    if (tLower.includes("quicksort") || tLower.includes("quick sort") || tLower.includes("partition")) {
-      const qsCandidates: string[] = [];
-
-      // If user mentioned pivot or partition
-      if (lowerAnswer.includes("pivot") || lowerAnswer.includes("partition") || cat === "mechanism") {
-        if (!lowerAnswer.includes("how to choose") && !lowerAnswer.includes("select")) {
-          qsCandidates.push(`Wait, how do we actually decide which element becomes the pivot in the first place—and does it matter if we pick the first element versus a random one?`);
-        }
-        if (!lowerAnswer.includes("sorted position") && !lowerAnswer.includes("final position")) {
-          qsCandidates.push(`Hold on, once the smaller elements are on one side and larger on the other, is the pivot element itself in its permanent sorted position?`);
-        }
-        qsCandidates.push(`How does the partitioning step actually swap and rearrange elements around the pivot under the hood?`);
-      }
-
-      // If looking for an example
-      if (strategy === "REQUEST_EXAMPLE" || cat === "application") {
-        qsCandidates.push(`Could you walk me through a quick example with a small list like [5, 2, 9, 1, 7] so I can see what the array looks like after that first partition pass?`);
-        qsCandidates.push(`Can you show me a concrete example tracing how the pointers swap elements around the pivot from start to finish?`);
-      }
-
-      // If looking at prerequisite / recursion / base case
-      if (cat === "prerequisite" || lowerAnswer.includes("recursive") || lowerAnswer.includes("left and right")) {
-        qsCandidates.push(`Wait, once the pivot is in place and it repeats on the left and right partitions, how does the recursion know when to stop—what is the base case?`);
-        qsCandidates.push(`What specific input condition or base case prevents QuickSort from continuing to recurse forever?`);
-      }
-
-      // If looking at complexity
-      if (cat === "complexity" || lowerAnswer.includes("o(") || lowerAnswer.includes("time") || lowerAnswer.includes("fast")) {
-        qsCandidates.push(`What causes QuickSort to degrade to its worst-case O(n²) time complexity, and how do we prevent that from happening?`);
-        qsCandidates.push(`Why is the average time complexity of QuickSort O(n log n)—where does that log n factor come from?`);
-      }
-
-      // If looking at edge cases
-      if (cat === "edge_cases") {
-        qsCandidates.push(`What happens in edge cases—like if the array is already sorted, or if all elements are completely identical?`);
-        qsCandidates.push(`What happens if we pass an empty array or an array with only one element to QuickSort?`);
-      }
-
-      // If looking at trade-offs
-      if (cat === "trade_offs") {
-        qsCandidates.push(`Why is QuickSort so popular in practice compared to MergeSort if MergeSort has a guaranteed O(n log n) worst case?`);
-        qsCandidates.push(`Does QuickSort require extra memory for helper arrays, or is it an in-place sorting algorithm?`);
-      }
-
-      const chosen = pickUnique(qsCandidates);
-      if (chosen) return chosen;
-    }
-
-    // 4. TOPIC-SPECIFIC INQUIRIES (Binary Search)
-    if (tLower.includes("binary search")) {
-      const bsCandidates: string[] = [];
-      if (cat === "mechanism" || strategy === "PROBE_HOW") {
-        bsCandidates.push(`How does binary search actually calculate the middle index and discard half of the array step-by-step?`);
-        bsCandidates.push(`When we compare the target with the middle element, how do the start and end pointers adjust?`);
-      }
-      if (cat === "prerequisite" || strategy === "PROBE_WHY") {
-        bsCandidates.push(`That makes sense! But why is sorted order strictly required beforehand—why couldn't we do that on an unsorted list?`);
-      }
-      if (cat === "application" || strategy === "REQUEST_EXAMPLE") {
-        bsCandidates.push(`Can you walk me through a simple, concrete example with actual numbers (like searching for 7 in [1, 3, 5, 7, 9]) to show how it narrows down?`);
-      }
-      if (cat === "complexity") {
-        bsCandidates.push(`How does halving the search space at each step lead to O(log n) time complexity, and how does that compare to checking one by one?`);
-      }
-      if (cat === "edge_cases") {
-        bsCandidates.push(`What happens in edge cases—like if the target element isn't in the list at all, or if the list is completely empty?`);
-      }
-      if (cat === "trade_offs") {
-        bsCandidates.push(`What are the trade-offs—when would someone prefer a hash table or linear search over binary search?`);
-      }
-      const chosen = pickUnique(bsCandidates);
-      if (chosen) return chosen;
-    }
 
     // 5. UNIVERSAL CURRICULUM QUESTIONS (Works for ANY Topic in the World)
     const universalCandidates: string[] = [];
