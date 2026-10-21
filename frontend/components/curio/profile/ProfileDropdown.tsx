@@ -38,11 +38,18 @@ export function ProfileDropdown() {
     learning,
     stats,
     initSettings,
+    syncRealStats,
   } = useSettingsStore();
 
   useEffect(() => {
     initSettings();
   }, [initSettings]);
+
+  useEffect(() => {
+    if (isOpen) {
+      syncRealStats();
+    }
+  }, [isOpen, syncRealStats]);
 
   // Click outside listener
   useEffect(() => {
@@ -78,7 +85,7 @@ export function ProfileDropdown() {
   }, [isOpen]);
 
   const displayName = user?.name || profile.displayName || (user?.email ? user.email.split("@")[0] : "Learner");
-  const displayEmail = user?.email || profile.email || "learner@curio.ai";
+  const displayEmail = user?.email || profile.email || "";
   const initials = displayName
     .split(" ")
     .map((n) => n[0])

@@ -4,32 +4,24 @@ import { apiClient } from "./apiClient";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-let mockPracticeQueue: PracticeQueueItem[] = [
-  {
-    id: "pq_1",
-    gapId: "gap_bc_1",
-    conceptName: "Boundary Conditions (low <= high vs low < high)",
-    topicName: "Binary Search",
-    severity: "HIGH",
-    savedAt: "2024-01-15T15:14:00Z",
-  },
-  {
-    id: "pq_2",
-    gapId: "gap_mid_2",
-    conceptName: "Integer Overflow in Midpoint Calculation",
-    topicName: "Binary Search",
-    severity: "MEDIUM",
-    savedAt: "2024-01-15T15:15:00Z",
-  },
-  {
-    id: "pq_3",
-    gapId: "gap_dijk_3",
-    conceptName: "Negative Edge Weights in Dijkstra",
-    topicName: "Dijkstra's Algorithm",
-    severity: "HIGH",
-    savedAt: "2024-01-08T17:10:00Z",
-  },
-];
+const QUEUE_STORAGE_KEY = "curio_practice_queue";
+
+function getStoredPracticeQueue(): PracticeQueueItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(QUEUE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setStoredPracticeQueue(items: PracticeQueueItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(items));
+  } catch {}
+}
 
 export const DEFAULT_CONFIDENCE = 0.6;
 
@@ -129,16 +121,17 @@ export async function getSessionHistory(page: number = 1, pageSize: number = 20)
 }
 
 export async function getPracticeQueue(): Promise<PracticeQueueItem[]> {
-  await delay(150);
-  return [...mockPracticeQueue];
+  await delay(50);
+  return getStoredPracticeQueue();
 }
 
 export async function saveToPracticeQueue(item: Omit<PracticeQueueItem, "id" | "savedAt">): Promise<void> {
-  await delay(200);
+  await delay(50);
+  const current = getStoredPracticeQueue();
   const newItem: PracticeQueueItem = {
     ...item,
     id: "pq_" + Date.now(),
     savedAt: new Date().toISOString(),
   };
-  mockPracticeQueue = [newItem, ...mockPracticeQueue];
+  setStoredPracticeQueue([newItem, ...current]);
 }

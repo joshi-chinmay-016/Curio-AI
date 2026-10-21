@@ -76,7 +76,7 @@ function DashboardContent() {
     };
   }, []);
 
-  const displayName = user?.email ? user.email.split("@")[0] : "Learner";
+  const displayName = user?.name || (user?.email ? user.email.split("@")[0] : "Learner");
   const activeSession = sessions.find((s) => s.status === "IN_PROGRESS");
   const completedSessionsCount = sessions.filter((s) => s.status === "COMPLETED").length;
   const totalConceptsTracked = progressData?.summary?.total_concepts_tracked || progressData?.concepts?.length || 0;

@@ -37,35 +37,30 @@ function getInitialAuthState(): {
       return { user: null, token: null, isAuthenticated: false, isLoading: false };
     }
 
+    // Clean up any stale demo session tokens
     if (savedToken === "demo-session-token") {
-      let demoUser: User = {
-        id: "demo-learner",
-        email: "learner@curio.ai",
-        name: "Curious Learner",
-        is_active: true,
-        created_at: new Date().toISOString(),
-      };
-      const rawDemo = localStorage.getItem("curio_demo_user");
-      if (rawDemo) {
-        demoUser = { ...demoUser, ...JSON.parse(rawDemo) };
-      }
-      return { user: demoUser, token: savedToken, isAuthenticated: true, isLoading: false };
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem("curio_demo_user");
+      return { user: null, token: null, isAuthenticated: false, isLoading: false };
     }
 
     const rawUser = localStorage.getItem(USER_KEY);
     if (rawUser) {
-      const user = JSON.parse(rawUser);
-      return { user, token: savedToken, isAuthenticated: true, isLoading: false };
+      try {
+        const user = JSON.parse(rawUser);
+        // Clean up legacy mock learner
+        if (user.email === "learner@curio.ai" && user.id === "demo-learner") {
+          localStorage.removeItem(USER_KEY);
+        } else {
+          return { user, token: savedToken, isAuthenticated: true, isLoading: false };
+        }
+      } catch {}
     }
 
-    // Token exists without cached user - preserve session and let initAuth populate in background
+    // Token exists without cached user - preserve session and let initAuth fetch real user in background
     return {
-      user: {
-        id: "user-session",
-        email: "learner@curio.ai",
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
+      user: null,
       token: savedToken,
       isAuthenticated: true,
       isLoading: false,
@@ -119,6 +114,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           displayName,
           email: user.email,
         });
+        useSettingsStore.getState().syncRealStats();
       } catch {}
 
       set({
@@ -183,37 +179,8 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     }
   },
 
-  loginDemoUser: (email?: string, name?: string) => {
-    const demoEmail = email || "learner@curio.ai";
-    const demoName = name || (demoEmail.includes("@") ? demoEmail.split("@")[0] : "Learner");
-    const demoUser: User = {
-      id: "demo-" + Math.random().toString(36).substring(2, 9),
-      email: demoEmail,
-      name: demoName,
-      is_active: true,
-      created_at: new Date().toISOString(),
-    };
-    const demoToken = "demo-session-token";
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TOKEN_KEY, demoToken);
-      localStorage.setItem("curio_demo_user", JSON.stringify(demoUser));
-      localStorage.setItem(USER_KEY, JSON.stringify(demoUser));
-    }
-
-    try {
-      useSettingsStore.getState().updateProfile({
-        displayName: demoName,
-        email: demoEmail,
-      });
-    } catch {}
-
-    set({
-      token: demoToken,
-      user: demoUser,
-      isAuthenticated: true,
-      isLoading: false,
-      error: null,
-    });
+  loginDemoUser: () => {
+    console.warn("[CurioAuth] Demo access is disabled. Real authentication is required.");
   },
 
   logout: () => {
@@ -253,25 +220,16 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       return;
     }
 
-    // Demo Session restoration
+    // Clean up any stale demo tokens
     if (savedToken === "demo-session-token") {
-      let storedUser: User = {
-        id: "demo-user",
-        email: "learner@curio.ai",
-        name: "Curious Learner",
-        is_active: true,
-        created_at: new Date().toISOString(),
-      };
-      try {
-        const raw = localStorage.getItem("curio_demo_user");
-        if (raw) storedUser = { ...storedUser, ...JSON.parse(raw) };
-      } catch {}
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem("curio_demo_user");
       set({
-        token: savedToken,
-        user: storedUser,
-        isAuthenticated: true,
+        user: null,
+        token: null,
+        isAuthenticated: false,
         isLoading: false,
-        error: null,
       });
       return;
     }
@@ -296,6 +254,17 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       if (typeof window !== "undefined") {
         localStorage.setItem(USER_KEY, JSON.stringify(user));
       }
+
+      // Sync user profile & stats to settings store
+      try {
+        const displayName = user.name || (user.email ? user.email.split("@")[0] : "Learner");
+        useSettingsStore.getState().updateProfile({
+          displayName,
+          email: user.email,
+        });
+        useSettingsStore.getState().syncRealStats();
+      } catch {}
+
       set({
         token: savedToken,
         user,

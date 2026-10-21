@@ -82,11 +82,15 @@ function SettingsContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    setProfileForm(profile);
+    setProfileForm({
+      ...profile,
+      displayName: profile.displayName || user?.name || (user?.email ? user.email.split("@")[0] : ""),
+      email: user?.email || profile.email || "",
+    });
     setLearningForm(learning);
     setAudioForm(audio);
     setPrivacyForm(privacy);
-  }, [profile, learning, audio, privacy]);
+  }, [profile, learning, audio, privacy, user]);
 
   const handleSaveAll = () => {
     updateProfile(profileForm);
