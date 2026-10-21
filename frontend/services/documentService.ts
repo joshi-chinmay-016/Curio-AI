@@ -77,22 +77,68 @@ export function formatDocumentStatus(status: string): {
   const norm = (status || "").toUpperCase();
   switch (norm) {
     case "PROCESSED":
+    case "READY":
       return {
         label: "Ready for Learning",
         badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300",
         isReady: true,
         isProcessing: false,
         isFailed: false,
-        description: "Text extracted and chunked. Ready to ground learning sessions.",
+        description: "Text extracted, chunked, and embedded with Gemini. Ready to ground learning sessions.",
       };
-    case "PROCESSING":
+    case "EXTRACTING":
       return {
-        label: "Processing Text...",
+        label: "Extracting Pages...",
         badgeClass: "bg-amber-50 text-amber-700 border-amber-300 animate-pulse",
         isReady: false,
         isProcessing: true,
         isFailed: false,
-        description: "Extracting text passages and indexing chunks.",
+        description: "Extracting text passages and preserving page structure.",
+      };
+    case "CHUNKING":
+      return {
+        label: "Chunking Sections...",
+        badgeClass: "bg-amber-50 text-amber-700 border-amber-300 animate-pulse",
+        isReady: false,
+        isProcessing: true,
+        isFailed: false,
+        description: "Performing structure-aware chunking and section analysis.",
+      };
+    case "EMBEDDING":
+      return {
+        label: "Generating Vectors...",
+        badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-300 animate-pulse",
+        isReady: false,
+        isProcessing: true,
+        isFailed: false,
+        description: "Embedding chunks in bounded batches using Gemini API.",
+      };
+    case "BUILDING_CURRICULUM":
+      return {
+        label: "Building Curriculum...",
+        badgeClass: "bg-purple-50 text-purple-700 border-purple-300 animate-pulse",
+        isReady: false,
+        isProcessing: true,
+        isFailed: false,
+        description: "Extracting concept graph and prerequisite hierarchy.",
+      };
+    case "PROCESSING":
+      return {
+        label: "Processing Document...",
+        badgeClass: "bg-amber-50 text-amber-700 border-amber-300 animate-pulse",
+        isReady: false,
+        isProcessing: true,
+        isFailed: false,
+        description: "Indexing document chunks and generating embeddings.",
+      };
+    case "PARTIAL":
+      return {
+        label: "Partially Ready",
+        badgeClass: "bg-amber-50 text-amber-700 border-amber-300",
+        isReady: true,
+        isProcessing: false,
+        isFailed: false,
+        description: "Partially indexed; some pages or chunks may be missing.",
       };
     case "UPLOADED":
       return {
@@ -105,12 +151,12 @@ export function formatDocumentStatus(status: string): {
       };
     case "FAILED":
       return {
-        label: "Extraction Failed",
+        label: "Processing Failed",
         badgeClass: "bg-rose-50 text-rose-700 border-rose-300",
         isReady: false,
         isProcessing: false,
         isFailed: true,
-        description: "Text extraction encountered an issue. You can retry processing.",
+        description: "Document processing encountered an issue. You can retry processing.",
       };
     default:
       return {

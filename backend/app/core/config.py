@@ -56,17 +56,21 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 200  # Overlap between adjacent chunks in characters
 
     # Embedding Configuration
-    EMBEDDING_PROVIDER: str = "openai"  # Options: "openai"
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_PROVIDER: str = "gemini"  # Options: "gemini", "openai"
+    GEMINI_API_KEY: str = ""
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
     EMBEDDING_DIMENSIONS: int = 1536
     EMBEDDING_API_KEY: str = "curio-dev-mock-key"
     EMBEDDING_TIMEOUT_SECONDS: float = 30.0
     EMBEDDING_MAX_RETRIES: int = 2
-    EMBEDDING_BATCH_SIZE: int = 100  # Max chunks per API call
+    EMBEDDING_BATCH_SIZE: int = 50  # Bounded batch size suitable for Gemini and large PDFs
 
     # Retrieval Configuration
     RETRIEVAL_TOP_K: int = 5  # Default number of results to return
     RETRIEVAL_SIMILARITY_THRESHOLD: float = 0.0  # Minimum cosine similarity (0-1)
+    RETRIEVAL_HYBRID_ENABLED: bool = True  # Combine dense and lexical retrieval via RRF
+    RETRIEVAL_RRF_K: int = 60  # Reciprocal Rank Fusion smoothing constant
 
     # Voice & Speech-to-Text Configuration
     VOICE_WHISPER_MODEL: str = "base"
