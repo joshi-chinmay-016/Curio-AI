@@ -3,20 +3,22 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { useReducedMotion } from "framer-motion";
 import { PenguinTraveler } from "./PenguinTraveler";
+import { PenguinCohort } from "./PenguinCohort";
 
 interface SectionTint {
   id: string;
-  tint: string;
+  lightTint: string;
+  darkTint: string;
 }
 
 const SECTION_TINTS: SectionTint[] = [
-  { id: "hero-section", tint: "#E8EEF3" }, // Curio Ice
-  { id: "how-it-works", tint: "#FFFFFF" }, // White / Clean
-  { id: "how-curio-thinks", tint: "#EBF3FA" }, // Pale Cobalt / Ice
-  { id: "adaptive-network", tint: "#F3F6FA" }, // Pale Navy Mist
-  { id: "teacher-mode-demo", tint: "#FFF8F2" }, // Very soft warm accent
-  { id: "report-preview", tint: "#E8EEF3" }, // Curio Ice
-  { id: "final-cta", tint: "#FFFFFF" }, // White
+  { id: "hero-section", lightTint: "#E8EEF3", darkTint: "#080F1A" }, // Curio Ice / Deep Dark Navy
+  { id: "how-it-works", lightTint: "#FFFFFF", darkTint: "#0B1524" },
+  { id: "how-curio-thinks", lightTint: "#EBF3FA", darkTint: "#091220" },
+  { id: "adaptive-network", lightTint: "#F3F6FA", darkTint: "#0C1728" },
+  { id: "teacher-mode-demo", lightTint: "#FFF8F2", darkTint: "#0F1622" },
+  { id: "report-preview", lightTint: "#E8EEF3", darkTint: "#080F1A" },
+  { id: "final-cta", lightTint: "#FFFFFF", darkTint: "#0B1524" },
 ];
 
 export function ScrollJourneyLayer() {
@@ -30,18 +32,49 @@ export function ScrollJourneyLayer() {
     height: 6000,
   });
   const [mounted, setMounted] = useState<boolean>(false);
+  const [isDark, setIsDark] = useState<boolean>(false);
 
   const reducedMotion = mounted ? Boolean(reducedMotionRaw) : false;
 
   // Active section tint
-  const [activeTint, setActiveTint] = useState<string>(SECTION_TINTS[0].tint);
+  const [activeTint, setActiveTint] = useState<string>(SECTION_TINTS[0].lightTint);
+
+  // Sync dark mode from DOM class
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkDark = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+    checkDark();
+
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const isMobile = pageDims.width < 768;
+  const originP0 = useMemo(() => {
+    const w = pageDims.width;
+    return {
+      x: isMobile ? 56 : Math.max(76, w * 0.08),
+      y: isMobile ? 158 : 176,
+    };
+  }, [isMobile, pageDims.width]);
 
   // Penguin state
-  const [penguinPos, setPenguinPos] = useState<{ x: number; y: number }>({ x: 90, y: 135 });
+  const [penguinPos, setPenguinPos] = useState<{ x: number; y: number }>(originP0);
   const [facingRight, setFacingRight] = useState<boolean>(true);
   const [penguinOpacity, setPenguinOpacity] = useState<number>(1);
   const [isMoving, setIsMoving] = useState<boolean>(false);
   const [velocityScale, setVelocityScale] = useState<number>(1);
+
+  useEffect(() => {
+    setPenguinPos(originP0);
+  }, [originP0]);
 
   // Measure page dimensions
   const updateDimensions = useCallback(() => {
@@ -92,7 +125,7 @@ export function ScrollJourneyLayer() {
     const midX = w * 0.5;
 
     // Waypoints from top of hero down to final CTA:
-    const p0 = { x: isMobile ? 36 : Math.max(48, w * 0.08), y: 135 };
+    const p0 = originP0;
     const p1 = { x: rightX, y: h * 0.20 };
     const p2 = { x: leftX, y: h * 0.36 };
     const p3 = { x: rightX * 0.95, y: h * 0.52 };
@@ -107,7 +140,7 @@ export function ScrollJourneyLayer() {
       `C ${p3.x + (p4.x - p3.x) * 0.4} ${p4.y + (p4.y - p3.y) * 0.25}, ${p4.x - (p4.x - p3.x) * 0.4} ${p4.y - (p4.y - p3.y) * 0.25}, ${p4.x} ${p4.y} ` +
       `C ${p4.x + (p5.x - p4.x) * 0.4} ${p5.y + (p5.y - p4.y) * 0.25}, ${p5.x - (p5.x - p4.x) * 0.4} ${p5.y - (p5.y - p4.y) * 0.25}, ${p5.x} ${p5.y} ` +
       `C ${p5.x + (p6.x - p5.x) * 0.4} ${p5.y + (p6.y - p5.y) * 0.3}, ${p6.x} ${p6.y - (p6.y - p5.y) * 0.2}, ${p6.x} ${p6.y}`;
-  }, [pageDims]);
+  }, [pageDims, originP0]);
 
   // Section boundary detection
   const checkActiveSection = useCallback(() => {
@@ -115,21 +148,25 @@ export function ScrollJourneyLayer() {
     const scrollY = window.scrollY || window.pageYOffset;
     const viewportMiddle = scrollY + window.innerHeight * 0.45;
 
-    let foundTint = SECTION_TINTS[0].tint;
+    let foundSection = SECTION_TINTS[0];
 
     for (let i = SECTION_TINTS.length - 1; i >= 0; i--) {
       const sec = document.getElementById(SECTION_TINTS[i].id);
       if (sec) {
         const top = sec.offsetTop;
         if (viewportMiddle >= top - 60) {
-          foundTint = SECTION_TINTS[i].tint;
+          foundSection = SECTION_TINTS[i];
           break;
         }
       }
     }
 
-    setActiveTint(foundTint);
-  }, []);
+    setActiveTint(isDark ? foundSection.darkTint : foundSection.lightTint);
+  }, [isDark]);
+
+  useEffect(() => {
+    checkActiveSection();
+  }, [isDark, checkActiveSection]);
 
   // Update position directly from scroll events
   useEffect(() => {
@@ -250,7 +287,20 @@ export function ScrollJourneyLayer() {
           />
         </svg>
 
-        {/* The Penguin Mascot */}
+        {/* The Penguin Cohort (Stationary group standing at the hero origin) */}
+        <div
+          className="absolute pointer-events-none select-none"
+          style={{
+            transform: `translate3d(${originP0.x - 24 * penguinScale}px, ${
+              originP0.y - 52 * penguinScale
+            }px, 0)`,
+            zIndex: 14,
+          }}
+        >
+          <PenguinCohort scale={penguinScale} reducedMotion={reducedMotion} />
+        </div>
+
+        {/* The Traveling Penguin Mascot */}
         <div
           className="absolute pointer-events-none select-none transition-opacity duration-200"
           style={{
@@ -259,6 +309,7 @@ export function ScrollJourneyLayer() {
             }px, 0)`,
             opacity: penguinOpacity,
             willChange: "transform, opacity",
+            zIndex: 16,
           }}
         >
           <PenguinTraveler

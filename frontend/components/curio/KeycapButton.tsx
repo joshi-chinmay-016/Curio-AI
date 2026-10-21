@@ -9,7 +9,7 @@ export interface KeycapButtonProps
   children: React.ReactNode;
   loading?: boolean;
   loadingText?: string;
-  variant?: "default" | "gap" | "cobalt" | "resolve" | "navy" | "ghost";
+  variant?: "default" | "gap" | "cobalt" | "resolve" | "navy" | "ghost" | "ghost-orange";
   size?: "sm" | "md" | "lg";
 }
 
@@ -65,6 +65,11 @@ export function KeycapButton({
       normal:
         "border-navy dark:border-[#2F4D73] bg-transparent text-navy dark:text-[#F0F4F8] hover:bg-navy dark:hover:bg-[#101F33] hover:text-white dark:hover:text-white",
       pressed: "translate-y-1 shadow-[0_0px_0_0_#0F2B4A] dark:shadow-[0_0px_0_0_#040910]",
+    },
+    "ghost-orange": {
+      normal:
+        "border-navy dark:border-[#2F4D73] bg-transparent text-navy dark:text-[#F0F4F8] hover:bg-gap-orange hover:border-gap-orange hover:text-white dark:hover:bg-gap-orange dark:hover:border-gap-orange dark:hover:text-white hover:shadow-[0_5px_0_0_#CC5200,0_8px_18px_rgba(255,107,26,0.3)] dark:hover:shadow-[0_5px_0_0_#CC5200,0_8px_18px_rgba(0,0,0,0.7)]",
+      pressed: "translate-y-1 shadow-[0_0px_0_0_#CC5200]",
     },
   };
 

@@ -79,7 +79,7 @@ export default function LandingPage() {
                 </KeycapButton>
               </Link>
               <KeycapButton
-                variant="ghost"
+                variant="ghost-orange"
                 size="lg"
                 onClick={scrollToHowItWorks}
               >

@@ -60,7 +60,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="antialiased min-h-screen bg-ice text-navy font-sans selection:bg-cobalt selection:text-white">
+      <body className="antialiased min-h-screen bg-ice dark:bg-[#080F1A] text-navy dark:text-[#F0F4F8] font-sans selection:bg-cobalt selection:text-white">
         {children}
         <CurioToaster />
       </body>
