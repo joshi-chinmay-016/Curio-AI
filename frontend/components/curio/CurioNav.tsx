@@ -35,17 +35,23 @@ export type CurioNavRoute =
 
 export interface CurioNavProps {
   activeRoute?: CurioNavRoute;
+  showProfile?: boolean;
 }
 
-export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
+export function CurioNav({ activeRoute = "home", showProfile }: CurioNavProps) {
   const router = useRouter();
   const { user, isAuthenticated, initAuth, logout } = useAuthStore();
   const { theme, setTheme } = useSettingsStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const shouldShowProfile =
+    showProfile !== undefined ? showProfile : activeRoute !== "home";
+
   useEffect(() => {
-    initAuth();
-  }, [initAuth]);
+    if (!isAuthenticated) {
+      initAuth();
+    }
+  }, [isAuthenticated, initAuth]);
 
   const navLinks = [
     {
@@ -177,12 +183,27 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
                 </Link>
               )}
 
-              {/* Top AI Product Profile Trigger & Menu */}
-              <ProfileDropdown />
+              {/* Show profile dropdown only on non-landing pages */}
+              {shouldShowProfile ? (
+                <ProfileDropdown />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    router.replace("/");
+                  }}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono uppercase font-bold text-navy/70 hover:text-rose-700 hover:bg-rose-50 border border-fog rounded-[4px] transition-colors cursor-pointer"
+                  title="Sign out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>LOGOUT</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2 sm:gap-2.5">
-              <ProfileDropdown />
+              {shouldShowProfile && <ProfileDropdown />}
               <Link href="/login" className="hidden sm:inline-block">
                 <KeycapButton variant="ghost" size="sm">
                   SIGN IN

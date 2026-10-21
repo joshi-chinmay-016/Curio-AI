@@ -30,7 +30,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-transparent text-navy flex flex-col selection:bg-cobalt selection:text-white relative">
       <ScrollJourneyLayer />
       <DiagonalSweepTransition />
-      <CurioNav />
+      <CurioNav activeRoute="home" showProfile={false} />
 
       {/* 1. HERO SECTION */}
       <section id="hero-section" className="relative w-full max-w-7xl mx-auto px-6 pt-10 pb-16 md:pt-16 md:pb-24">

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Lock, Mail, AlertCircle, CheckCircle2, User } from "lucide-react";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { useAuthStore } from "@/stores/authStore";
@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { register, loginDemoUser, isAuthenticated, isLoading, error, clearError, initAuth } = useAuthStore();
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,8 +22,10 @@ export default function RegisterPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    initAuth();
-  }, [initAuth]);
+    if (!isAuthenticated) {
+      initAuth();
+    }
+  }, [isAuthenticated, initAuth]);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -35,9 +38,14 @@ export default function RegisterPage() {
     clearError();
     setFormError(null);
 
+    const cleanName = name.trim();
     const cleanEmail = email.trim();
 
     // 1. Validations
+    if (!cleanName) {
+      setFormError("Please enter your full name.");
+      return;
+    }
     if (!cleanEmail) {
       setFormError("Please enter your email address.");
       return;
@@ -61,7 +69,7 @@ export default function RegisterPage() {
 
     try {
       setIsSubmitting(true);
-      await register({ email: cleanEmail, password });
+      await register({ name: cleanName, email: cleanEmail, password });
       router.replace("/dashboard");
     } catch (err: any) {
       setIsSubmitting(false);
@@ -152,7 +160,7 @@ export default function RegisterPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        loginDemoUser(email || "learner@curio.ai");
+                        loginDemoUser(email || "learner@curio.ai", name || "Curious Learner");
                         router.replace("/dashboard");
                       }}
                       className="px-3 py-1.5 bg-navy text-white text-xs font-mono font-bold rounded-[4px] hover:bg-cobalt transition-colors inline-flex items-center justify-center gap-1.5 shrink-0 shadow-xs"
@@ -166,6 +174,36 @@ export default function RegisterPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              {/* Full Name */}
+              <div>
+                <label
+                  htmlFor="name"
+                  className="block font-mono text-xs font-bold uppercase tracking-wider text-navy/80 mb-2"
+                >
+                  Full Name
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-navy/40 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    autoComplete="name"
+                    required
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (displayedError) {
+                        clearError();
+                        setFormError(null);
+                      }
+                    }}
+                    placeholder="e.g. Richard Feynman"
+                    className="w-full pl-10 pr-4 py-2.5 bg-ice/40 border border-fog rounded-[6px] font-sans text-sm text-navy placeholder:text-navy/35 focus:outline-none focus:border-cobalt focus:ring-1 focus:ring-cobalt transition-colors"
+                  />
+                </div>
+              </div>
+
               {/* Email Address */}
               <div>
                 <label

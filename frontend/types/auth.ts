@@ -1,6 +1,7 @@
 export interface User {
   id: string;
   email: string;
+  name?: string;
   is_active: boolean;
   created_at: string;
 }
@@ -17,6 +18,7 @@ export interface LoginCredentials {
 }
 
 export interface RegisterCredentials {
+  name?: string;
   email: string;
   password: string;
 }

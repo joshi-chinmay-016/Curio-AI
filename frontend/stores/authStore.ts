@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { User, LoginCredentials, RegisterCredentials } from "@/types/auth";
 import { loginApi, registerApi, getMeApi } from "@/services/authService";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 const TOKEN_KEY = "curio_access_token";
+const USER_KEY = "curio_auth_user";
 
 interface AuthStoreState {
   user: User | null;
@@ -14,17 +16,72 @@ interface AuthStoreState {
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (credentials: RegisterCredentials) => Promise<void>;
-  loginDemoUser: (email?: string) => void;
+  loginDemoUser: (email?: string, name?: string) => void;
   logout: () => void;
   initAuth: () => Promise<void>;
   clearError: () => void;
 }
 
+function getInitialAuthState(): {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+} {
+  if (typeof window === "undefined") {
+    return { user: null, token: null, isAuthenticated: false, isLoading: false };
+  }
+  try {
+    const savedToken = localStorage.getItem(TOKEN_KEY);
+    if (!savedToken) {
+      return { user: null, token: null, isAuthenticated: false, isLoading: false };
+    }
+
+    if (savedToken === "demo-session-token") {
+      let demoUser: User = {
+        id: "demo-learner",
+        email: "learner@curio.ai",
+        name: "Curious Learner",
+        is_active: true,
+        created_at: new Date().toISOString(),
+      };
+      const rawDemo = localStorage.getItem("curio_demo_user");
+      if (rawDemo) {
+        demoUser = { ...demoUser, ...JSON.parse(rawDemo) };
+      }
+      return { user: demoUser, token: savedToken, isAuthenticated: true, isLoading: false };
+    }
+
+    const rawUser = localStorage.getItem(USER_KEY);
+    if (rawUser) {
+      const user = JSON.parse(rawUser);
+      return { user, token: savedToken, isAuthenticated: true, isLoading: false };
+    }
+
+    // Token exists without cached user - preserve session and let initAuth populate in background
+    return {
+      user: {
+        id: "user-session",
+        email: "learner@curio.ai",
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+      token: savedToken,
+      isAuthenticated: true,
+      isLoading: false,
+    };
+  } catch {
+    return { user: null, token: null, isAuthenticated: false, isLoading: false };
+  }
+}
+
+const initialState = getInitialAuthState();
+
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  isLoading: true,
+  user: initialState.user,
+  token: initialState.token,
+  isAuthenticated: initialState.isAuthenticated,
+  isLoading: initialState.isLoading,
   error: null,
 
   clearError: () => set({ error: null }),
@@ -39,7 +96,31 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       }
 
       // Fetch user profile immediately
-      const user = await getMeApi(token);
+      let user: User;
+      try {
+        user = await getMeApi(token);
+      } catch {
+        user = {
+          id: "user-" + Math.random().toString(36).substring(2, 9),
+          email: credentials.email,
+          is_active: true,
+          created_at: new Date().toISOString(),
+        };
+      }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(USER_KEY, JSON.stringify(user));
+      }
+
+      // Sync with settings store
+      try {
+        const displayName = user.name || credentials.email.split("@")[0];
+        useSettingsStore.getState().updateProfile({
+          displayName,
+          email: user.email,
+        });
+      } catch {}
+
       set({
         token,
         user,
@@ -50,6 +131,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     } catch (err: any) {
       if (typeof window !== "undefined") {
         localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
       }
       set({
         token: null,
@@ -66,8 +148,32 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       await registerApi(credentials);
+
+      // Save name to settings immediately
+      if (credentials.name) {
+        try {
+          useSettingsStore.getState().updateProfile({
+            displayName: credentials.name,
+            email: credentials.email,
+          });
+        } catch {}
+      }
+
       // Automatically log in following registration
-      await get().login(credentials);
+      await get().login({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      // Update name on user object if returned without it
+      const currentUser = get().user;
+      if (currentUser && credentials.name) {
+        const updatedUser = { ...currentUser, name: credentials.name };
+        set({ user: updatedUser });
+        if (typeof window !== "undefined") {
+          localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
+        }
+      }
     } catch (err: any) {
       set({
         isLoading: false,
@@ -77,11 +183,13 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     }
   },
 
-  loginDemoUser: (email?: string) => {
+  loginDemoUser: (email?: string, name?: string) => {
     const demoEmail = email || "learner@curio.ai";
+    const demoName = name || (demoEmail.includes("@") ? demoEmail.split("@")[0] : "Learner");
     const demoUser: User = {
       id: "demo-" + Math.random().toString(36).substring(2, 9),
       email: demoEmail,
+      name: demoName,
       is_active: true,
       created_at: new Date().toISOString(),
     };
@@ -89,7 +197,16 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     if (typeof window !== "undefined") {
       localStorage.setItem(TOKEN_KEY, demoToken);
       localStorage.setItem("curio_demo_user", JSON.stringify(demoUser));
+      localStorage.setItem(USER_KEY, JSON.stringify(demoUser));
     }
+
+    try {
+      useSettingsStore.getState().updateProfile({
+        displayName: demoName,
+        email: demoEmail,
+      });
+    } catch {}
+
     set({
       token: demoToken,
       user: demoUser,
@@ -102,8 +219,8 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   logout: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
       localStorage.removeItem("curio_demo_user");
-      // Clean up sensitive user session items
       if (typeof sessionStorage !== "undefined") {
         sessionStorage.clear();
       }
@@ -118,9 +235,10 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   },
 
   initAuth: async () => {
-    set({ isLoading: true, error: null });
-    if (typeof window === "undefined") {
-      set({ isLoading: false });
+    if (typeof window === "undefined") return;
+
+    // Idempotency: If already authenticated and user object exists, do NOT wipe state or enter loading!
+    if (get().isAuthenticated && get().user && get().token) {
       return;
     }
 
@@ -135,16 +253,18 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       return;
     }
 
+    // Demo Session restoration
     if (savedToken === "demo-session-token") {
       let storedUser: User = {
         id: "demo-user",
         email: "learner@curio.ai",
+        name: "Curious Learner",
         is_active: true,
         created_at: new Date().toISOString(),
       };
       try {
         const raw = localStorage.getItem("curio_demo_user");
-        if (raw) storedUser = JSON.parse(raw);
+        if (raw) storedUser = { ...storedUser, ...JSON.parse(raw) };
       } catch {}
       set({
         token: savedToken,
@@ -156,8 +276,26 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       return;
     }
 
+    // Try reading cached user first to preserve instant render
+    const cachedUserRaw = localStorage.getItem(USER_KEY);
+    if (cachedUserRaw) {
+      try {
+        const cachedUser = JSON.parse(cachedUserRaw);
+        set({
+          token: savedToken,
+          user: cachedUser,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } catch {}
+    }
+
+    // Background validation
     try {
       const user = await getMeApi(savedToken);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(USER_KEY, JSON.stringify(user));
+      }
       set({
         token: savedToken,
         user,
@@ -165,15 +303,25 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         isLoading: false,
         error: null,
       });
-    } catch (err) {
-      // Invalid or expired token
-      localStorage.removeItem(TOKEN_KEY);
-      set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+    } catch (err: any) {
+      // ONLY clear token if the server explicitly returned 401 Unauthorized
+      // On network errors / timeouts, keep user logged in so their session never drops
+      if (err?.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      } else {
+        // Keep authenticated state active from cache
+        set({
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      }
     }
   },
 }));

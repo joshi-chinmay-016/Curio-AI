@@ -22,8 +22,10 @@ function LoginForm() {
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    initAuth();
-  }, [initAuth]);
+    if (!isAuthenticated) {
+      initAuth();
+    }
+  }, [isAuthenticated, initAuth]);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
