@@ -17,6 +17,7 @@ from uuid import UUID
 from backend.app.core.config import settings
 from backend.app.models.document import DocumentChunk
 from backend.app.repositories.document_chunk_repository import DocumentChunkRepository
+from backend.app.embeddings.gemini_provider import GeminiEmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class EmbeddingService:
     Service for generating embeddings for document chunks.
     
     Features:
+    - Provider support for Google Gemini (primary) and OpenAI (legacy/fallback)
     - Batched embedding generation with configurable batch size
     - Automatic retry with exponential backoff for retryable errors
     - Input validation and dimension checking
@@ -65,43 +67,47 @@ class EmbeddingService:
         max_retries: Optional[int] = None,
         batch_size: Optional[int] = None,
         client: Optional[OpenAI] = None,
+        provider: Optional[str] = None,
     ):
         """
         Initialize embedding service with configuration.
-        
-        Args:
-            api_key: OpenAI API key (from settings if None)
-            model: Embedding model name (from settings if None)
-            dimensions: Expected vector dimensions (from settings if None)
-            timeout: Request timeout in seconds (from settings if None)
-            max_retries: Max retry attempts for retryable errors (from settings if None)
-            batch_size: Max texts per API call (from settings if None)
-            client: Optional OpenAI client for testing/mocking
-            
-        Raises:
-            EmbeddingError: If configuration is invalid
         """
-        self._api_key = api_key or settings.EMBEDDING_API_KEY
-        self._model = model or settings.EMBEDDING_MODEL
+        self._provider = (provider or settings.EMBEDDING_PROVIDER or "gemini").lower()
+        self._api_key = api_key or (settings.GEMINI_API_KEY if self._provider == "gemini" else settings.EMBEDDING_API_KEY)
+        self._model = model or (settings.GEMINI_EMBEDDING_MODEL if self._provider == "gemini" else settings.EMBEDDING_MODEL)
         self._dimensions = dimensions or settings.EMBEDDING_DIMENSIONS
         self._timeout = timeout or settings.EMBEDDING_TIMEOUT_SECONDS
         self._max_retries = max_retries if max_retries is not None else settings.EMBEDDING_MAX_RETRIES
         self._batch_size = batch_size or settings.EMBEDDING_BATCH_SIZE
-        
-        if not self._api_key:
-            raise EmbeddingError("Embedding API key not configured", "Set EMBEDDING_API_KEY in environment")
         
         if self._dimensions <= 0:
             raise EmbeddingError("Embedding dimensions must be positive", f"dimensions={self._dimensions}")
         
         if self._batch_size <= 0:
             raise EmbeddingError("Batch size must be positive", f"batch_size={self._batch_size}")
-        
-        self._client = client or OpenAI(
-            api_key=self._api_key,
-            timeout=self._timeout,
-            max_retries=0,  # We handle retries ourselves
-        )
+
+        self._gemini_provider: Optional[GeminiEmbeddingProvider] = None
+        self._client: Optional[OpenAI] = client
+
+        if self._provider == "gemini":
+            self._gemini_provider = GeminiEmbeddingProvider(
+                api_key=self._api_key,
+                model=self._model,
+                dimensions=self._dimensions,
+                batch_size=self._batch_size,
+                timeout=self._timeout,
+                max_retries=self._max_retries,
+            )
+        else:
+            if not self._client and self._api_key:
+                try:
+                    self._client = OpenAI(
+                        api_key=self._api_key,
+                        timeout=self._timeout,
+                        max_retries=0,
+                    )
+                except Exception as e:
+                    logger.warning("Could not initialize OpenAI client: %s", e)
         
         self._repo = DocumentChunkRepository()
 
@@ -125,6 +131,9 @@ class EmbeddingService:
                 dimensions=self._dimensions,
                 total_tokens=0,
             )
+
+        if self._gemini_provider:
+            return self._gemini_provider.generate_embeddings(texts)
         
         # Filter out empty texts
         valid_texts = []
@@ -355,6 +364,7 @@ def create_embedding_service(
     max_retries: Optional[int] = None,
     batch_size: Optional[int] = None,
     client: Optional[OpenAI] = None,
+    provider: Optional[str] = None,
 ) -> EmbeddingService:
     """
     Factory function to create EmbeddingService with settings from config.
@@ -367,6 +377,7 @@ def create_embedding_service(
         max_retries: Override max retries
         batch_size: Override batch size
         client: Optional OpenAI client for testing
+        provider: Override embedding provider ('gemini' or 'openai')
         
     Returns:
         Configured EmbeddingService instance
@@ -379,4 +390,5 @@ def create_embedding_service(
         max_retries=max_retries,
         batch_size=batch_size,
         client=client,
+        provider=provider,
     )

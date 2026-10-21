@@ -1138,6 +1138,7 @@ class ChatService:
                 "query_text": result.query_text,
                 "top_k": result.top_k,
                 "retrieval_status": "success",
+                "evidence_sufficiency": getattr(result, "evidence_sufficiency", "SUFFICIENT"),
             }
             
         except RetrievalError as e:

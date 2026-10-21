@@ -154,7 +154,7 @@ export function DocumentUploadZone({
               </span>
             </p>
             <p className="font-mono text-xs text-navy/50">
-              Supported formats: PDF, TXT, DOCX • Up to 10 MB per document
+              Supported formats: PDF, TXT, DOCX • Up to 100 MB per document
             </p>
           </div>
         )}

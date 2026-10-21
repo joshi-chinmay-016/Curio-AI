@@ -43,6 +43,11 @@ export function CurioNav({ activeRoute = "home", showProfile }: CurioNavProps) {
   const { user, isAuthenticated, initAuth, logout } = useAuthStore();
   const { theme, setTheme } = useSettingsStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const shouldShowProfile =
     showProfile !== undefined ? showProfile : activeRoute !== "home";
@@ -106,8 +111,11 @@ export function CurioNav({ activeRoute = "home", showProfile }: CurioNavProps) {
     },
   ];
 
+  // Prevent SSR/hydration mismatch by only showing auth-dependent links after client mount
+  const isUserAuthenticated = mounted && isAuthenticated;
+
   const visibleLinks = navLinks.filter(
-    (item) => !item.requiresAuth || isAuthenticated
+    (item) => !item.requiresAuth || isUserAuthenticated
   );
 
   return (
@@ -173,7 +181,7 @@ export function CurioNav({ activeRoute = "home", showProfile }: CurioNavProps) {
             </svg>
           </a>
 
-          {isAuthenticated ? (
+          {isUserAuthenticated ? (
             <div className="flex items-center gap-2 sm:gap-3">
               {activeRoute !== "dashboard" && (
                 <Link href="/dashboard" className="hidden sm:inline-block">

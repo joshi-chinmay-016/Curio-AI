@@ -175,19 +175,36 @@ class ChunkingService:
         sections = text.split("\n\n---PAGE_BREAK---\n\n")
         return sections
 
+    def _extract_active_heading(self, text: str, current_pos: int) -> Optional[str]:
+        """Find the most recent section heading preceding current_pos."""
+        prefix = text[:current_pos]
+        # Match markdown headers (# Title), numbered sections (1.2 Section), or Chapter headings
+        lines = prefix.split("\n")
+        heading_pat = re.compile(r'^(?:#{1,4}\s+|[0-9]+(?:\.[0-9]+)*\s+|Chapter\s+[0-9]+|Section\s+[0-9]+|[A-Z\s]{4,}:)', re.IGNORECASE)
+        for line in reversed(lines):
+            line_str = line.strip()
+            if line_str and heading_pat.match(line_str) and len(line_str) <= 120:
+                # Strip markdown markers
+                clean = re.sub(r'^#+\s*', '', line_str).strip()
+                return clean
+        return None
+
     def _chunk_page_text(self, text: str, page_num: int, start_chunk_index: int, char_offset: int) -> List[Chunk]:
-        """Chunk a single page's text using sliding window with boundary preference."""
+        """Chunk a single page's text using sliding window with structure and boundary preference."""
         chunks = []
         text_len = len(text)
         
         if text_len <= self.chunk_size:
-            # Text fits in one chunk
+            heading = self._extract_active_heading(text, text_len)
+            meta = {"page_number": page_num}
+            if heading:
+                meta["section_heading"] = heading
             chunk = Chunk(
                 chunk_index=start_chunk_index,
                 text=text.strip(),
                 start_char=char_offset,
                 end_char=char_offset + len(text.strip()),
-                metadata={"page_number": page_num}
+                metadata=meta
             )
             return [chunk]
         
@@ -209,14 +226,23 @@ class ChunkingService:
                     if sent_boundary > position:
                         window_end = sent_boundary
             
-            chunk_text = text[position:window_end].strip()
-            if chunk_text:
+            chunk_raw = text[position:window_end].strip()
+            if chunk_raw:
+                active_heading = self._extract_active_heading(text, position)
+                chunk_meta = {
+                    "page_number": page_num,
+                    "has_equations": "$$" in chunk_raw or "\\begin{" in chunk_raw,
+                    "has_table": "|" in chunk_raw and "-|-" in chunk_raw,
+                }
+                if active_heading:
+                    chunk_meta["section_heading"] = active_heading
+                
                 chunk = Chunk(
                     chunk_index=start_chunk_index + len(chunks),
-                    text=chunk_text,
+                    text=chunk_raw,
                     start_char=char_offset + position,
                     end_char=char_offset + window_end,
-                    metadata={"page_number": page_num}
+                    metadata=chunk_meta
                 )
                 chunks.append(chunk)
             
@@ -229,6 +255,13 @@ class ChunkingService:
             if position <= chunks[-1].start_char - char_offset:
                 # Ensure forward progress
                 position = window_end
+
+        # Link neighboring chunks with indices
+        for idx, ch in enumerate(chunks):
+            if idx > 0:
+                ch.metadata["prev_chunk_index"] = chunks[idx - 1].chunk_index
+            if idx < len(chunks) - 1:
+                ch.metadata["next_chunk_index"] = chunks[idx + 1].chunk_index
         
         return chunks
 

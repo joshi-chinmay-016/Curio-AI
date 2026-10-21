@@ -12,6 +12,13 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from backend.app.ai.providers.groq_provider import GroqLLMProvider
+from backend.app.ai.mistake_injection import (
+    MistakeInjectionEngine,
+    InjectedMistakeState,
+    MistakeEvaluationVerdict,
+    MistakeCandidate,
+    MistakeVerificationResult,
+)
 
 logger = logging.getLogger("curio.api.guest_ai")
 
@@ -37,6 +44,7 @@ class GuestTurnRequest(BaseModel):
     gap: Optional[str] = None
     interrupted_question: Optional[Dict[str, Any]] = None
     injected_mistake: Optional[Dict[str, Any]] = None
+    last_mistake_injected_turn: Optional[int] = None
     teacher_attempt_count: int = 1
     is_stuck_request: bool = False
     is_readiness_signal: bool = False
@@ -373,31 +381,34 @@ Provide a clear, detailed 2-paragraph teacher explanation:
     has_mistake = False
     misconception_desc = ""
 
-    # Check if user previously had an injected mistake active
+    # -------------------------------------------------------------------------
+    # Check if user previously had an injected mistake active (3-Way Evaluation)
+    # -------------------------------------------------------------------------
     if req.injected_mistake and req.injected_mistake.get("active"):
-        inj_concept = req.injected_mistake.get("concept", topic)
-        inj_mistake = req.injected_mistake.get("misconception", "")
+        mistake_engine = MistakeInjectionEngine(provider)
+        inj_state = InjectedMistakeState(
+            active=True,
+            turn=req.injected_mistake.get("turn", req.turn_number - 1),
+            concept=req.injected_mistake.get("concept", topic),
+            claim=req.injected_mistake.get("claim") or req.injected_mistake.get("misconception", ""),
+            why_false=req.injected_mistake.get("why_false") or req.injected_mistake.get("counter_reason", ""),
+            question=req.injected_mistake.get("question") or req.injected_mistake.get("misconception", ""),
+            verified=req.injected_mistake.get("verified", True),
+            status=req.injected_mistake.get("status", "PENDING"),
+        )
 
-        eval_inj_prompt = f"""The student (Curio) intentionally asked a tricky edge-case question containing a subtle misconception:
-"{inj_mistake}"
+        verdict_obj = mistake_engine.evaluate_response(topic, user_answer, inj_state)
+        logger.info(
+            "Mistake injection evaluation for %s: verdict=%s, explanation=%s",
+            topic,
+            verdict_obj.verdict,
+            verdict_obj.explanation,
+        )
 
-The teacher (user) answered:
-"{user_answer}"
-
-Did the user catch and correct the subtle mistake, or did they agree with / miss the mistake?
-Reply in exact format:
-VERDICT: CAUGHT or MISSED
-EXPLANATION: <one sentence>"""
-        try:
-            res_inj = provider.generate_text(eval_inj_prompt)
-            is_caught = "VERDICT: CAUGHT" in res_inj.upper()
-        except Exception:
-            is_caught = any(w in user_answer.lower() for w in ["no", "not", "false", "incorrect", "actually", "doesn't", "wrong", "cannot", "careful"])
-
-        if is_caught:
-            # Praise the user enthusiastically as an enlightened student!
+        if verdict_obj.verdict == "CAUGHT":
+            # Master teacher caught the student's injected misconception!
             praise_prompt = f"""You are Curio, an inquisitive student learning {topic}.
-You previously proposed this subtle misconception: "{inj_mistake}".
+You previously proposed this subtle misconception: "{inj_state.claim}".
 The teacher brilliantly caught it and explained: "{user_answer}".
 
 Respond enthusiastically:
@@ -415,16 +426,16 @@ Respond enthusiastically:
             return GuestTurnResponse(
                 ai_response=praise_q,
                 evaluation={
-                    "correctness": 0.98,
-                    "clarity": 0.95,
-                    "completeness": 0.95,
-                    "depth": 0.90,
+                    "correctness": 0.94,
+                    "clarity": 0.90,
+                    "completeness": 0.90,
+                    "depth": 0.85,
                     "relevance": 1.0,
                     "stuck_probability": 0.05,
                     "misconceptions": [],
                     "missing_concepts": [],
                     "undefined_terms": [],
-                    "mastered_concepts": [inj_concept],
+                    "mastered_concepts": [inj_state.concept],
                     "knowledge_gap": None,
                     "recommended_strategy": "DEPTH_EXPANSION",
                     "recommended_difficulty": min(5, req.current_difficulty + 1),
@@ -433,9 +444,105 @@ Respond enthusiastically:
                     "next_mode": "STUDENT",
                     "strategy": "DEPTH_EXPANSION",
                     "difficulty": min(5, req.current_difficulty + 1),
-                    "confidence": min(100, 70 + req.turn_number * 5),
-                    "reason": f"Learner brilliantly caught injected subtle misconception on '{inj_concept}'.",
-                    "active_concept": inj_concept,
+                    "confidence": min(100, 65 + req.turn_number * 5),
+                    "reason": f"Learner brilliantly caught injected subtle misconception on '{inj_state.concept}'.",
+                    "active_concept": inj_state.concept,
+                    "should_offer_termination": False,
+                    "should_restore_interrupted_question": False,
+                },
+                injected_mistake=None,
+            )
+
+        elif verdict_obj.verdict == "MISSED":
+            # Learner agreed with the subtle misconception: Curio challenges as an inquisitive student
+            challenge_prompt = f"""You are Curio, an inquisitive student learning {topic}.
+You previously asked about this scenario: "{inj_state.claim}".
+The teacher answered: "{user_answer}".
+However, the reality is: "{inj_state.why_false}".
+
+As a curious beginner student, ask strictly ONE question voicing your doubt or confusion:
+"Wait, hold on — if that's true, wouldn't [consequence]? How does that work?"
+Keep it genuine, polite, and exactly ONE question."""
+            try:
+                raw_c = provider.generate_text(f"{STUDENT_SYSTEM_PROMPT}\n\n{challenge_prompt}")
+                doubt_q = clean_text(raw_c)
+                if not doubt_q.endswith("?"):
+                    doubt_q += "?"
+            except Exception:
+                doubt_q = f"Wait, really? But doesn't {inj_state.why_false or 'that break the standard expectation'}? Wouldn't that cause unexpected issues in {topic}?"
+
+            return GuestTurnResponse(
+                ai_response=doubt_q,
+                evaluation={
+                    "correctness": 0.50,
+                    "clarity": 0.70,
+                    "completeness": 0.50,
+                    "depth": 0.40,
+                    "relevance": 0.95,
+                    "stuck_probability": 0.20,
+                    "misconceptions": [inj_state.why_false or f"Misconception regarding {inj_state.concept}"],
+                    "missing_concepts": [],
+                    "undefined_terms": [],
+                    "mastered_concepts": [],
+                    "knowledge_gap": inj_state.why_false or inj_state.concept,
+                    "recommended_strategy": "CHALLENGE_MISCONCEPTION",
+                    "recommended_difficulty": req.current_difficulty,
+                },
+                decision={
+                    "next_mode": "STUDENT",
+                    "strategy": "CHALLENGE_MISCONCEPTION",
+                    "difficulty": req.current_difficulty,
+                    "confidence": max(15, 50 - req.consecutive_failures * 10),
+                    "reason": f"Learner accepted subtle edge case premise. Raising student doubt to explore boundaries.",
+                    "active_concept": inj_state.concept,
+                    "should_offer_termination": False,
+                    "should_restore_interrupted_question": False,
+                },
+                injected_mistake=None,
+            )
+
+        else:
+            # INCONCLUSIVE: Learner's response was ambiguous, vague, or asked for clarification.
+            # Do NOT penalize them or record a misconception!
+            clarify_prompt = f"""You are Curio, an inquisitive student learning {topic}.
+You previously asked this tricky doubt: "{inj_state.question}".
+The teacher replied: "{user_answer}", which was ambiguous or requested clarification.
+
+Politely apologize for being unclear, state in simple plain language what you were wondering, and ask ONE clear question:
+"Sorry, let me clarify what I was asking! I was trying to understand: [simple question]? Could you help me see what happens there?"
+Keep it polite, curious, and exactly ONE question."""
+            try:
+                raw_cl = provider.generate_text(f"{STUDENT_SYSTEM_PROMPT}\n\n{clarify_prompt}")
+                clarify_q = clean_text(raw_cl)
+                if not clarify_q.endswith("?"):
+                    clarify_q += "?"
+            except Exception:
+                clarify_q = f"Sorry, let me rephrase what I was wondering: in {topic}, what specifically happens if boundary conditions are met? Could you help me picture that?"
+
+            return GuestTurnResponse(
+                ai_response=clarify_q,
+                evaluation={
+                    "correctness": 0.75,
+                    "clarity": 0.70,
+                    "completeness": 0.65,
+                    "depth": 0.60,
+                    "relevance": 0.90,
+                    "stuck_probability": 0.10,
+                    "misconceptions": [],
+                    "missing_concepts": [],
+                    "undefined_terms": [],
+                    "mastered_concepts": [],
+                    "knowledge_gap": None,
+                    "recommended_strategy": "CLARIFY_TERM",
+                    "recommended_difficulty": req.current_difficulty,
+                },
+                decision={
+                    "next_mode": "STUDENT",
+                    "strategy": "CLARIFY_TERM",
+                    "difficulty": req.current_difficulty,
+                    "confidence": 50,
+                    "reason": f"Response to injected mistake was inconclusive. Curio rephrased student question without penalty.",
+                    "active_concept": inj_state.concept,
                     "should_offer_termination": False,
                     "should_restore_interrupted_question": False,
                 },
@@ -561,71 +668,80 @@ Generate a master teacher explanation:
             },
         )
 
-    # PROACTIVE DYNAMIC MISTAKE INJECTION:
-    # Trigger on advanced turns (difficulty >= 3 or turn >= 3, and strong answer) ~20% of the time
-    should_inject_mistake = (
-        req.current_difficulty >= 3
-        and word_count >= 6
-        and req.turn_number >= 3
-        and (req.turn_number % 3 == 0)
-        and not has_mistake
+    # =========================================================================
+    # PROACTIVE DYNAMIC MISTAKE INJECTION (With Independent Verification Pass)
+    # =========================================================================
+    mistake_engine = MistakeInjectionEngine(provider)
+    last_inj_turn = req.last_mistake_injected_turn
+    if last_inj_turn is None and req.injected_mistake:
+        last_inj_turn = req.injected_mistake.get("turn")
+
+    is_eligible = mistake_engine.check_eligibility(
+        mode=req.mode,
+        current_difficulty=req.current_difficulty,
+        turn_number=req.turn_number,
+        last_injected_turn=last_inj_turn,
+        correctness=0.85,
+        completeness=0.80,
+        has_unresolved_misconceptions=has_mistake,
+        pending_mistake=req.injected_mistake,
+        is_stuck_or_remediation=req.is_stuck_request or req.consecutive_failures > 0,
     )
 
-    if should_inject_mistake:
-        inject_prompt = f"""You are Curio, an inquisitive student learning {topic}.
-The teacher (user) just explained:
-"{user_answer}"
+    if is_eligible:
+        candidate = mistake_engine.generate_candidate(topic, user_answer, active_concept=topic)
+        if candidate:
+            verification = mistake_engine.verify_candidate(topic, candidate)
+            if verification.is_valid:
+                ai_question = clean_text(candidate.student_question)
+                if not ai_question.endswith("?"):
+                    ai_question += "?"
 
-Intentionally propose ONE subtle, plausible student misconception or tricky edge-case question to test if the teacher catches it!
-Requirements:
-- Sound like a curious student having a doubt about an edge case: acknowledge what they taught, express your doubt, and ask for clarification.
-- It must be plausible and tricky, but factually false or an invalid assumption.
-- Exactly ONE question mark at the end (2-3 sentences)."""
-        try:
-            raw_inj = provider.generate_text(f"{STUDENT_SYSTEM_PROMPT}\n\n{inject_prompt}")
-            ai_question = clean_text(raw_inj)
-            if not ai_question.endswith("?"):
-                ai_question += "?"
-        except Exception:
-            ai_question = f"Wait, so if the input is already partially ordered, does {topic} always run in best-case time complexity, right?"
+                injected_meta = {
+                    "active": True,
+                    "turn": req.turn_number,
+                    "concept": candidate.concept,
+                    "claim": candidate.claim,
+                    "why_false": candidate.why_false,
+                    "question": ai_question,
+                    "verified": True,
+                    "status": "PENDING",
+                }
 
-        injected_meta = {
-            "active": True,
-            "turn": req.turn_number,
-            "misconception": ai_question,
-            "concept": topic,
-            "counter_reason": "Edge case where the assumption fails.",
-        }
-
-        return GuestTurnResponse(
-            ai_response=ai_question,
-            evaluation={
-                "correctness": 0.90,
-                "clarity": 0.90,
-                "completeness": 0.85,
-                "depth": 0.80,
-                "relevance": 0.95,
-                "stuck_probability": 0.05,
-                "misconceptions": [],
-                "missing_concepts": [],
-                "undefined_terms": [],
-                "mastered_concepts": [topic],
-                "knowledge_gap": None,
-                "recommended_strategy": "TEST_EDGE_CASE",
-                "recommended_difficulty": req.current_difficulty,
-            },
-            decision={
-                "next_mode": "STUDENT",
-                "strategy": "TEST_EDGE_CASE",
-                "difficulty": req.current_difficulty,
-                "confidence": min(100, 50 + req.turn_number * 8),
-                "reason": f"Proactively injecting subtle edge-case misconception to test deep understanding of {topic}.",
-                "active_concept": topic,
-                "should_offer_termination": False,
-                "should_restore_interrupted_question": False,
-            },
-            injected_mistake=injected_meta,
-        )
+                return GuestTurnResponse(
+                    ai_response=ai_question,
+                    evaluation={
+                        "correctness": 0.90,
+                        "clarity": 0.90,
+                        "completeness": 0.85,
+                        "depth": 0.80,
+                        "relevance": 0.95,
+                        "stuck_probability": 0.05,
+                        "misconceptions": [],
+                        "missing_concepts": [],
+                        "undefined_terms": [],
+                        "mastered_concepts": [topic],
+                        "knowledge_gap": None,
+                        "recommended_strategy": "TEST_EDGE_CASE",
+                        "recommended_difficulty": req.current_difficulty,
+                    },
+                    decision={
+                        "next_mode": "STUDENT",
+                        "strategy": "TEST_EDGE_CASE",
+                        "difficulty": req.current_difficulty,
+                        "confidence": min(100, 50 + req.turn_number * 8),
+                        "reason": f"Proactively injecting verified subtle edge-case misconception to test deep understanding of {topic}.",
+                        "active_concept": topic,
+                        "should_offer_termination": False,
+                        "should_restore_interrupted_question": False,
+                    },
+                    injected_mistake=injected_meta,
+                )
+            else:
+                logger.info(
+                    "Candidate mistake rejected during independent verification (%s). Continuing normal questioning.",
+                    verification.reasoning,
+                )
 
     # Progressive Pedagogical Stages (Tabula Rasa student learning naturally based strictly on what teacher taught)
     lower_ans = user_answer.lower()

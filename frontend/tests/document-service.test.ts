@@ -60,11 +60,11 @@ describe("Document Service and File Validation Tests", () => {
     assert.match(result.error || "", /empty/i);
   });
 
-  test("2. Client-side validation: Rejects files exceeding 10 MB", () => {
+  test("2. Client-side validation: Rejects files exceeding 100 MB", () => {
     const largeFile = createMockFile("large_textbook.pdf", MAX_UPLOAD_SIZE + 1024, "application/pdf");
     const result = validateDocumentFile(largeFile);
     assert.equal(result.valid, false);
-    assert.match(result.error || "", /10 MB/i);
+    assert.match(result.error || "", /100 MB/i);
   });
 
   test("3. Client-side validation: Rejects unsupported file extensions", () => {
