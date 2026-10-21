@@ -64,7 +64,7 @@ def _tokenize_meaningful(text: str) -> Set[str]:
         return set()
     # Normalize hyphens and underscores
     clean_text = text.replace("-", " ").replace("_", " ")
-    raw_tokens = re.findall(r"\b[a-zA-Z0-9]{2,}\b", clean_text.lower())
+    raw_tokens = re.findall(r"\b[a-zA-Z0-9]+\b", clean_text.lower())
     tokens: Set[str] = set()
     for t in raw_tokens:
         if t not in STOP_WORDS:
@@ -75,6 +75,8 @@ def _tokenize_meaningful(text: str) -> Set[str]:
 
     # Common compound expansions in CS
     lower_orig = text.lower()
+    if any(k in lower_orig for k in ["discard", "eliminate", "half", "right half", "left half"]):
+        tokens.update(["discard", "discarded", "eliminat", "eliminate", "half", "portion", "side"])
     if "rollback" in lower_orig or "roll back" in lower_orig:
         tokens.update(["roll", "back", "rollback"])
     if "all or nothing" in lower_orig or "all-or-nothing" in lower_orig:
@@ -255,12 +257,11 @@ class LocalAssessmentProvider(BaseAssessmentProvider):
                 return RelevanceLevel.RELEVANT, 0.75
             return RelevanceLevel.IRRELEVANT, 0.05
 
-        # Check if answer discusses topic in general but completely misses target concept
-        # Example: Question is DBMS Atomicity, but answer is "SQL is a language used to query databases"
+        # Check if answer discusses topic or question specifics (e.g. concrete verification question)
         if not overlap_concept_evidence and not has_direct_concept_mention:
-            # Answer touches topic words but zero target concept words
-            if overlap_question and len(overlap_question - topic_tokens) > 0:
-                return RelevanceLevel.PARTIALLY_RELEVANT, 0.35
+            # Answer touches question words/examples even if not mentioning abstract concept name directly
+            if overlap_question:
+                return RelevanceLevel.PARTIALLY_RELEVANT, 0.40
             return RelevanceLevel.IRRELEVANT, 0.05
 
         # Substantial overlap with concept and expected evidence

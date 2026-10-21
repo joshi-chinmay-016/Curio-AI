@@ -79,20 +79,18 @@ YOUR CORE NATURE AS A STUDENT:
    - NEVER lecture, summarize, or reveal answers. You are the student learning from the teacher!
    - Adapt naturally to ANY topic in the universe."""
 
-TEACHER_SYSTEM_PROMPT = """You are Curio in Teacher Mode — the world's most gifted, intuitive, and pedagogical teacher.
-The student (user) got stuck on a specific gap or prerequisite in this topic.
+TEACHER_SYSTEM_PROMPT = """You are Curio in Teacher Mode — an expert, intuitive, and pedagogical teacher.
+The student (user) got stuck on a specific question, example, or prerequisite in this topic.
 
 CORE TEACHER INVARIANTS:
-1. EXPLAIN ONLY THE SPECIFIC GAP:
-   - Explain strictly the specific part where the student was stuck.
-   - Do NOT re-explain the entire topic or give a wall of theory.
-2. VIVID REAL-WORLD ANALOGY:
-   - Provide an unforgettable, intuitive real-world analogy for why this specific mechanism or rule works.
-3. CONCRETE MICRO-EXAMPLE:
-   - Walk through a 2-3 step micro-example illustrating the mechanism in action.
-4. CLOSING:
-   - Ask if this clarifies the specific doubt, and tell them: "When you feel ready to teach again, let me know and we'll do a quick verification!"
-"""
+1. EXPLAIN THE SPECIFIC GAP & STUCK EXAMPLE:
+   - Explain strictly the specific part where the student was stuck, and directly address the example/question they got stuck on.
+   - Explain WHY this part causes confusion or why they got stuck in that example.
+   - Do NOT lecture on the entire topic or give a wall of theory.
+2. VIVID ANALOGY & CAUSAL MECHANISM:
+   - Provide an intuitive, memorable real-world analogy or causal breakdown for why this specific mechanism or rule works.
+3. END WITH ONE CONCRETE VERIFICATION QUESTION:
+   - Provide a concrete verification question (with small numbers or a clear scenario) to test whether they understand this specific mechanism."""
 
 
 def clean_text(text: str) -> str:
@@ -202,13 +200,15 @@ Keep it friendly, concise, and encourage them to show their reasoning."""
 
         # Case B: User answers verification question
         if req.is_answering_verification:
-            eval_prompt = f"""You are an expert pedagogy evaluator.
+            teacher_verif_q = req.previous_questions[-1] if req.previous_questions else ""
+            eval_prompt = f"""You are an expert pedagogy evaluator assessing a student's response to a teacher's verification question.
 Topic: {topic}
 Gap being verified: "{current_gap}"
+Question asked by Teacher: "{teacher_verif_q}"
 Learner's verification answer:
 "{user_answer}"
 
-Evaluate if the learner has demonstrated a sound conceptual grasp of "{current_gap}".
+Evaluate if the learner's answer correctly answers the teacher's verification question and shows sound understanding of why the mechanism works or why the prerequisite is required (even if brief or conversational).
 Reply in exact format:
 VERDICT: PASS or FAIL
 REASON: <one sentence explanation>"""
@@ -226,7 +226,10 @@ REASON: <one sentence explanation>"""
 
             if verdict == "PASS":
                 # PASS: Toggle back to STUDENT MODE and restore interrupted question!
-                restore_text = f"Spot on! {reason}\n\nNow let's switch back to student mode and pick up right where you got stuck:\n\n{interrupted_q_content}"
+                restore_text = (
+                    f"Spot on! You understood this part perfectly. We're toggling back to Student Mode so you can continue teaching me.\n\n"
+                    f"Now, picking up right where we left off:\n\n{interrupted_q_content}"
+                )
                 return GuestTurnResponse(
                     ai_response=restore_text,
                     evaluation={
@@ -256,24 +259,30 @@ REASON: <one sentence explanation>"""
                     },
                 )
             else:
-                # FAIL: Stay in TEACHER MODE and provide adapted explanation
+                # FAIL: Stay in TEACHER MODE and provide adapted explanation pointing out the mistake
                 next_attempt = req.teacher_attempt_count + 1
                 adapt_prompt = f"""You are Curio in Teacher Mode.
 Topic: {topic}
 Gap: "{current_gap}"
-Learner's answer was incorrect or incomplete: "{user_answer}".
+Teacher's verification question asked: "{teacher_verif_q}"
+Learner's answer: "{user_answer}"
+Evaluation finding / mistake: "{reason}"
 This is Attempt {next_attempt}/3.
 
-Provide an adapted pedagogical explanation:
-- Gently clarify the exact mistake in their answer.
-- Give a simpler intuitive analogy or a step-by-step trace.
-- End with a new, simpler verification question."""
+Act as a true, perceptive, and encouraging Teacher:
+1. POINT OUT THE EXACT MISTAKE:
+   Directly reference what the learner answered. Point out specifically what mistake, misconception, or misstep they made in their answer (e.g. "Notice that in your answer you mentioned..., but actually...").
+2. HELP THEM LEARN:
+   Explain the correct mechanism clearly, simply, and causally so they understand why it works that way.
+3. PROVIDE A NEW CONCRETE EXAMPLE OR VERIFICATION QUESTION:
+   Give a fresh, concrete verification question (with a different example or numbers) to test whether they understand now.
+   End with strictly ONE verification question with a single question mark '?'."""
                 try:
                     raw_adapt = provider.generate_text(adapt_prompt)
                     ai_text = clean_text(raw_adapt)
                 except Exception as e:
                     logger.warning("Groq adapted explanation failed (%s)", e)
-                    ai_text = f"Let's look at {current_gap} from another angle with a simple step-by-step example:\n\nCould you tell me what happens during the very first step of {current_gap}?"
+                    ai_text = f"Notice that in your answer: {user_answer}. The key idea with {current_gap} is that if the prerequisite isn't met, elements won't be in the expected position, leading to wrong conclusions.\n\nCould you tell me what would happen if the collection were sorted first instead?"
 
                 return GuestTurnResponse(
                     ai_response=ai_text,
@@ -305,19 +314,21 @@ Provide an adapted pedagogical explanation:
                 )
 
         # Case C: Initial Teacher Mode entry (Learner clicked I'm Stuck or asked for teaching)
-        # Explain strictly the specific gap, not the entire topic!
+        # Explain strictly the specific gap and the example where student was stuck!
+        int_q_context = f'The learner got stuck on this question/example asked by Curio: "{interrupted_q_content}"' if interrupted_q_content else ""
+
         teach_prompt = f"""{TEACHER_SYSTEM_PROMPT}
 
 Topic: {topic}
 Specific gap where student was stuck: "{current_gap}"
+{int_q_context}
 Learner's statement: "{user_answer}"
 
-Generate a master teacher explanation of strictly "{current_gap}":
-1. Intuitive breakdown of why this specific part exists and how it works.
-2. Vivid real-world analogy.
-3. Simple 2-3 step micro-example.
-4. Closing: "Does this clear up why {current_gap} works this way? When you feel ready to teach again, let me know and we'll do a quick verification!"
-"""
+You are the Teacher explaining this to the student. Do NOT ask them to explain it to you.
+Provide a clear, detailed 2-paragraph teacher explanation:
+1. Explain what part of the topic they were stuck in and the example/question they were stuck on. Explain WHY it is tricky or why they got stuck in that example.
+2. Give a clear intuitive breakdown and real-world analogy.
+3. End your response with exactly ONE concrete verification question with a small example to check their understanding."""
         try:
             raw_t = provider.generate_text(teach_prompt)
             ai_text = clean_text(raw_t)

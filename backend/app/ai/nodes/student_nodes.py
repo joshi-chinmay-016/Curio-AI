@@ -289,7 +289,13 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
             interpretation.intent = TurnIntent.OFF_TOPIC
             interpretation.is_answer_attempt = False
 
-        is_irrel = assessment.relevance_level in (RelevanceLevel.IRRELEVANT, RelevanceLevel.UNCERTAIN)
+        is_teacher_mode = context.current_mode == Mode.TEACHER or (
+            hasattr(context.current_mode, "value") and context.current_mode.value == "TEACHER"
+        )
+        is_irrel = (
+            assessment.relevance_level in (RelevanceLevel.IRRELEVANT, RelevanceLevel.UNCERTAIN)
+            and not (is_teacher_mode and interpretation.is_answer_attempt)
+        )
         misc_list = [m.description for m in assessment.misconceptions]
 
         if interpretation.intent == TurnIntent.CLARIFICATION_REQUEST:
@@ -605,7 +611,7 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
             if is_limit_fallback:
                 content = f"Let's pause on that specific detail for now and return to our original question at a simpler level:\n\n{restored_q.content}"
             else:
-                content = f"Great job! Now let's return to our original question:\n\n{restored_q.content}"
+                content = f"Spot on! You understood this part perfectly. We're toggling back to Student Mode so you can continue teaching me. Great job! Now let's return to our original question:\n\n{restored_q.content}"
         else:
             if spec:
                 generator = QuestionGenerator(provider)

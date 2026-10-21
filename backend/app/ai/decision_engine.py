@@ -278,7 +278,11 @@ class DecisionEngine:
             # 8. Must be relevant to target concept (never pass on irrelevant answers!)
             if assessment is not None:
                 is_pass = (
-                    (assessment.supports_mastery or assessment.correctness == CorrectnessLevel.CORRECT)
+                    (
+                        assessment.supports_mastery
+                        or assessment.correctness == CorrectnessLevel.CORRECT
+                        or evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
+                    )
                     and assessment.correctness not in (
                         CorrectnessLevel.PARTIALLY_CORRECT,
                         CorrectnessLevel.INCOMPLETE,
@@ -288,6 +292,7 @@ class DecisionEngine:
                     )
                     and assessment.relevance_level in (RelevanceLevel.RELEVANT, RelevanceLevel.PARTIALLY_RELEVANT)
                     and len(assessment.misconceptions) == 0
+                    and evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
                     and not is_teach_or_stuck
                     and not is_question
                     and not is_bare_ack
