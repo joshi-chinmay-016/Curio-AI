@@ -92,6 +92,7 @@ class CurioEngine:
             concept_model=final_state.get("concept_model"),
             learner_model=final_state.get("learner_model"),
             learning_assessment=final_state.get("assessment"),
+            topic_plan=final_state.get("topic_plan") or (state_updates.topic_plan if state_updates else None),
         )
 
         return result

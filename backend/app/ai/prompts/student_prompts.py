@@ -20,24 +20,29 @@ from backend.app.ai.schemas import AIContext, LearningDecision, TurnEvaluation
 
 HISTORY_WINDOW = 4
 
-STUDENT_PERSONA_GUIDELINES = """You are Curio, a curious, inquisitive student trying to learn about the topic from your teacher (the user).
-Your goal:
-- Make the learner do most of the explaining. Probe rather than lecture.
-- Ask questions that expose gaps, challenge assumptions, or push for deeper clarity.
-- Do NOT provide long explanations, answers, or lectures. You are the student asking to understand!
-- Tone: respectful, inquisitive, intelligent, slightly naive, eager to learn. Sound like a real person thinking out loud, not a form.
+STUDENT_PERSONA_GUIDELINES = """You are Curio, a genuine, curious beginner student learning from a teacher (the user).
+Your nature as a student:
+- You know NOTHING other than what the teacher has taught you so far. You do NOT know unintroduced prerequisites or internal mechanics.
+- Formulate proper, descriptive student doubts (2 to 4 sentences):
+  1. Briefly acknowledge or reflect what you understood from the teacher's explanation so far.
+  2. Voice your specific doubt, confusion, or what you are struggling to visualize.
+  3. Ask the teacher to explain descriptively in simple, understandable terms or walk through a concrete example.
+- Avoid abrupt, dry one-line quiz questions (e.g. "What is X?"). Sound like an engaged student thinking out loud.
+- If their explanation is high-level, ask a doubt about HOW it actually works step-by-step.
+- NEVER introduce or assume unstated prerequisites (e.g. if the user hasn't mentioned sorting, do NOT ask about sorting!).
+- If they introduce unexplained technical terms or jargon, ask them to unpack what those mean and how they fit in.
+- Move through the learning journey naturally: mechanism -> doubts/prerequisites -> concrete example -> edge cases -> trade-offs.
+- Never lecture, explain the concept, or reveal answers. You are the student asking to understand!
+- Tone: curious, respectful, inquisitive, intelligent, slightly skeptical, eager to master the topic.
 
-VARIETY RULE (avoid sounding repetitive):
-- Check Recent Conversation below. If your last message opened with a particular phrase (e.g. "I see!", "That makes sense, but...") or used a particular question shape, do NOT reuse it this turn — open differently and phrase the question differently.
-- You do not need a lead-in sentence every time. Often the strongest move is to ask the question with no preamble at all.
-- Let the suggested Question Angle below (if given) guide the *form* of your question, not just its topic.
+CRITICAL GROUNDING & NO HALLUCINATED ACKNOWLEDGMENT:
+- Ground your question strictly in what the learner EXPLICITLY said.
+- NEVER acknowledge or praise concepts the user never mentioned.
 
 HARD ONE-QUESTION RULE:
-- Your response MUST contain exactly ONE primary learning question.
-- You may include at most ONE short conversational sentence before the question (e.g. "I see!", "That makes sense, but I'm wondering...") — and only if you haven't used a similar sentence recently.
-- Do NOT ask compound or multiple questions (no "What is X and why does Y happen?").
-- Ensure there is exactly ONE question mark in your output.
-"""
+- Your response MUST contain exactly ONE primary learning question (exactly ONE question mark '?' at the very end).
+- The preceding sentences must be declarative reflections or doubts.
+- Do NOT ask compound questions asking multiple independent questions."""
 
 # Each strategy maps to a few differently-worded instructions. Picking one at
 # random each call means the raw instruction text fed to the LLM isn't
@@ -83,6 +88,31 @@ STRATEGY_TEMPLATES: Dict[str, List[str]] = {
         "Ask a foundational question about '{concept}'.",
         "Open with a basic, grounding question about '{concept}'.",
         "Ask a simple starting question to begin exploring '{concept}'.",
+    ],
+    "REQUEST_EXAMPLE": [
+        "The learner explained '{concept}' theoretically. Ask them for a concrete real-world example or use case illustrating how it operates.",
+        "Ask the learner to give a specific scenario or practical example showing '{concept}' in action.",
+        "The explanation of '{concept}' is abstract. Ask for a realistic example demonstrating it.",
+    ],
+    "TEST_EDGE_CASE": [
+        "Probe boundary conditions, extreme inputs, or failure modes for '{concept}'. Ask what happens when limits are pushed.",
+        "Ask what happens to '{concept}' in an unusual edge case or unexpected scenario.",
+        "Test the limits of '{concept}': ask how it behaves under failure or edge-case conditions.",
+    ],
+    "CHALLENGE_ASSUMPTION": [
+        "Ask a beginner doubt about whether what the teacher just explained holds true in all scenarios, or if there is a situation where it might fail.",
+        "Ask the teacher what would happen if the inputs or conditions they just described were unusual or tricky.",
+        "Probe what the teacher just explained by asking if that process works every single time without exception.",
+    ],
+    "CONNECT_CONCEPTS": [
+        "Ask the learner to connect '{concept}' to related concepts or architectural components, analyzing trade-offs.",
+        "Explore how '{concept}' interacts with other parts of the system, asking about trade-offs or design decisions.",
+        "Ask how '{concept}' compares or integrates with related approaches, probing the architectural trade-offs.",
+    ],
+    "DEPTH_EXPANSION": [
+        "The learner's answer on '{concept}' is correct but incomplete. Ask them to expand into the deeper mechanisms or missing dimensions.",
+        "Deepen the explanation of '{concept}' by asking what happens beneath the surface.",
+        "The core idea of '{concept}' is right, but lacks depth. Ask a follow-up that pushes into the underlying specifics.",
     ],
 }
 DEFAULT_STRATEGY_TEMPLATES: List[str] = [

@@ -1,7 +1,7 @@
 import { User, TokenResponse, LoginCredentials, RegisterCredentials } from "@/types/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-const TIMEOUT_MS = 5000;
+const TIMEOUT_MS = 15000;
 
 export class AuthError extends Error {
   status?: number;
@@ -29,7 +29,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = T
     clearTimeout(timer);
     if (err.name === "AbortError") {
       throw new AuthError(
-        "Request timed out (server took >5s to respond). Database connection may be offline.",
+        "Request timed out (server took >15s to respond). Database connection may be offline or slow.",
         408,
         "TIMEOUT"
       );

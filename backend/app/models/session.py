@@ -46,5 +46,6 @@ class SessionState(Base):
     misconception_counts = Column(JSON, default=dict, nullable=False)
     recent_strategy_history = Column(JSON, default=list, nullable=False)
     mode_switch_history = Column(JSON, default=list, nullable=False)
+    concept_model = Column(JSON, nullable=True)
 
     session = relationship("Session", back_populates="state")

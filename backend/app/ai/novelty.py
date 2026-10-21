@@ -14,7 +14,7 @@ class QuestionNoveltyChecker:
     Acts as a guardrail against repeating prepared or recently asked questions.
     """
 
-    def __init__(self, similarity_threshold: float = 0.80):
+    def __init__(self, similarity_threshold: float = 0.50):
         self.similarity_threshold = similarity_threshold
 
     def is_novel(
@@ -42,10 +42,15 @@ class QuestionNoveltyChecker:
         max_sim = 0.0
         most_similar_q = ""
 
-        for past_q in recent_questions[-6:]:
+        for past_q in recent_questions:
             clean_past = self._preprocess(past_q)
             if not clean_past:
                 continue
+
+            # Substring containment check for substantial questions
+            if len(clean_cand) > 20 and len(clean_past) > 20:
+                if clean_cand in clean_past or clean_past in clean_cand:
+                    return False, 1.0, f"Substring match with past question: '{past_q}'"
 
             past_ngrams = self._get_char_ngrams(clean_past, n=3)
             past_tokens = set(clean_past.split())

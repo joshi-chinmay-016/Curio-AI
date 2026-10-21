@@ -9,7 +9,7 @@ Coordinates:
 """
 import logging
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from backend.app.ai.novelty import QuestionNoveltyChecker
 from backend.app.ai.prompts.candidate_prompts import build_candidate_generation_prompt
@@ -48,12 +48,13 @@ class QuestionGenerator:
         spec: QuestionSpecification,
         context: Optional[AIContext] = None,
         recent_questions: Optional[List[str]] = None,
+        assessment: Optional[Any] = None,
     ) -> QuestionSelectionResult:
         recent_q = recent_questions or []
 
         # 1. First generation attempt (3 candidates)
-        candidates = self._generate_candidates(spec, context, recent_q)
-        validations = [self.validator.validate_candidate(c, spec, recent_q) for c in candidates]
+        candidates = self._generate_candidates(spec, context, recent_q, assessment=assessment)
+        validations = [self.validator.validate_candidate(c, spec, recent_q, context=context) for c in candidates]
 
         valid_candidates = [
             (c, v) for c, v in zip(candidates, validations) if v.is_valid
@@ -81,8 +82,8 @@ class QuestionGenerator:
             [f"{v.candidate_id}: {', '.join(v.rejection_reasons)}" for v in validations]
         )
         retry_spec = self._strengthen_spec_constraints(spec, rejection_summary)
-        retry_candidates = self._generate_candidates(retry_spec, context, recent_q)
-        retry_validations = [self.validator.validate_candidate(c, spec, recent_q) for c in retry_candidates]
+        retry_candidates = self._generate_candidates(retry_spec, context, recent_q, assessment=assessment)
+        retry_validations = [self.validator.validate_candidate(c, spec, recent_q, context=context) for c in retry_candidates]
 
         retry_valid = [
             (c, v) for c, v in zip(retry_candidates, retry_validations) if v.is_valid
@@ -106,7 +107,7 @@ class QuestionGenerator:
             spec.target_concept,
         )
         fallback_candidate = self._construct_specification_fallback(spec)
-        fallback_val = self.validator.validate_candidate(fallback_candidate, spec, recent_q)
+        fallback_val = self.validator.validate_candidate(fallback_candidate, spec, recent_q, context=context)
 
         return QuestionSelectionResult(
             specification=spec,
@@ -122,8 +123,14 @@ class QuestionGenerator:
         spec: QuestionSpecification,
         context: Optional[AIContext],
         recent_questions: List[str],
+        assessment: Optional[Any] = None,
     ) -> List[QuestionCandidate]:
-        prompt = build_candidate_generation_prompt(spec, context, recent_questions)
+        prompt = build_candidate_generation_prompt(
+            spec=spec,
+            context=context,
+            recent_questions=recent_questions,
+            assessment=assessment,
+        )
         try:
             candidate_list: CandidateList = self.provider.generate_structured(prompt, CandidateList)
             if candidate_list and candidate_list.candidates:
@@ -176,6 +183,8 @@ class QuestionGenerator:
         new_constraints = list(spec.generation_constraints)
         new_constraints.append("STRICT RULE: Exactly ONE primary question. Do not include second question mark.")
         new_constraints.append("STRICT RULE: Do NOT explain or lecture. Ask a curious student question.")
+        if "Tabula rasa" in failure_summary or "unintroduced" in failure_summary:
+            new_constraints.append("STRICT TABULA RASA: Do NOT introduce or ask about unmentioned assumptions or prerequisites (like 'sorted')! Ask ONLY how the mechanism works step-by-step from what the teacher explicitly taught.")
         new_constraints.append(f"STRICT RULE: Avoid previous failure patterns: {failure_summary[:120]}")
         return QuestionSpecification(
             target_concept=spec.target_concept,
@@ -186,7 +195,8 @@ class QuestionGenerator:
             generation_constraints=new_constraints,
         )
 
-    def _construct_specification_fallback(self, spec: QuestionSpecification) -> QuestionCandidate:
+    @staticmethod
+    def construct_specification_fallback(spec: QuestionSpecification) -> QuestionCandidate:
         """
         Dynamically construct a clean, single Socratic question strictly tailored to the specification.
         Guaranteed to pass all validator checks.
@@ -199,14 +209,22 @@ class QuestionGenerator:
             q_text = f"How would you explain the core purpose and definition of {c_name} in your own words?"
         elif obj_type == ObjectiveType.UNDERSTAND_MECHANISM:
             q_text = f"What is the step-by-step mechanism that makes {c_name} work under the hood?"
+        elif obj_type == ObjectiveType.UNDERSTAND_CAUSAL_RELATION:
+            q_text = f"Why is {c_name} structured this way, and what fundamental reason justifies that design choice?"
         elif obj_type == ObjectiveType.APPLY_CONCEPT:
-            q_text = f"How does {c_name} behave when applied to a concrete real-world problem?"
+            q_text = f"How does {c_name} behave when applied to a concrete real-world problem or example?"
         elif obj_type == ObjectiveType.RESOLVE_MISCONCEPTION:
             q_text = f"Why would it be a mistake to assume {c_name} operates without enforcing its core invariants?"
         elif obj_type == ObjectiveType.HANDLE_EDGE_CASE:
-            q_text = f"What happens to {c_name} when boundary conditions or extreme inputs occur?"
+            q_text = f"What happens to {c_name} when boundary conditions, unexpected inputs, or failure states occur?"
         elif obj_type == ObjectiveType.SYNTHESIZE_CONCEPTS:
-            q_text = f"How does {c_name} coordinate with the rest of the system to balance performance trade-offs?"
+            q_text = f"How does {c_name} coordinate with related concepts to balance system trade-offs?"
+        elif obj_type == ObjectiveType.EXPLAIN_IN_OWN_WORDS:
+            q_text = f"Could you verify how you think about {c_name} by summarizing its key intuition in your own words?"
+        elif obj_type == ObjectiveType.REINFORCE_WEAK_CONCEPT:
+            q_text = f"Could we step back and clarify the core foundation of {c_name} so I can see where it fits?"
+        elif obj_type == ObjectiveType.VERIFY_GAP:
+            q_text = f"What essential piece of {c_name} are we missing here, and how does it connect to the rest?"
         else:
             q_text = f"Could you walk me through how {c_name} functions in this context?"
 
@@ -215,3 +233,7 @@ class QuestionGenerator:
             question_text=q_text,
             rationale=f"Specification-driven safe fallback for {c_name} ({obj_type.value})",
         )
+
+    def _construct_specification_fallback(self, spec: QuestionSpecification) -> QuestionCandidate:
+        return QuestionGenerator.construct_specification_fallback(spec)
+

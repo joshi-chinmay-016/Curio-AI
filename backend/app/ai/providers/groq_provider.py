@@ -49,6 +49,10 @@ class GroqLLMProvider(BaseLLMProvider):
             if max_retries is not None
             else int(os.getenv("GROQ_MAX_RETRIES") or getattr(settings, "GROQ_MAX_RETRIES", 2))
         )
+        self.max_tokens = int(
+            os.getenv("GROQ_MAX_TOKENS")
+            or getattr(settings, "GROQ_MAX_TOKENS", 900)
+        )
         self.mock_fallback = MockLLMProvider()
         self.client = None
 
@@ -60,7 +64,7 @@ class GroqLLMProvider(BaseLLMProvider):
                     timeout=self.timeout,
                     max_retries=self.max_retries,
                 )
-                logger.info("GroqLLMProvider successfully initialized with client (model=%s).", self.model)
+                logger.info("GroqLLMProvider successfully initialized with client (model=%s, max_tokens=%d).", self.model, self.max_tokens)
             except ImportError:
                 logger.warning("Groq package not installed; falling back to MockLLMProvider.")
             except Exception as e:
@@ -87,16 +91,35 @@ class GroqLLMProvider(BaseLLMProvider):
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.0,
-                timeout=self.timeout,
-            )
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.0,
+                    max_tokens=self.max_tokens,
+                    timeout=self.timeout,
+                )
+            except Exception as e_rf:
+                # If json_object response_format failed (e.g. 400 Bad Request / json_validate_failed), retry without it
+                if "json_validate_failed" in str(e_rf) or "BadRequestError" in type(e_rf).__name__:
+                    logger.info("Retrying structured generation without response_format constraint...")
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt},
+                        ],
+                        temperature=0.0,
+                        max_tokens=self.max_tokens,
+                        timeout=self.timeout,
+                    )
+                else:
+                    raise e_rf
+
             raw_content = response.choices[0].message.content or "{}"
             cleaned_content = self._clean_json_text(raw_content)
             return response_model.model_validate_json(cleaned_content)
@@ -132,6 +155,7 @@ class GroqLLMProvider(BaseLLMProvider):
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
+                max_tokens=min(self.max_tokens, 600),
                 timeout=self.timeout,
             )
             content = response.choices[0].message.content or ""
@@ -146,7 +170,7 @@ class GroqLLMProvider(BaseLLMProvider):
 
     @staticmethod
     def _clean_json_text(raw: str) -> str:
-        """Strip markdown fences if model outputs ```json ... ```."""
+        """Strip markdown fences if model outputs ```json ... ``` or wraps JSON in text."""
         text = raw.strip()
         if text.startswith("```json"):
             text = text[7:]
@@ -154,4 +178,11 @@ class GroqLLMProvider(BaseLLMProvider):
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
-        return text.strip()
+        text = text.strip()
+
+        # If text contains extra conversational wrapper, extract the outermost JSON object
+        if not (text.startswith("{") and text.endswith("}")):
+            match = re.search(r"(\{.*\})", text, re.DOTALL)
+            if match:
+                text = match.group(1).strip()
+        return text

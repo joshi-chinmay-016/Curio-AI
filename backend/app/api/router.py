@@ -8,6 +8,7 @@ from backend.app.api.v1 import (
     progress,
     teacher_interventions,
     voice,
+    guest_ai,
 )
 
 api_router = APIRouter()
@@ -20,4 +21,5 @@ api_router.include_router(reports.router, tags=["Reports"])
 api_router.include_router(progress.router)
 api_router.include_router(teacher_interventions.router)
 api_router.include_router(voice.router, prefix="/voice", tags=["Voice"])
+api_router.include_router(guest_ai.router, tags=["Guest AI"])
 

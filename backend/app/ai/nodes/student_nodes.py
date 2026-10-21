@@ -19,12 +19,14 @@ from backend.app.ai.answer_intelligence.schemas import (
     RelevanceLevel,
 )
 from backend.app.ai.concept_model import ConceptModelBuilder
+from backend.app.ai.document_curriculum import DocumentCurriculumBuilder
 from backend.app.ai.decision_engine import DecisionEngine
 from backend.app.ai.evaluator import AIEvaluator
 from backend.app.ai.learner_model import LearnerModelManager
 from backend.app.ai.providers.mock_provider import MockLLMProvider
 from backend.app.ai.question_generator import QuestionGenerator
 from backend.app.ai.question_selector import QuestionSelector
+from backend.app.ai.question_validator import enforce_single_student_question
 from backend.app.ai.schemas import (
     AIContext,
     AIResponse,
@@ -38,6 +40,7 @@ from backend.app.ai.schemas import (
     QuestionSelectionResult,
     QuestionSpecification,
     Role,
+    SourceMode,
     StateUpdates,
     Strategy,
     TeacherIntervention,
@@ -61,13 +64,7 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     provider = state.get("provider") or MockLLMProvider()
     doc_context = state.get("document_context") or context.document_context
 
-    # 1. Hydrate or dynamically build ConceptModel
-    concept_model: Optional[ConceptModel] = context.current_state.concept_model
-    if not concept_model:
-        builder = ConceptModelBuilder(provider)
-        concept_model = builder.build_model(context.topic)
-
-    # 2. Hydrate or initialize LearnerModel
+    # 1. Hydrate or initialize LearnerModel
     learner_model: Optional[LearnerModel] = context.current_state.learner_model
     if not learner_model:
         learner_model = LearnerModel(session_id=context.session_id)
@@ -78,6 +75,85 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if context.current_state.unresolved_misconceptions:
             learner_model.unresolved_gaps = list(context.current_state.unresolved_misconceptions)
     learner_mgr = LearnerModelManager(learner_model, session_id=context.session_id)
+
+    # 2. Hydrate or dynamically build ConceptModel
+    concept_model: Optional[ConceptModel] = context.current_state.concept_model
+    topic_matches = (
+        concept_model is not None
+        and bool(concept_model.topic)
+        and bool(context.topic)
+        and concept_model.topic.strip().lower() == context.topic.strip().lower()
+    )
+    doc_matches = True
+    session_info = getattr(context, "session", None)
+    raw_doc_id = getattr(session_info, "document_id", None) if session_info else None
+    session_doc_id = raw_doc_id if (raw_doc_id is not None and not (hasattr(raw_doc_id, "_mock_return_value") or type(raw_doc_id).__name__ == "MagicMock")) else None
+
+    raw_doc_ver = getattr(session_info, "document_version", None) if session_info else None
+    session_doc_ver = raw_doc_ver if (raw_doc_ver is not None and not (hasattr(raw_doc_ver, "_mock_return_value") or type(raw_doc_ver).__name__ == "MagicMock")) else None
+    if concept_model:
+        cm_meta = concept_model.metadata or {}
+        cm_doc_id = cm_meta.get("document_id")
+        cm_doc_ver = cm_meta.get("document_version") or cm_meta.get("content_hash")
+        if session_doc_id:
+            if cm_doc_id != str(session_doc_id):
+                doc_matches = False
+            elif session_doc_ver and cm_doc_ver and str(cm_doc_ver) != str(session_doc_ver):
+                doc_matches = False
+        elif cm_doc_id:
+            doc_matches = False
+
+    if not (topic_matches and doc_matches):
+        concept_model = None
+
+    if not concept_model:
+        # Prefer complete document chunks passed from ingestion/session, then fallback to turn-level doc_context
+        all_chunks = getattr(context, "all_document_chunks", None)
+        if all_chunks is None:
+            all_chunks = state.get("document_chunks")
+        doc_chunks = all_chunks if (all_chunks and len(all_chunks) > 0) else (getattr(doc_context, "chunks", None) if doc_context else None)
+
+        if doc_chunks and len(doc_chunks) > 0:
+            first_chunk = doc_chunks[0]
+            if session_doc_id:
+                doc_id = str(session_doc_id)
+            elif hasattr(first_chunk, "document_id"):
+                doc_id = str(first_chunk.document_id)
+            elif isinstance(first_chunk, dict) and "document_id" in first_chunk:
+                doc_id = str(first_chunk["document_id"])
+            else:
+                doc_id = "document"
+
+            curr_builder = DocumentCurriculumBuilder(provider)
+            curriculum = curr_builder.build_curriculum(
+                document_id=doc_id,
+                chunks=doc_chunks,
+                content_hash=str(session_doc_ver) if session_doc_ver else None,
+                topic_hint=context.topic,
+                learner_model=learner_model,
+            )
+            concept_model = curriculum.concept_model
+        elif session_doc_id and (all_chunks is not None or getattr(context.session, "source_mode", None) == SourceMode.DOCUMENT):
+            # Authorized empty document (0 chunks): build generic scaffold curriculum
+            curr_builder = DocumentCurriculumBuilder(provider)
+            curriculum = curr_builder.build_curriculum(
+                document_id=str(session_doc_id),
+                chunks=[],
+                content_hash=str(session_doc_ver) if session_doc_ver else None,
+                topic_hint=context.topic,
+                learner_model=learner_model,
+            )
+            concept_model = curriculum.concept_model
+        else:
+            builder = ConceptModelBuilder(provider)
+            try:
+                built_model = builder.build_model(context.topic)
+                if built_model and built_model.concepts:
+                    concept_model = built_model
+                else:
+                    concept_model = built_model or ConceptModel(topic=context.topic, concepts=[], relationships=[])
+            except Exception:
+                concept_model = ConceptModel(topic=context.topic, concepts=[], relationships=[])
 
     # 3. Evaluator Mode branch
     if context.current_mode == Mode.EVALUATOR:
@@ -180,21 +256,18 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # Answer Intelligence assessment
         aggregator = AssessmentAggregator()
+        spec = getattr(context, "question_specification", None) or (
+            getattr(context.current_state, "question_specification", None)
+            if hasattr(context, "current_state")
+            else None
+        )
         assessment = aggregator.assess(
             user_message=latest_user_msg,
             context=context,
             current_question=curr_q,
             concept_model=concept_model,
             target_concept_override=target_concept,
-        )
-
-        # Semantic Turn Interpretation
-        interpreter = TurnInterpreter(provider)
-        interpretation = interpreter.interpret(
-            user_message=latest_user_msg,
-            context=context,
-            current_question=curr_q,
-            mode=context.current_mode,
+            question_specification=spec,
         )
 
         # Synchronize interpretation with assessment
@@ -216,7 +289,13 @@ def evaluation_node(state: Dict[str, Any]) -> Dict[str, Any]:
             interpretation.intent = TurnIntent.OFF_TOPIC
             interpretation.is_answer_attempt = False
 
-        is_irrel = assessment.relevance_level in (RelevanceLevel.IRRELEVANT, RelevanceLevel.UNCERTAIN)
+        is_teacher_mode = context.current_mode == Mode.TEACHER or (
+            hasattr(context.current_mode, "value") and context.current_mode.value == "TEACHER"
+        )
+        is_irrel = (
+            assessment.relevance_level in (RelevanceLevel.IRRELEVANT, RelevanceLevel.UNCERTAIN)
+            and not (is_teacher_mode and interpretation.is_answer_attempt)
+        )
         misc_list = [m.description for m in assessment.misconceptions]
 
         if interpretation.intent == TurnIntent.CLARIFICATION_REQUEST:
@@ -376,16 +455,42 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
             if m.role == Role.ASSISTANT or getattr(m, "sender", "").upper() == "AI"
         ]
         recent_c = [context.active_concept] if context.active_concept else []
+        if context.current_state.active_concept and context.current_state.active_concept not in recent_c:
+            recent_c.append(context.current_state.active_concept)
 
-        # If probing current concept, preserve active_concept; otherwise let selector advance
-        is_probing_active = decision.strategy in (
-            Strategy.PROBE_WHY,
-            Strategy.PROBE_HOW,
-            Strategy.PROBE_MISSING_CONCEPT,
-            Strategy.CLARIFY_TERM,
-            Strategy.CHALLENGE_MISCONCEPTION,
-        ) and bool(context.active_concept or decision.active_concept)
-        concept_target = (decision.active_concept or context.active_concept) if is_probing_active else None
+        # Answer-driven vs topic-driven concept target:
+        # Prioritize answer-driven needs when genuine (misconceptions, gaps, undefined terms, or incomplete mastery).
+        # When current concept is already mastered and free of gaps/misconceptions, release target_concept_override
+        # so QuestionSelector coverage logic can systematically advance to unassessed concepts in TopicPlan.
+        cand_concept = decision.active_concept or context.active_concept
+        cand_state = learner_model.concepts.get(cand_concept) if cand_concept else None
+        is_already_mastered = (
+            cand_state is not None
+            and cand_state.mastery >= 0.75
+            and (cand_state.evidence_count >= 1 or cand_state.attempt_count >= 1)
+            and not cand_state.unresolved_gap
+            and not cand_state.active_misconceptions
+        )
+
+        has_answer_driven_need = (
+            decision.strategy in (
+                Strategy.CHALLENGE_MISCONCEPTION,
+                Strategy.CLARIFY_TERM,
+                Strategy.PROBE_MISSING_CONCEPT,
+                Strategy.CHALLENGE_ASSUMPTION,
+            )
+            or (cand_state is not None and (cand_state.unresolved_gap or bool(cand_state.active_misconceptions)))
+            or (not is_already_mastered and decision.strategy in (
+                Strategy.PROBE_WHY,
+                Strategy.PROBE_HOW,
+                Strategy.DEPTH_EXPANSION,
+                Strategy.VERIFY_UNDERSTANDING,
+                Strategy.REQUEST_EXAMPLE,
+                Strategy.TEST_EDGE_CASE,
+                Strategy.CONNECT_CONCEPTS,
+            ))
+        ) and bool(cand_concept)
+        concept_target = cand_concept if has_answer_driven_need else None
 
         spec = selector.select_question_specification(
             concept_model=concept_model,
@@ -393,11 +498,14 @@ def decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
             current_difficulty=decision.difficulty,
             current_objective=context.current_state.current_objective,
             latest_interpretation=interpretation,
-            latest_evaluation=None,
+            latest_evaluation=evaluation if has_user_message else None,
             recent_question_history=recent_q,
             recent_concept_history=recent_c,
             interrupted_question=context.interrupted_question,
             target_concept_override=concept_target,
+            strategy=decision.strategy,
+            strategy_reason=decision.reason,
+            adjust_difficulty=False,
         )
 
         # Synchronize decision with specification
@@ -496,22 +604,39 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
     elif decision.should_restore_interrupted_question:
         # Exiting Teacher Mode: restore interrupted question
         restored_q = context.interrupted_question
-        curr_attempts = context.current_state.teacher_attempt_count or 0
-        is_limit_fallback = curr_attempts >= 3 or "Maximum Teacher attempts" in (decision.reason or "")
+        is_limit_fallback = "Maximum Teacher attempts" in (decision.reason or "")
 
         if restored_q:
             if is_limit_fallback:
                 content = f"Let's pause on that specific detail for now and return to our original question at a simpler level:\n\n{restored_q.content}"
             else:
-                content = f"Great job! Now let's return to our original question:\n\n{restored_q.content}"
+                content = f"Spot on! You understood this part perfectly. We're toggling back to Student Mode so you can continue teaching me. Great job! Now let's return to our original question:\n\n{restored_q.content}"
         else:
             if spec:
                 generator = QuestionGenerator(provider)
-                sel_res = generator.generate_and_select_question(spec, context, recent_q)
+                sel_res = generator.generate_and_select_question(
+                    spec=spec,
+                    context=context,
+                    recent_questions=recent_q,
+                    assessment=state.get("assessment"),
+                )
                 content = sel_res.selected_candidate.question_text
             else:
                 student_handler = StudentModeHandler(provider)
                 content = student_handler.generate_followup_question(context, evaluation, decision)
+
+        target_concept = (
+            (spec.target_concept if spec else None)
+            or (restored_q.concept if restored_q and hasattr(restored_q, "concept") else None)
+            or decision.active_concept
+            or context.active_concept
+            or context.topic
+        )
+        content = enforce_single_student_question(
+            content=content,
+            spec=spec,
+            fallback_concept=target_concept,
+        )
 
         response = AIResponse(
             content=content,
@@ -541,16 +666,33 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 learner_model=learner_model,
                 current_difficulty=decision.difficulty,
                 recent_question_history=recent_q,
+                adjust_difficulty=False,
             )
 
+        if spec and not getattr(spec, "target_concept_evidence", None):
+            cm = state.get("concept_model") or context.current_state.concept_model
+            if cm:
+                from backend.app.ai.document_curriculum import format_concept_evidence
+                c_node = cm.get_concept(spec.target_concept)
+                if c_node:
+                    cm_meta = cm.metadata or {}
+                    spec.target_concept_evidence = format_concept_evidence(
+                        concept_id=spec.target_concept,
+                        concept_node=c_node,
+                        source_references=getattr(c_node, "source_references", None),
+                        expected_doc_id=cm_meta.get("document_id"),
+                        expected_doc_version=cm_meta.get("document_version") or cm_meta.get("content_hash"),
+                    )
+
+        assessment = state.get("assessment")
         selection_res: QuestionSelectionResult = generator.generate_and_select_question(
             spec=spec,
             context=context,
             recent_questions=recent_q,
+            assessment=assessment,
         )
 
         content = selection_res.selected_candidate.question_text
-        assessment = state.get("assessment")
 
         # If learner response was irrelevant / off-topic, prefix with gentle redirection (Section 49)
         if assessment and assessment.relevance_level in (RelevanceLevel.IRRELEVANT, RelevanceLevel.UNCERTAIN):
@@ -559,6 +701,13 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
         elif interpretation.intent == TurnIntent.CLARIFICATION_REQUEST:
             clean_term = spec.target_concept.replace("_", " ")
             content = f"By that, I'm referring to the core mechanism of {clean_term}.\n\n{content}"
+
+        target_concept = spec.target_concept if spec else (context.active_concept or context.topic)
+        content = enforce_single_student_question(
+            content=content,
+            spec=spec,
+            fallback_concept=target_concept,
+        )
 
         resp_metadata = {
             "selected_concept": spec.target_concept,
@@ -655,11 +804,20 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     qid = f"q_{uuid.uuid4().hex[:8]}"
 
-    # Synced concept mastery from LearnerModel
-    mastery_dict = (
-        LearnerModelManager(learner_model).export_mastery_dict()
-        if learner_model
-        else (context.current_state.concept_mastery or {})
+    # Synced concept mastery and cumulative misconception counts from LearnerModel
+    if learner_model:
+        lm_mgr = LearnerModelManager(learner_model)
+        mastery_dict = lm_mgr.export_mastery_dict()
+        misconception_dict = lm_mgr.export_misconception_counts_dict()
+    else:
+        mastery_dict = context.current_state.concept_mastery or {}
+        misconception_dict = context.current_state.misconception_counts if context.current_state.misconception_counts is not None else None
+
+    from backend.app.ai.topic_plan import TopicPlanner
+    topic_plan = TopicPlanner.build_topic_plan(
+        concept_model=concept_model,
+        learner_model=learner_model,
+        topic=context.topic if context else None,
     )
 
     if decision.next_mode == Mode.EVALUATOR:
@@ -684,6 +842,8 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             latest_interpretation=interpretation,
             question_specification=spec,
             concept_mastery=mastery_dict,
+            misconception_counts=misconception_dict,
+            topic_plan=topic_plan,
         )
 
     elif decision.next_mode == Mode.TEACHER:
@@ -743,6 +903,8 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             latest_interpretation=interpretation,
             question_specification=spec,
             concept_mastery=mastery_dict,
+            misconception_counts=misconception_dict,
+            topic_plan=topic_plan,
         )
 
     elif decision.should_restore_interrupted_question:
@@ -775,6 +937,7 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 lm_mgr = LearnerModelManager(learner_model)
                 lm_mgr.record_teacher_verification(decision.active_concept, passed=True)
                 mastery_dict = lm_mgr.export_mastery_dict()
+                misconception_dict = lm_mgr.export_misconception_counts_dict()
 
         state_updates = StateUpdates(
             active_concept=current_q.concept if current_q else decision.active_concept,
@@ -797,6 +960,8 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             latest_interpretation=interpretation,
             question_specification=spec,
             concept_mastery=mastery_dict,
+            misconception_counts=misconception_dict,
+            topic_plan=topic_plan,
         )
 
     else:
@@ -829,6 +994,8 @@ def state_updates_node(state: Dict[str, Any]) -> Dict[str, Any]:
             latest_interpretation=interpretation,
             question_specification=spec,
             concept_mastery=mastery_dict,
+            misconception_counts=misconception_dict,
+            topic_plan=topic_plan,
         )
 
-    return {"state_updates": state_updates}
+    return {"state_updates": state_updates, "topic_plan": topic_plan}

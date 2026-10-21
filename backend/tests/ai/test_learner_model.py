@@ -131,3 +131,53 @@ def test_teacher_verification_fail_preserves_gap():
     assert state.unresolved_gap is True
     assert concept in mgr.model.unresolved_gaps
     assert state.mastery <= 0.30
+
+
+def test_export_misconception_counts_dict_cumulative_and_isolated():
+    """Verify export_misconception_counts_dict exports cumulative counts accurately and isolates internal state."""
+    mgr = LearnerModelManager()
+
+    # Concept 1: 2 misconceptions across turns
+    mgr.update_from_evaluation(
+        "concept_a",
+        _eval(correctness=0.4, misconceptions=["Misconception A1"]),
+        interpretation=TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT),
+    )
+    mgr.update_from_evaluation(
+        "concept_a",
+        _eval(correctness=0.4, misconceptions=["Misconception A2"]),
+        interpretation=TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT),
+    )
+
+    # Concept 2: 1 misconception, then resolved
+    mgr.update_from_evaluation(
+        "concept_b",
+        _eval(correctness=0.4, misconceptions=["Misconception B1"]),
+        interpretation=TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT),
+    )
+    # Resolution turn for concept_b
+    mgr.update_from_evaluation(
+        "concept_b",
+        _eval(correctness=0.9),
+        interpretation=TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT, is_answer_attempt=True),
+    )
+
+    # Concept 3: clean concept
+    mgr.update_from_evaluation(
+        "concept_c",
+        _eval(correctness=0.9),
+        interpretation=TurnInterpretation(intent=TurnIntent.ANSWER_ATTEMPT, is_answer_attempt=True),
+    )
+
+    counts = mgr.export_misconception_counts_dict()
+
+    # Verify counts
+    assert counts["concept_a"] == 2
+    # Cumulative count must NOT decrement on resolution
+    assert counts["concept_b"] == 1
+    assert counts["concept_c"] == 0
+
+    # Verify dictionary isolation: mutating exported dict must not affect model state
+    counts["concept_a"] = 999
+    assert mgr.model.concepts["concept_a"].misconception_count == 2
+

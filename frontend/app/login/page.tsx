@@ -8,7 +8,7 @@ import { KeycapButton } from "@/components/curio/KeycapButton";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { useAuthStore } from "@/stores/authStore";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "/dashboard";
@@ -243,3 +243,12 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export default function LoginPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen bg-sand flex items-center justify-center font-mono text-sm text-navy">Loading...</div>}>
+      <LoginForm />
+    </React.Suspense>
+  );
+}
+

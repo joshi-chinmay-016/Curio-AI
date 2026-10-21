@@ -43,12 +43,18 @@ class DynamicPromptContext(BaseModel):
     concept_subgraph_summary: Optional[str] = None
     document_evidence_section: Optional[str] = None
     document_grounding_instruction: Optional[str] = None
+    assessment_available: bool = True
 
     def to_prompt_section(self) -> str:
         """Renders cleanly formatted structured context for LLM prompt templates."""
-        supp_str = "; ".join(self.supported_evidence) if self.supported_evidence else "None yet demonstrated"
-        miss_str = "; ".join(self.missing_evidence) if self.missing_evidence else "None identified"
-        misc_str = "; ".join(self.misconceptions) if self.misconceptions else "None detected"
+        if not self.assessment_available:
+            supp_str = "Not evaluated (no assessment data available)"
+            miss_str = "Not evaluated (no assessment data available)"
+            misc_str = "Not evaluated (no assessment data available)"
+        else:
+            supp_str = "; ".join(self.supported_evidence) if self.supported_evidence else "None yet demonstrated"
+            miss_str = "; ".join(self.missing_evidence) if self.missing_evidence else "None identified"
+            misc_str = "; ".join(self.misconceptions) if self.misconceptions else "None detected"
 
         lines = [
             "STRUCTURED LEARNER ASSESSMENT CONTEXT (Use to guide question phrasing):",
@@ -125,6 +131,7 @@ def build_dynamic_prompt_context(
             correctness_level="UNKNOWN",
             completeness_level="UNKNOWN",
             difficulty=difficulty,
+            assessment_available=False,
             prompt_instruction="Ask a foundational question to probe understanding.",
             document_evidence_section=doc_evidence_sec,
             document_grounding_instruction=doc_grounding_inst,

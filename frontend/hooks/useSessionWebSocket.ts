@@ -368,9 +368,9 @@ export function useSessionWebSocket(sessionId: string) {
     }, 2000);
   }, [router, sessionId, setMode]);
 
-  // Attempt real WebSocket connection
+  // Attempt real WebSocket connection (only if explicitly enabled)
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || process.env.NEXT_PUBLIC_ENABLE_WS !== "true") return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = process.env.NEXT_PUBLIC_WS_HOST || "localhost:8000";

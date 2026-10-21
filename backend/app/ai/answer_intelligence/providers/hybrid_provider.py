@@ -258,6 +258,9 @@ class HybridSemanticProvider(BaseAssessmentProvider):
                 for c in expected.core_components
             ]
 
+        if self.semantic_provider._model is None:
+            return self.local_provider.match_evidence(claims, expected)
+
         clean_user = " ".join(c.text for c in claims).strip()
         split_clauses = [
             s.strip() for s in re.split(r'[;.!?]|\b(?:and|but|however|while|if)\b', clean_user, flags=re.IGNORECASE)
@@ -476,6 +479,9 @@ class HybridSemanticProvider(BaseAssessmentProvider):
         misconceptions = expected.common_misconceptions
         if not misconceptions or not user_message:
             return []
+
+        if self.semantic_provider._model is None:
+            return self.local_provider.detect_misconceptions(user_message, claims, expected)
 
         clean_user = user_message.strip()
         lower_user = clean_user.lower()

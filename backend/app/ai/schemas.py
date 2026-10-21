@@ -1,7 +1,7 @@
 from enum import Enum, IntEnum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import UUID
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.ai.answer_intelligence.schemas import LearningAssessment
 
@@ -37,6 +37,11 @@ class Strategy(str, Enum):
     INCREASE_DIFFICULTY = "INCREASE_DIFFICULTY"
     TEACH_GAP = "TEACH_GAP"
     VERIFY_UNDERSTANDING = "VERIFY_UNDERSTANDING"
+    REQUEST_EXAMPLE = "REQUEST_EXAMPLE"
+    TEST_EDGE_CASE = "TEST_EDGE_CASE"
+    CHALLENGE_ASSUMPTION = "CHALLENGE_ASSUMPTION"
+    CONNECT_CONCEPTS = "CONNECT_CONCEPTS"
+    DEPTH_EXPANSION = "DEPTH_EXPANSION"
     RESTORE_INTERRUPTED_QUESTION = "RESTORE_INTERRUPTED_QUESTION"
     OFFER_TERMINATION = "OFFER_TERMINATION"
     GENERATE_REPORT = "GENERATE_REPORT"
@@ -311,6 +316,8 @@ class ConceptNode(BaseModel):
     edge_cases: List[str] = Field(default_factory=list)
     difficulty_level: int = Field(default=1, ge=1, le=5)
     generation_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    source_references: List[Dict[str, Any]] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ConceptRelationship(BaseModel):
@@ -319,6 +326,8 @@ class ConceptRelationship(BaseModel):
     target_concept_id: str
     relation_type: str = "PREREQUISITE_OF"
     description: str = ""
+    evidence_type: str = "EXPLICIT_STATEMENT"  # EXPLICIT_STATEMENT, HEURISTIC_INFERENCE
+    is_explicit: bool = True
 
 
 class ConceptModel(BaseModel):
@@ -326,6 +335,8 @@ class ConceptModel(BaseModel):
     Top-level validated concept representation for a topic.
     Serves as TopicModel describing knowledge decomposition, prerequisites, and learning objectives.
     """
+    model_config = ConfigDict(protected_namespaces=())
+
     topic: str
     topic_id: str = ""
     topic_title: str = ""
@@ -424,6 +435,8 @@ class ConceptState(BaseModel):
     recent_scores: List[float] = Field(default_factory=list)
     unresolved_gap: bool = False
     active_misconceptions: List[str] = Field(default_factory=list)
+    assessed_objectives: List[str] = Field(default_factory=list)
+    mastered_objectives: List[str] = Field(default_factory=list)
 
 
 class LearnerModel(BaseModel):
@@ -439,6 +452,175 @@ class LearnerModel(BaseModel):
         return self.concepts[concept_id]
 
 
+# =====================================================================
+# PHASE 5: TOPIC PLANNING & COMPREHENSIVE CONCEPT COVERAGE
+# =====================================================================
+
+class CoverageStatus(str, Enum):
+    """
+    Distinct pedagogical coverage states for concepts in a TopicPlan.
+    Coverage is decoupled from mastery:
+    - UNASSESSED: No meaningful evaluation evidence exists yet.
+    - IN_PROGRESS: Evidence exists, but understanding is partial, incomplete, or inconsistent.
+    - MASTERED: Demonstrates sufficient evidence meeting established mastery criteria.
+    - NEEDS_REVIEW: Previously explored concept with an active misconception, knowledge gap, or regression.
+    """
+    UNASSESSED = "UNASSESSED"
+    IN_PROGRESS = "IN_PROGRESS"
+    MASTERED = "MASTERED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
+class ConceptCoverageItem(BaseModel):
+    """
+    Represents an individual concept within the TopicPlan, its importance,
+    dependencies, learning objectives, and current coverage/mastery status.
+    """
+    concept_id: str
+    name: str
+    importance: str = "CORE"  # CORE, PREREQUISITE, ADVANCED, EXTENSION
+    difficulty_level: int = Field(default=1, ge=1, le=5)
+    prerequisites: List[str] = Field(default_factory=list)
+    sub_concepts: List[str] = Field(default_factory=list)
+    learning_objectives: List[LearningObjective] = Field(default_factory=list)
+    status: CoverageStatus = CoverageStatus.UNASSESSED
+    mastery: float = Field(default=0.0, ge=0.0, le=1.0)
+    evidence_count: int = Field(default=0, ge=0)
+    attempt_count: int = Field(default=0, ge=0)
+    unresolved_gap: bool = False
+    active_misconceptions: List[str] = Field(default_factory=list)
+    assessed_objectives: List[str] = Field(default_factory=list)
+    mastered_objectives: List[str] = Field(default_factory=list)
+    source_references: List[Dict[str, Any]] = Field(default_factory=list)
+    has_source_evidence: bool = False
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_source_evidence_flag(self) -> Any:
+        if self.metadata.get("is_generic_scaffold", False):
+            self.has_source_evidence = False
+            return self
+        if not self.source_references:
+            self.has_source_evidence = False
+        return self
+
+    @property
+    def coverage_status(self) -> CoverageStatus:
+        return self.status
+
+
+class TopicPlan(BaseModel):
+    """
+    Top-level topic plan representing all concepts required to explore and understand a topic.
+    Provides deterministic querying of unassessed concepts, in-progress concepts,
+    review-needed concepts, and overall topic coverage metrics.
+    """
+    topic: str
+    topic_id: str = ""
+    topic_title: str = ""
+    topic_description: str = ""
+    concepts: List[ConceptCoverageItem] = Field(default_factory=list)
+    validation_status: ValidationStatus = ValidationStatus.VALID
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def coverage_percentage(self) -> float:
+        return round(self.coverage_summary()["coverage_ratio"] * 100.0, 1)
+
+    def get_concept(self, concept_id: str) -> Optional[ConceptCoverageItem]:
+        cid_norm = (concept_id or "").strip().lower().replace(" ", "_")
+        for c in self.concepts:
+            if c.concept_id == concept_id or c.concept_id.strip().lower().replace(" ", "_") == cid_norm:
+                return c
+            if c.name and (c.name.strip().lower() == (concept_id or "").strip().lower() or c.name.strip().lower().replace(" ", "_") == cid_norm):
+                return c
+        return None
+
+    def get_unassessed_concepts(self) -> List[ConceptCoverageItem]:
+        return [c for c in self.concepts if c.status == CoverageStatus.UNASSESSED]
+
+    def get_in_progress_concepts(self) -> List[ConceptCoverageItem]:
+        return [c for c in self.concepts if c.status == CoverageStatus.IN_PROGRESS]
+
+    def get_mastered_concepts(self) -> List[ConceptCoverageItem]:
+        return [c for c in self.concepts if c.status == CoverageStatus.MASTERED]
+
+    def get_review_needed_concepts(self) -> List[ConceptCoverageItem]:
+        return [c for c in self.concepts if c.status == CoverageStatus.NEEDS_REVIEW]
+
+    def get_eligible_concepts(self, min_prereq_mastery: float = 0.50) -> List[ConceptCoverageItem]:
+        mastery_map = {c.concept_id: c.mastery for c in self.concepts}
+        eligible: List[ConceptCoverageItem] = []
+        for c in self.concepts:
+            prereqs_satisfied = True
+            for pid in c.prerequisites:
+                if mastery_map.get(pid, 0.0) < min_prereq_mastery:
+                    prereqs_satisfied = False
+                    break
+            if prereqs_satisfied:
+                eligible.append(c)
+        return eligible
+
+    def coverage_summary(self) -> Dict[str, Any]:
+        total = len(self.concepts)
+        if total == 0:
+            return {
+                "total_concepts": 0,
+                "unassessed_count": 0,
+                "in_progress_count": 0,
+                "mastered_count": 0,
+                "needs_review_count": 0,
+                "coverage_ratio": 0.0,
+                "mastery_ratio": 0.0,
+                "curriculum_coverage": 0.0,
+                "learner_mastery": 0.0,
+                "assessed_mastery_ratio": 0.0,
+                "source_availability_ratio": 0.0,
+                "is_generic_scaffold": bool(self.metadata.get("is_generic_scaffold", False)),
+                "curriculum_type": "GENERIC_SCAFFOLD" if self.metadata.get("is_generic_scaffold", False) else ("DOCUMENT_DERIVED" if self.metadata.get("document_id") else "TOPIC_DERIVED"),
+                "document_id": self.metadata.get("document_id"),
+                "document_version": self.metadata.get("document_version") or self.metadata.get("content_hash"),
+                "ingestion_status": self.metadata.get("ingestion_status", "PROCESSED"),
+            }
+        unassessed = len(self.get_unassessed_concepts())
+        in_progress = len(self.get_in_progress_concepts())
+        mastered = len(self.get_mastered_concepts())
+        needs_review = len(self.get_review_needed_concepts())
+        explored = total - unassessed
+        cov_ratio = round(explored / total, 3)
+        mast_ratio = round(mastered / total, 3)
+        assessed_mast = round(mastered / explored, 3) if explored > 0 else 0.0
+        
+        is_scaffold = bool(self.metadata.get("is_generic_scaffold", False))
+        if is_scaffold:
+            source_ratio = 0.0
+        else:
+            with_evidence = sum(
+                1 for c in self.concepts
+                if getattr(c, "has_source_evidence", False)
+                and bool(getattr(c, "source_references", []))
+                and not bool(getattr(c, "metadata", {}).get("is_generic_scaffold", False))
+            )
+            source_ratio = round(with_evidence / total, 3)
+
+        return {
+            "total_concepts": total,
+            "unassessed_count": unassessed,
+            "in_progress_count": in_progress,
+            "mastered_count": mastered,
+            "needs_review_count": needs_review,
+            "coverage_ratio": cov_ratio,
+            "mastery_ratio": mast_ratio,
+            "curriculum_coverage": cov_ratio,
+            "learner_mastery": mast_ratio,
+            "assessed_mastery_ratio": assessed_mast,
+            "source_availability_ratio": source_ratio,
+            "is_generic_scaffold": is_scaffold,
+            "curriculum_type": "GENERIC_SCAFFOLD" if is_scaffold else ("DOCUMENT_DERIVED" if self.metadata.get("document_id") else "TOPIC_DERIVED"),
+            "document_id": self.metadata.get("document_id"),
+            "document_version": self.metadata.get("document_version") or self.metadata.get("content_hash"),
+            "ingestion_status": self.metadata.get("ingestion_status", "PROCESSED"),
+        }
 
 
 class QuestionSpecification(BaseModel):
@@ -452,6 +634,8 @@ class QuestionSpecification(BaseModel):
     concept_constraints: List[ConceptConstraint] = Field(default_factory=list)
     prerequisite_context: List[str] = Field(default_factory=list)
     cognitive_action: Optional[CognitiveAction] = None
+    target_concept_evidence: Optional[str] = None
+    source_references: List[Any] = Field(default_factory=list)
 
 
 class QuestionCandidate(BaseModel):
@@ -507,6 +691,7 @@ class SessionState(BaseModel):
     latest_interpretation: Optional[TurnInterpretation] = None
     question_specification: Optional[QuestionSpecification] = None
     learning_assessment: Optional[LearningAssessment] = None
+    topic_plan: Optional[TopicPlan] = None
 
     @field_validator("session_id", mode="before")
     @classmethod
@@ -597,6 +782,7 @@ class StateUpdates(BaseModel):
     current_objective: Optional[LearningObjective] = None
     latest_interpretation: Optional[TurnInterpretation] = None
     question_specification: Optional[QuestionSpecification] = None
+    topic_plan: Optional[TopicPlan] = None
 
     @field_validator("concept_mastery")
     @classmethod
@@ -796,6 +982,7 @@ class AIResult(BaseModel):
     concept_model: Optional[ConceptModel] = None
     learner_model: Optional[LearnerModel] = None
     learning_assessment: Optional[LearningAssessment] = None
+    topic_plan: Optional[TopicPlan] = None
 
 
 # =====================================================================
@@ -835,6 +1022,8 @@ class SessionInfo(BaseModel):
     session_id: str
     topic: str
     source_mode: SourceMode = SourceMode.GENERAL
+    document_id: Optional[str] = None
+    document_version: Optional[str] = None
 
     @field_validator("session_id", mode="before")
     @classmethod
@@ -869,6 +1058,7 @@ class AIContext(BaseModel):
     conversation: ConversationContext
     learning_context: LearningContext = Field(default_factory=LearningContext)
     source_context: Optional[Dict[str, Any]] = None
+    document_chunks: Optional[List[Any]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -891,10 +1081,14 @@ class AIContext(BaseModel):
         topic = data.get("topic", "General Topic")
         source_mode = data.get("source_mode", SourceMode.GENERAL)
 
+        document_id = data.get("document_id")
+        document_version = data.get("document_version")
         session_info = SessionInfo(
             session_id=session_id,
             topic=topic,
-            source_mode=source_mode
+            source_mode=source_mode,
+            document_id=str(document_id) if document_id else None,
+            document_version=str(document_version) if document_version else None,
         )
 
         current_mode = data.get("current_mode", Mode.STUDENT)
@@ -921,6 +1115,8 @@ class AIContext(BaseModel):
                 current_question=curr_q,
                 interrupted_question=interrupted_q,
                 teacher_intervention=teacher_int,
+                recent_strategy_history=data.get("recent_strategy_history", []),
+                misconception_counts=data.get("misconception_counts", {}),
             )
 
         raw_history = data.get("history", data.get("recent_messages", data.get("messages", [])))
@@ -940,13 +1136,15 @@ class AIContext(BaseModel):
 
         learning_context = data.get("learning_context", LearningContext())
         source_context = data.get("source_context", None)
+        document_chunks = data.get("document_chunks", None)
 
         return {
             "session": session_info,
             "current_state": current_state,
             "conversation": conversation,
             "learning_context": learning_context,
-            "source_context": source_context
+            "source_context": source_context,
+            "document_chunks": document_chunks,
         }
 
     # Backward compatibility accessors
@@ -990,3 +1188,7 @@ class AIContext(BaseModel):
     def document_context(self) -> Any:
         from backend.app.ai.rag.models import parse_document_source_context
         return parse_document_source_context(self.source_context)
+
+    @property
+    def all_document_chunks(self) -> Optional[List[Any]]:
+        return self.document_chunks

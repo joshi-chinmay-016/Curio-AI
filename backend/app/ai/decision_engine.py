@@ -12,6 +12,7 @@ from backend.app.ai.schemas import (
     AIContext,
     LearningDecision,
     Mode,
+    Role,
     Strategy,
     TurnEvaluation,
     TurnIntent,
@@ -275,7 +276,17 @@ class DecisionEngine:
             # 6. NOT a generic bare non-answer acknowledgment ("yes", "ok", "sure", "i understand")
             # 7. Must contain substantive content (>= 3 words)
             # 8. Must be relevant to target concept (never pass on irrelevant answers!)
-            if assessment is not None:
+            if evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD:
+                is_pass = (
+                    evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
+                    and len(evaluation.misconceptions) == 0
+                    and (assessment is None or len(assessment.misconceptions) == 0)
+                    and not is_teach_or_stuck
+                    and not is_question
+                    and not is_bare_ack
+                    and word_count >= 3
+                )
+            elif assessment is not None:
                 is_pass = (
                     (assessment.supports_mastery or assessment.correctness == CorrectnessLevel.CORRECT)
                     and assessment.correctness not in (
@@ -293,15 +304,7 @@ class DecisionEngine:
                     and word_count >= 3
                 )
             else:
-                is_pass = (
-                    evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
-                    and evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
-                    and len(evaluation.misconceptions) == 0
-                    and not is_teach_or_stuck
-                    and not is_question
-                    and not is_bare_ack
-                    and word_count >= 3
-                )
+                is_pass = False
 
             if is_pass:
                 # Verification PASS: Restore interrupted question and return to Student Mode
@@ -469,11 +472,13 @@ class DecisionEngine:
         elif context.current_state.consecutive_failures >= 2 and evaluation.correctness < 0.5:
             trigger_c = True
 
-        # Trigger D: Clear major misconception or total failure to understand
+        # Trigger D: Major misconception or failure to understand when repeated or explicitly recommended
         trigger_d = (
-            (len(evaluation.misconceptions) > 0 and evaluation.correctness < 0.35)
-            or evaluation.correctness < 0.25
-            or evaluation.recommended_strategy == Strategy.TEACH_GAP
+            evaluation.recommended_strategy == Strategy.TEACH_GAP
+            or (context.current_state.consecutive_failures >= 1 and (
+                (len(evaluation.misconceptions) > 0 and evaluation.correctness < 0.35)
+                or evaluation.correctness < 0.25
+            ))
         )
 
         if trigger_a or trigger_b or trigger_c or trigger_d:
@@ -508,79 +513,201 @@ class DecisionEngine:
             )
 
         # =================================================================
-        # 3. NORMAL STUDENT MODE POLICY (Phase 1)
+        # 3. NORMAL STUDENT MODE POLICY (Phase 4: Adaptive Progression & Evidence-Driven Strategies)
         # =================================================================
         is_strong = (
-            evaluation.correctness >= 0.8
-            and evaluation.completeness >= 0.7
-            and evaluation.stuck_probability < 0.3
+            evaluation.correctness >= 0.80
+            and evaluation.completeness >= 0.70
+            and evaluation.stuck_probability < 0.30
             and len(evaluation.misconceptions) == 0
             and len(evaluation.undefined_terms) == 0
             and len(evaluation.missing_concepts) == 0
+            and evaluation.depth >= 0.60
         )
         is_major_gap = (
-            evaluation.correctness < 0.4
-            or evaluation.stuck_probability >= 0.7
-            or (evaluation.knowledge_gap is not None and evaluation.correctness < 0.5)
+            evaluation.correctness < 0.40
+            or evaluation.stuck_probability >= 0.70
+            or (evaluation.knowledge_gap is not None and evaluation.correctness < 0.50)
+            or (len(evaluation.misconceptions) > 0 and evaluation.correctness < 0.50)
         )
         has_misconception = len(evaluation.misconceptions) > 0
         has_undefined_term = len(evaluation.undefined_terms) > 0
         has_missing_concept = len(evaluation.missing_concepts) > 0
+        has_assumption = (
+            evaluation.recommended_strategy == Strategy.CHALLENGE_ASSUMPTION
+            or (hasattr(evaluation, "unsupported_assumptions") and bool(getattr(evaluation, "unsupported_assumptions")))
+        )
+        needs_example = (
+            evaluation.recommended_strategy == Strategy.REQUEST_EXAMPLE
+            or (
+                evaluation.correctness >= 0.70
+                and current_difficulty >= 2
+                and evaluation.completeness < 0.80
+                and evaluation.depth >= 0.55
+                and not has_misconception
+                and not has_undefined_term
+            )
+        )
+        needs_edge_case = (
+            evaluation.recommended_strategy == Strategy.TEST_EDGE_CASE
+            or (current_difficulty == 4 and is_strong)
+        )
+        needs_synthesis = (
+            evaluation.recommended_strategy == Strategy.CONNECT_CONCEPTS
+            or (current_difficulty >= 5 and is_strong)
+        )
 
-        # Strategy Priority
+        active_concept = context.active_concept or context.topic
+
+        # Tabula Rasa Check: Has the teacher actually explained the mechanism/steps yet?
+        user_msgs = [
+            m.content for m in (context.history or [])
+            if getattr(m, "role", None) == Role.USER or getattr(m, "sender", "").upper() == "USER"
+        ]
+        all_user_text = " ".join(user_msgs).lower()
+        has_explained_mechanism = any(
+            w in all_user_text
+            for w in [
+                "step", "first", "then", "compare", "half", "halves", "middle", "left", "right",
+                "divide", "pivot", "partition", "recurse", "recursive", "base case",
+                "condition", "check", "process", "pointer", "loop", "iterate"
+            ]
+        )
+
+        # Strategy Priority Policy (Section 5):
+        # 1. Undefined terms blocking foundational understanding
         if has_undefined_term:
             strategy = Strategy.CLARIFY_TERM
             active_concept = evaluation.undefined_terms[0]
             reason = f"Undefined term '{active_concept}' detected. Requesting clarification."
+        # 2. Critical active misconception
         elif has_misconception:
             strategy = Strategy.CHALLENGE_MISCONCEPTION
             active_concept = evaluation.misconceptions[0]
             reason = f"Misconception detected: '{active_concept}'. Challenging with counterexample."
-        elif evaluation.recommended_strategy == Strategy.PROBE_WHY and evaluation.correctness >= 0.7:
-            strategy = Strategy.PROBE_WHY
-            active_concept = context.active_concept or context.topic
-            reason = "Reasoning gap identified. Probing underlying cause/rationale (why)."
-        elif evaluation.recommended_strategy == Strategy.PROBE_HOW and evaluation.correctness >= 0.7:
-            strategy = Strategy.PROBE_HOW
-            active_concept = context.active_concept or context.topic
-            reason = "Mechanism gap identified. Probing step-by-step process (how)."
-        elif has_missing_concept:
+        # 3. Unsupported assumption or premature premise (Valid after mechanism has been introduced)
+        elif has_assumption:
+            if not has_explained_mechanism and current_difficulty <= 2:
+                strategy = Strategy.PROBE_HOW
+                reason = f"Premature assumption check deferred: teacher provided definition/purpose for '{active_concept}'. Probing step-by-step process (how) under the hood."
+            else:
+                strategy = Strategy.CHALLENGE_ASSUMPTION
+                reason = f"Implicit assumption or unverified premise detected. Probing boundaries and validity of '{active_concept}'."
+        # 4. Missing foundational concept / prerequisite gap
+        elif has_missing_concept and evaluation.recommended_strategy == Strategy.PROBE_MISSING_CONCEPT:
             strategy = Strategy.PROBE_MISSING_CONCEPT
             active_concept = evaluation.missing_concepts[0]
             reason = f"Missing concept '{active_concept}' identified. Probing prerequisite/component."
+        # 7. Correct answer missing concrete example
+        elif evaluation.recommended_strategy == Strategy.REQUEST_EXAMPLE or (needs_example and current_difficulty == 3):
+            strategy = Strategy.REQUEST_EXAMPLE
+            reason = f"Explanation for '{active_concept}' provides mechanics but lacks a concrete example. Requesting realistic application scenario."
+        # 8. Edge cases and failure limits
+        elif evaluation.recommended_strategy == Strategy.TEST_EDGE_CASE or (needs_edge_case and current_difficulty == 4 and is_strong):
+            strategy = Strategy.TEST_EDGE_CASE
+            reason = f"Probing boundary conditions, failure limits, and edge cases for '{active_concept}'."
+        # 9. Concept synthesis and architectural trade-offs
+        elif evaluation.recommended_strategy == Strategy.CONNECT_CONCEPTS or (needs_synthesis and current_difficulty >= 5 and is_strong):
+            strategy = Strategy.CONNECT_CONCEPTS
+            reason = f"Connecting concepts and probing system trade-offs for '{active_concept}'."
+        # 10. Depth expansion for correct but incomplete explanations
+        elif evaluation.recommended_strategy == Strategy.DEPTH_EXPANSION or (
+            evaluation.correctness >= 0.65
+            and evaluation.completeness < 0.70
+            and not is_strong
+            and evaluation.recommended_strategy not in (Strategy.PROBE_HOW, Strategy.PROBE_WHY)
+        ):
+            strategy = Strategy.DEPTH_EXPANSION
+            reason = f"Explanation for '{active_concept}' is partially correct but incomplete. Probing deeper technical components."
+        # 11. Explicit or evidence-based mechanism probe (How)
         elif evaluation.recommended_strategy == Strategy.PROBE_HOW or (
-            evaluation.depth < 0.6 and evaluation.completeness < 0.7
+            evaluation.depth < 0.60 and evaluation.completeness < 0.70
         ):
             strategy = Strategy.PROBE_HOW
-            active_concept = context.active_concept or context.topic
-            reason = "Mechanism gap identified. Probing step-by-step process (how)."
+            reason = f"Mechanism gap identified for '{active_concept}'. Probing step-by-step process (how)."
+        # 12. Explicit or evidence-based causal reasoning probe (Why)
         elif evaluation.recommended_strategy == Strategy.PROBE_WHY or (
-            evaluation.depth < 0.8 and not is_strong
+            evaluation.correctness >= 0.70 and evaluation.depth < 0.80 and not is_strong
         ):
             strategy = Strategy.PROBE_WHY
-            active_concept = context.active_concept or context.topic
-            reason = "Reasoning gap identified. Probing underlying cause/rationale (why)."
+            reason = f"Reasoning gap identified for '{active_concept}'. Probing underlying cause/rationale (why)."
+        # 13. Strong understanding advancement by difficulty tier
         elif is_strong:
             if current_difficulty < 5 and evaluation.recommended_strategy == Strategy.INCREASE_DIFFICULTY:
                 strategy = Strategy.INCREASE_DIFFICULTY
-                reason = "Strong understanding demonstrated. Advancing difficulty level."
+                reason = f"Strong understanding demonstrated on '{active_concept}'. Advancing difficulty level."
+            elif current_difficulty == 1:
+                strategy = Strategy.PROBE_HOW
+                reason = f"Strong foundational understanding demonstrated on '{active_concept}'. Advancing to mechanism exploration."
+            elif current_difficulty == 2:
+                strategy = Strategy.REQUEST_EXAMPLE
+                reason = f"Strong mechanism understanding demonstrated on '{active_concept}'. Requesting practical application example."
+            elif current_difficulty == 3:
+                strategy = Strategy.TEST_EDGE_CASE
+                reason = f"Solid application understanding demonstrated on '{active_concept}'. Probing boundary assumptions and edge cases."
+            elif current_difficulty == 4:
+                strategy = Strategy.CONNECT_CONCEPTS
+                reason = f"Robust edge-case understanding demonstrated on '{active_concept}'. Advancing to concept synthesis and trade-offs."
             else:
-                strategy = Strategy.PROBE_WHY
-                reason = "Strong understanding demonstrated. Probing deeper reasons."
-            active_concept = context.active_concept or context.topic
+                strategy = Strategy.CONNECT_CONCEPTS
+                reason = f"Advanced understanding demonstrated on '{active_concept}'. Probing architectural trade-offs."
+        # 14. General verification fallback
         else:
             strategy = Strategy.VERIFY_UNDERSTANDING
-            active_concept = context.active_concept or context.topic
-            reason = "Partial answer. Verifying understanding with concrete application."
+            reason = f"Partial answer for '{active_concept}'. Verifying understanding with concrete explanation."
 
-        # Difficulty Transitions
-        if has_misconception:
-            next_difficulty = current_difficulty
-        elif evaluation.correctness >= 0.8:
-            next_difficulty = min(5, current_difficulty + 1)
-        elif is_major_gap:
+        # Adaptive Strategy Anti-Repetition (Section 6)
+        # Avoid selecting the same strategy for consecutive turns when a pedagogically sound alternative exists.
+        # DO NOT suppress CLARIFY_TERM or CHALLENGE_MISCONCEPTION while terms remain undefined or misconceptions active.
+        recent_history = list(context.current_state.recent_strategy_history or [])
+        if recent_history:
+            last_strategy = recent_history[-1]
+            last_strategy_val = last_strategy.value if hasattr(last_strategy, "value") else str(last_strategy)
+            curr_strategy_val = strategy.value if hasattr(strategy, "value") else str(strategy)
+
+            if curr_strategy_val == last_strategy_val:
+                if strategy == Strategy.CLARIFY_TERM:
+                    # Keep CLARIFY_TERM while undefined terms remain
+                    if not has_undefined_term:
+                        strategy = Strategy.PROBE_HOW
+                        reason = f"{reason} (Shifted from CLARIFY_TERM to PROBE_HOW to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.CHALLENGE_MISCONCEPTION:
+                    # Keep CHALLENGE_MISCONCEPTION while misconception remains active
+                    if not has_misconception:
+                        strategy = Strategy.PROBE_WHY
+                        reason = f"{reason} (Shifted from CHALLENGE_MISCONCEPTION to PROBE_WHY to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.REQUEST_EXAMPLE:
+                    strategy = Strategy.DEPTH_EXPANSION
+                    reason = f"{reason} (Shifted from REQUEST_EXAMPLE to DEPTH_EXPANSION to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.PROBE_WHY:
+                    strategy = Strategy.PROBE_HOW
+                    reason = f"{reason} (Shifted from PROBE_WHY to PROBE_HOW to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.PROBE_HOW:
+                    strategy = Strategy.VERIFY_UNDERSTANDING
+                    reason = f"{reason} (Shifted from PROBE_HOW to VERIFY_UNDERSTANDING to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.VERIFY_UNDERSTANDING:
+                    strategy = Strategy.PROBE_WHY
+                    reason = f"{reason} (Shifted from VERIFY_UNDERSTANDING to PROBE_WHY to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.TEST_EDGE_CASE:
+                    strategy = Strategy.CHALLENGE_ASSUMPTION
+                    reason = f"{reason} (Shifted from TEST_EDGE_CASE to CHALLENGE_ASSUMPTION to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.CONNECT_CONCEPTS:
+                    strategy = Strategy.PROBE_WHY
+                    reason = f"{reason} (Shifted from CONNECT_CONCEPTS to PROBE_WHY to avoid consecutive strategy repetition)."
+                elif strategy == Strategy.DEPTH_EXPANSION:
+                    strategy = Strategy.PROBE_HOW
+                    reason = f"{reason} (Shifted from DEPTH_EXPANSION to PROBE_HOW to avoid consecutive strategy repetition)."
+
+        # Difficulty Transitions (Section 4)
+        # Driven strictly by demonstrated evidence, concept coverage, and misconception absence.
+        if is_major_gap:
             next_difficulty = max(1, current_difficulty - 1)
+        elif has_misconception:
+            next_difficulty = current_difficulty
+        elif is_strong:
+            next_difficulty = min(5, current_difficulty + 1)
         else:
+            # Incomplete, vague, or partial answers maintain current difficulty
             next_difficulty = current_difficulty
 
         delta = next_difficulty - current_difficulty
@@ -599,6 +726,7 @@ class DecisionEngine:
             confidence_delta = 0.00
 
         new_confidence = round(max(0.0, min(1.0, current_confidence + confidence_delta)), 2)
+        should_offer = (new_confidence >= 0.75 and not has_misconception)
 
         return LearningDecision(
             next_mode=Mode.STUDENT,
@@ -607,7 +735,7 @@ class DecisionEngine:
             confidence=new_confidence,
             reason=reason,
             active_concept=active_concept,
-            should_offer_termination=False,
+            should_offer_termination=should_offer,
             should_restore_interrupted_question=False,
         )
 

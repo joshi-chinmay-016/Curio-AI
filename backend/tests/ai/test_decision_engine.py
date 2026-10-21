@@ -249,3 +249,180 @@ def test_non_student_mode_does_not_offer_termination_evaluator():
     assert decision.should_offer_termination is False
     assert decision.strategy == LearningStrategy.GENERATE_REPORT
 
+
+def test_anti_repetition_alternates_repeated_probe_why():
+    """Verify repeated PROBE_WHY shifts to PROBE_HOW when recent strategy history contains PROBE_WHY."""
+    from backend.app.ai.decision_engine import DecisionEngine
+    from backend.app.ai.schemas import SessionState, Strategy
+
+    engine = DecisionEngine()
+    context = create_context(LearningMode.STUDENT, 2, "It works because of caching.")
+    context.current_state.recent_strategy_history = [Strategy.PROBE_WHY]
+
+    evaluation = TurnEvaluation(
+        correctness=0.75,
+        clarity=0.8,
+        completeness=0.7,
+        depth=0.7,
+        relevance=1.0,
+        stuck_probability=0.0,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=[],
+        recommended_strategy=Strategy.PROBE_WHY,
+        recommended_difficulty=2,
+    )
+
+    decision = engine.decide(context, evaluation)
+    # Consecutive PROBE_WHY must shift to PROBE_HOW
+    assert decision.strategy == Strategy.PROBE_HOW
+    assert "avoid consecutive strategy repetition" in decision.reason
+
+
+def test_anti_repetition_alternates_repeated_probe_how():
+    """Verify repeated PROBE_HOW shifts to VERIFY_UNDERSTANDING."""
+    from backend.app.ai.decision_engine import DecisionEngine
+    from backend.app.ai.schemas import Strategy
+
+    engine = DecisionEngine()
+    context = create_context(LearningMode.STUDENT, 2, "It steps through line by line.")
+    context.current_state.recent_strategy_history = [Strategy.PROBE_HOW]
+
+    evaluation = TurnEvaluation(
+        correctness=0.75,
+        clarity=0.8,
+        completeness=0.7,
+        depth=0.7,
+        relevance=1.0,
+        stuck_probability=0.0,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=[],
+        recommended_strategy=Strategy.PROBE_HOW,
+        recommended_difficulty=2,
+    )
+
+    decision = engine.decide(context, evaluation)
+    assert decision.strategy == Strategy.VERIFY_UNDERSTANDING
+    assert "avoid consecutive strategy repetition" in decision.reason
+
+
+def test_anti_repetition_alternates_repeated_verify_understanding():
+    """Verify repeated VERIFY_UNDERSTANDING shifts to PROBE_WHY."""
+    from backend.app.ai.decision_engine import DecisionEngine
+    from backend.app.ai.schemas import Strategy
+
+    engine = DecisionEngine()
+    context = create_context(LearningMode.STUDENT, 2, "For example in web servers.")
+    context.current_state.recent_strategy_history = [Strategy.VERIFY_UNDERSTANDING]
+
+    # Partial answer that defaults to VERIFY_UNDERSTANDING
+    evaluation = TurnEvaluation(
+        correctness=0.6,
+        clarity=0.7,
+        completeness=0.75,
+        depth=0.85,
+        relevance=1.0,
+        stuck_probability=0.0,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=[],
+        recommended_strategy=Strategy.VERIFY_UNDERSTANDING,
+        recommended_difficulty=2,
+    )
+
+    decision = engine.decide(context, evaluation)
+    assert decision.strategy == Strategy.PROBE_WHY
+    assert "avoid consecutive strategy repetition" in decision.reason
+
+
+def test_anti_repetition_never_suppresses_clarify_term():
+    """Verify CLARIFY_TERM is retained even if the previous strategy was also CLARIFY_TERM."""
+    from backend.app.ai.decision_engine import DecisionEngine
+    from backend.app.ai.schemas import Strategy
+
+    engine = DecisionEngine()
+    context = create_context(LearningMode.STUDENT, 1, "The buffer is volatile.")
+    context.current_state.recent_strategy_history = [Strategy.CLARIFY_TERM]
+
+    evaluation = TurnEvaluation(
+        correctness=0.5,
+        clarity=0.5,
+        completeness=0.5,
+        depth=0.4,
+        relevance=1.0,
+        stuck_probability=0.1,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=["volatile"],
+        mastered_concepts=[],
+        recommended_strategy=Strategy.CLARIFY_TERM,
+        recommended_difficulty=1,
+    )
+
+    decision = engine.decide(context, evaluation)
+    assert decision.strategy == Strategy.CLARIFY_TERM
+    assert decision.active_concept == "volatile"
+
+
+def test_anti_repetition_never_suppresses_challenge_misconception():
+    """Verify CHALLENGE_MISCONCEPTION is retained even if the previous strategy was also CHALLENGE_MISCONCEPTION."""
+    from backend.app.ai.decision_engine import DecisionEngine
+    from backend.app.ai.schemas import Strategy
+
+    engine = DecisionEngine()
+    context = create_context(LearningMode.STUDENT, 2, "It searches sequentially.")
+    context.current_state.recent_strategy_history = [Strategy.CHALLENGE_MISCONCEPTION]
+
+    evaluation = TurnEvaluation(
+        correctness=0.4,
+        clarity=0.6,
+        completeness=0.4,
+        depth=0.3,
+        relevance=1.0,
+        stuck_probability=0.1,
+        misconceptions=["Linear search on binary tree"],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=[],
+        recommended_strategy=Strategy.CHALLENGE_MISCONCEPTION,
+        recommended_difficulty=2,
+    )
+
+    decision = engine.decide(context, evaluation)
+    assert decision.strategy == Strategy.CHALLENGE_MISCONCEPTION
+    assert decision.active_concept == "Linear search on binary tree"
+
+
+def test_anti_repetition_empty_history_preserves_standard_strategy():
+    """Verify empty recent_strategy_history does not alter strategy selection."""
+    from backend.app.ai.decision_engine import DecisionEngine
+    from backend.app.ai.schemas import Strategy
+
+    engine = DecisionEngine()
+    context = create_context(LearningMode.STUDENT, 2, "Because of the pointer dereference.")
+    context.current_state.recent_strategy_history = []
+
+    evaluation = TurnEvaluation(
+        correctness=0.75,
+        clarity=0.8,
+        completeness=0.7,
+        depth=0.7,
+        relevance=1.0,
+        stuck_probability=0.0,
+        misconceptions=[],
+        missing_concepts=[],
+        undefined_terms=[],
+        mastered_concepts=[],
+        recommended_strategy=Strategy.PROBE_WHY,
+        recommended_difficulty=2,
+    )
+
+    decision = engine.decide(context, evaluation)
+    assert decision.strategy == Strategy.PROBE_WHY
+    assert "avoid consecutive strategy repetition" not in decision.reason
+
+
