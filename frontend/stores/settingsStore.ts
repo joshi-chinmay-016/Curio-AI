@@ -7,25 +7,27 @@ import {
   AudioVoiceSettings,
   PrivacyAndDataSettings,
 } from "@/types/settings";
+import { getSessionHistory } from "@/services/historyService";
+import { getUserProgress } from "@/services/progressService";
 
 const SETTINGS_STORAGE_KEY = "curio_user_settings_v1";
 
 const DEFAULT_SETTINGS: CurioSettingsState = {
   theme: "light",
   profile: {
-    displayName: "Chinmay Joshi",
-    email: "learner@curio.ai",
-    role: "AI & Systems Researcher",
-    bio: "Passionate about testing mental models from first principles using the Feynman technique.",
-    learningGoal: "Master Quantum Mechanics, Topology & Distributed Consensus",
+    displayName: "",
+    email: "",
+    role: "Learner",
+    bio: "",
+    learningGoal: "",
     characterAvatar: "PROFESSOR",
     avatarColor: "#3A63FF",
-    feynmanLevel: 4,
-    levelTitle: "Senior Explainer",
+    feynmanLevel: 1,
+    levelTitle: "Beginner Explainer",
   },
   learning: {
     rigorLevel: "socratic",
-    probingDepth: 4,
+    probingDepth: 3,
     defaultCharacter: "STUDENT",
     evaluationStrictness: "standard",
     showReasoningSteps: true,
@@ -48,11 +50,11 @@ const DEFAULT_SETTINGS: CurioSettingsState = {
     customElevenLabsApiKey: "",
   },
   stats: {
-    conceptsMastered: 48,
-    gapsResolved: 17,
-    totalSessions: 23,
-    voiceMinutes: 64,
-    feynmanStreakDays: 6,
+    conceptsMastered: 0,
+    gapsResolved: 0,
+    totalSessions: 0,
+    voiceMinutes: 0,
+    feynmanStreakDays: 0,
   },
 };
 
@@ -64,6 +66,7 @@ interface SettingsStoreActions {
   updatePrivacy: (privacy: Partial<PrivacyAndDataSettings>) => void;
   incrementGapsResolved: () => void;
   incrementSessionCount: () => void;
+  syncRealStats: () => Promise<void>;
   resetToDefaults: () => void;
   exportDataAsJson: () => string;
   initSettings: () => void;
@@ -95,8 +98,33 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
     try {
       const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
+      let parsed = stored ? JSON.parse(stored) : null;
+
+      // Purge any legacy mock user data that might be stuck in localStorage
+      if (parsed?.profile?.email === "learner@curio.ai") {
+        parsed.profile.email = "";
+      }
+      if (parsed?.profile?.displayName === "Chinmay Joshi") {
+        parsed.profile.displayName = "";
+      }
+
+      // Sync user identity from real auth session if available
+      const rawUser = localStorage.getItem("curio_auth_user");
+      if (rawUser) {
+        try {
+          const authUser = JSON.parse(rawUser);
+          if (!parsed) parsed = {};
+          if (!parsed.profile) parsed.profile = {};
+          if (authUser.name && !parsed.profile.displayName) {
+            parsed.profile.displayName = authUser.name;
+          }
+          if (authUser.email && !parsed.profile.email) {
+            parsed.profile.email = authUser.email;
+          }
+        } catch {}
+      }
+
+      if (parsed) {
         set((state) => ({
           ...state,
           ...parsed,
@@ -110,6 +138,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       } else {
         applyThemeToDOM(get().theme);
       }
+
+      // Automatically sync real stats in background
+      get().syncRealStats();
     } catch (e) {
       console.warn("Failed to load settings from storage:", e);
       applyThemeToDOM("light");
@@ -128,6 +159,83 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       } catch {
         mediaQuery.addListener(handleThemeChange);
       }
+    }
+  },
+
+  syncRealStats: async () => {
+    if (typeof window === "undefined") return;
+    const token = localStorage.getItem("curio_access_token");
+    if (!token) return;
+
+    try {
+      const [sessionsRes, progressRes] = await Promise.allSettled([
+        getSessionHistory(1, 100),
+        getUserProgress(),
+      ]);
+
+      let totalSessions = 0;
+      let voiceMinutes = 0;
+      let conceptsMastered = 0;
+      let gapsResolved = 0;
+      let feynmanStreakDays = 0;
+
+      if (sessionsRes.status === "fulfilled" && Array.isArray(sessionsRes.value)) {
+        const sList = sessionsRes.value;
+        totalSessions = sList.length;
+        voiceMinutes = sList.reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+        gapsResolved = sList.reduce((acc, s) => acc + (s.resolvedMisconceptions || 0), 0);
+
+        if (sList.length > 0) {
+          const uniqueDays = new Set(
+            sList
+              .filter((s) => s.createdAt)
+              .map((s) => new Date(s.createdAt).toISOString().slice(0, 10))
+          );
+          feynmanStreakDays = uniqueDays.size;
+        }
+      }
+
+      if (progressRes.status === "fulfilled" && progressRes.value) {
+        const p = progressRes.value;
+        if (p.concepts && Array.isArray(p.concepts)) {
+          conceptsMastered = p.concepts.filter((c) => (c.mastery_score ?? 0) >= 0.8).length;
+        }
+        if (p.summary?.total_misconceptions) {
+          gapsResolved = Math.max(gapsResolved, p.summary.total_misconceptions);
+        }
+      }
+
+      // Dynamic Feynman Level computation
+      let feynmanLevel = 1;
+      let levelTitle = "Beginner Explainer";
+
+      if (totalSessions >= 20 || conceptsMastered >= 15) {
+        feynmanLevel = 4;
+        levelTitle = "Senior Explainer";
+      } else if (totalSessions >= 10 || conceptsMastered >= 8) {
+        feynmanLevel = 3;
+        levelTitle = "Proficient Explainer";
+      } else if (totalSessions >= 3 || conceptsMastered >= 3) {
+        feynmanLevel = 2;
+        levelTitle = "Junior Explainer";
+      }
+
+      set((state) => ({
+        stats: {
+          conceptsMastered,
+          gapsResolved,
+          totalSessions,
+          voiceMinutes,
+          feynmanStreakDays,
+        },
+        profile: {
+          ...state.profile,
+          feynmanLevel,
+          levelTitle,
+        },
+      }));
+    } catch (e) {
+      console.warn("Failed to sync real learner stats:", e);
     }
   },
 

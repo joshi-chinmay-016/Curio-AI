@@ -17,7 +17,7 @@ import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransit
 export default function GapReportPage() {
   const params = useParams();
   const router = useRouter();
-  const sessionId = (params?.id as string) || "session_mock_bs";
+  const sessionId = params?.id as string;
 
   const {
     report,
@@ -39,12 +39,35 @@ export default function GapReportPage() {
     handleMarkForReview,
   } = useGapReport(sessionId);
 
-  if (isLoading || !report) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-ice text-navy flex items-center justify-center">
         <div className="font-mono text-sm uppercase tracking-widest text-navy flex items-center gap-2">
           <span className="animate-spin text-cobalt text-lg">◈</span>
           LOADING GAP REPORT...
+        </div>
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div className="min-h-screen bg-ice text-navy flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white border-2 border-navy rounded-[10px] p-8 max-w-md shadow-[6px_6px_0_0_#0F2B4A]">
+          <BookOpen className="w-10 h-10 text-cobalt mx-auto mb-4" />
+          <h2 className="font-heading text-xl font-bold text-navy mb-2">
+            No Gap Report Available
+          </h2>
+          <p className="font-sans text-sm text-navy/70 mb-6 leading-relaxed">
+            There is no completed gap report for this session yet. Complete an active Feynman explanation session to generate a knowledge map.
+          </p>
+          <div className="flex justify-center gap-3">
+            <Link href="/dashboard">
+              <KeycapButton variant="navy" size="sm">
+                BACK TO DASHBOARD
+              </KeycapButton>
+            </Link>
+          </div>
         </div>
       </div>
     );

@@ -107,17 +107,17 @@ function ToastCard({ toast }: { toast: ToastItem }) {
       exit={{ opacity: 0, y: 8, scale: 0.95 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
       role="alert"
-      className={`pointer-events-auto bg-white border-2 border-navy rounded-none shadow-[4px_4px_0_0_#0F2B4A] p-4 text-navy ${topStripeClass}`}
+      className={`pointer-events-auto bg-white dark:bg-[#0E1A2B] border-2 border-navy dark:border-[#2F4D73] rounded-none shadow-[4px_4px_0_0_#0F2B4A] dark:shadow-[4px_4px_0_0_#040910] p-4 text-navy dark:text-[#F0F4F8] ${topStripeClass}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2.5">
           <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${iconColor}`} />
           <div>
-            <div className="font-mono text-xs font-semibold tracking-wider text-navy">
+            <div className="font-mono text-xs font-semibold tracking-wider text-navy dark:text-[#F0F4F8]">
               {toast.message}
             </div>
             {toast.description && (
-              <div className="font-sans text-xs text-navy/75 mt-1">
+              <div className="font-sans text-xs text-navy/75 dark:text-[#F0F4F8]/75 mt-1">
                 {toast.description}
               </div>
             )}
@@ -125,7 +125,7 @@ function ToastCard({ toast }: { toast: ToastItem }) {
         </div>
         <button
           onClick={() => curioToast.dismiss(toast.id)}
-          className="text-navy/50 hover:text-navy transition-colors shrink-0 p-0.5"
+          className="text-navy/50 dark:text-[#F0F4F8]/50 hover:text-navy dark:hover:text-white transition-colors shrink-0 p-0.5"
           aria-label="Dismiss notification"
         >
           <X className="w-3.5 h-3.5" />

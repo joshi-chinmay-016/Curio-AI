@@ -170,7 +170,7 @@ function DocumentsLibraryContent() {
   }, [documents, searchQuery, statusFilter, sortBy]);
 
   return (
-    <div className="min-h-screen bg-ice text-navy flex flex-col selection:bg-cobalt selection:text-white">
+    <div className="min-h-screen bg-ice dark:bg-[#070D18] text-navy dark:text-[#F0F4F8] flex flex-col selection:bg-cobalt selection:text-white">
       <DiagonalSweepTransition />
 
       {/* Authenticated Global Navigation Bar */}
@@ -182,16 +182,16 @@ function DocumentsLibraryContent() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="font-heading text-2xl md:text-3xl font-bold text-navy">
+              <h1 className="font-heading text-2xl md:text-3xl font-bold text-navy dark:text-[#F0F4F8]">
                 My Documents
               </h1>
               {!loading && (
-                <span className="font-mono text-xs font-bold px-2 py-0.5 bg-navy text-white rounded-[3px]">
+                <span className="font-mono text-xs font-bold px-2 py-0.5 bg-navy dark:bg-cobalt text-white rounded-[3px]">
                   {documents.length}
                 </span>
               )}
             </div>
-            <p className="font-sans text-sm text-navy/70 mt-1 max-w-xl">
+            <p className="font-sans text-sm text-navy/70 dark:text-[#BAC7D5] mt-1 max-w-xl">
               Upload textbook chapters, research papers, or study notes. Curio indexes the text into verified chunks and tests your comprehension using the Feynman technique.
             </p>
           </div>
@@ -220,19 +220,19 @@ function DocumentsLibraryContent() {
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div
                 key={i}
-                className="bg-white border-2 border-navy/20 rounded-[6px] p-5 h-48 animate-pulse space-y-3"
+                className="bg-white dark:bg-[#0E1A2B] border-2 border-navy/20 dark:border-[#2F4D73] rounded-[6px] p-5 h-48 animate-pulse space-y-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-fog/50 rounded-[4px]" />
+                  <div className="w-9 h-9 bg-fog/50 dark:bg-[#1E3652] rounded-[4px]" />
                   <div className="flex-1 space-y-1.5">
-                    <div className="h-4 bg-fog/50 rounded-[2px] w-3/4" />
-                    <div className="h-3 bg-fog/30 rounded-[2px] w-1/3" />
+                    <div className="h-4 bg-fog/50 dark:bg-[#1E3652] rounded-[2px] w-3/4" />
+                    <div className="h-3 bg-fog/30 dark:bg-[#16273F] rounded-[2px] w-1/3" />
                   </div>
                 </div>
-                <div className="h-5 bg-fog/30 rounded-[3px] w-28 mt-4" />
+                <div className="h-5 bg-fog/30 dark:bg-[#16273F] rounded-[3px] w-28 mt-4" />
                 <div className="grid grid-cols-2 gap-2 pt-4">
-                  <div className="h-3 bg-fog/30 rounded-[2px]" />
-                  <div className="h-3 bg-fog/30 rounded-[2px]" />
+                  <div className="h-3 bg-fog/30 dark:bg-[#16273F] rounded-[2px]" />
+                  <div className="h-3 bg-fog/30 dark:bg-[#16273F] rounded-[2px]" />
                 </div>
               </div>
             ))}
@@ -241,12 +241,12 @@ function DocumentsLibraryContent() {
 
         {/* Error State */}
         {!loading && error && (
-          <div className="bg-white border-2 border-navy rounded-[6px] shadow-editorial p-8 text-center max-w-md mx-auto my-12">
-            <AlertCircle className="w-10 h-10 text-rose-600 mx-auto mb-3" />
-            <h3 className="font-heading text-lg font-bold text-navy mb-2">
+          <div className="bg-white dark:bg-[#0E1A2B] border-2 border-navy dark:border-[#2F4D73] shadow-editorial dark:shadow-[4px_4px_0_0_#040910] p-8 text-center max-w-md mx-auto my-12">
+            <AlertCircle className="w-10 h-10 text-rose-600 dark:text-rose-400 mx-auto mb-3" />
+            <h3 className="font-heading text-lg font-bold text-navy dark:text-[#F0F4F8] mb-2">
               Could Not Load Documents
             </h3>
-            <p className="font-mono text-xs text-navy/60 mb-6">
+            <p className="font-mono text-xs text-navy/60 dark:text-[#BAC7D5] mb-6">
               {error}
             </p>
             <KeycapButton variant="navy" size="sm" onClick={() => fetchLibrary()}>
@@ -258,14 +258,14 @@ function DocumentsLibraryContent() {
 
         {/* Empty State */}
         {!loading && !error && documents.length === 0 && (
-          <div className="bg-white border-2 border-navy rounded-[8px] shadow-[8px_8px_0_0_#0F2B4A] p-8 md:p-12 text-center max-w-xl mx-auto my-8">
-            <div className="w-16 h-16 rounded-[6px] bg-ice border-2 border-navy flex items-center justify-center mx-auto mb-5 text-cobalt shadow-[3px_3px_0_0_#0F2B4A]">
+          <div className="bg-white dark:bg-[#0E1A2B] border-2 border-navy dark:border-[#2F4D73] rounded-[8px] shadow-[8px_8px_0_0_#0F2B4A] dark:shadow-[8px_8px_0_0_#040910] p-8 md:p-12 text-center max-w-xl mx-auto my-8">
+            <div className="w-16 h-16 rounded-[6px] bg-ice dark:bg-[#16273F] border-2 border-navy dark:border-[#2F4D73] flex items-center justify-center mx-auto mb-5 text-cobalt dark:text-[#4D7CFF] shadow-[3px_3px_0_0_#0F2B4A] dark:shadow-[3px_3px_0_0_#040910]">
               <FileText className="w-8 h-8" />
             </div>
-            <h2 className="font-heading text-xl font-bold text-navy mb-2">
+            <h2 className="font-heading text-xl font-bold text-navy dark:text-[#F0F4F8] mb-2">
               No Learning Material Uploaded Yet
             </h2>
-            <p className="font-sans text-sm text-navy/70 mb-6 max-w-md mx-auto leading-relaxed">
+            <p className="font-sans text-sm text-navy/70 dark:text-[#BAC7D5] mb-6 max-w-md mx-auto leading-relaxed">
               Ground your Feynman sessions in your actual course materials. Upload a PDF, TXT, or DOCX document to get started.
             </p>
 
@@ -307,11 +307,11 @@ function DocumentsLibraryContent() {
 
             {/* No matches for search */}
             {filteredDocuments.length === 0 ? (
-              <div className="bg-white border-2 border-navy/40 rounded-[6px] p-8 text-center my-6">
-                <p className="font-heading text-sm font-bold text-navy">
+              <div className="bg-white dark:bg-[#0E1A2B] border-2 border-navy/40 dark:border-[#2F4D73] rounded-[6px] p-8 text-center my-6">
+                <p className="font-heading text-sm font-bold text-navy dark:text-[#F0F4F8]">
                   No documents match your filter
                 </p>
-                <p className="font-mono text-xs text-navy/50 mt-1 mb-4">
+                <p className="font-mono text-xs text-navy/50 dark:text-[#829AB1] mt-1 mb-4">
                   Try adjusting your search query or status filter.
                 </p>
                 <button
@@ -319,7 +319,7 @@ function DocumentsLibraryContent() {
                     setSearchQuery("");
                     setStatusFilter("ALL");
                   }}
-                  className="font-mono text-xs font-bold text-cobalt hover:underline uppercase"
+                  className="font-mono text-xs font-bold text-cobalt dark:text-[#4D7CFF] hover:underline uppercase cursor-pointer"
                 >
                   [Reset Filters]
                 </button>

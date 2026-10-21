@@ -51,21 +51,21 @@ function SessionHistoryContent() {
   });
 
   return (
-    <div className="min-h-screen bg-ice text-navy flex flex-col selection:bg-cobalt selection:text-white">
+    <div className="min-h-screen bg-ice dark:bg-[#070D18] text-navy dark:text-[#F0F4F8] flex flex-col selection:bg-cobalt selection:text-white">
       <DiagonalSweepTransition />
 
       {/* Global Navigation */}
       <CurioNav activeRoute="history" />
 
       {/* Sub-bar with Breadcrumb & Quick Actions */}
-      <div className="w-full bg-white/70 border-b border-fog/80 px-6 py-2.5">
+      <div className="w-full bg-white/70 dark:bg-[#0B1524]/90 border-b border-fog/80 dark:border-[#1E3652] px-6 py-2.5">
         <div className="max-w-4xl mx-auto flex items-center justify-between text-xs font-mono">
-          <div className="flex items-center gap-2 text-navy/60">
-            <Link href="/dashboard" className="hover:text-navy transition-colors">
+          <div className="flex items-center gap-2 text-navy/60 dark:text-[#829AB1]">
+            <Link href="/dashboard" className="hover:text-navy dark:hover:text-white transition-colors">
               DASHBOARD
             </Link>
-            <span className="text-fog">/</span>
-            <span className="font-bold text-navy">LEARNING HISTORY</span>
+            <span className="text-fog dark:text-[#2F4D73]">/</span>
+            <span className="font-bold text-navy dark:text-[#F0F4F8]">LEARNING HISTORY</span>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -88,10 +88,10 @@ function SessionHistoryContent() {
       {/* Main Content */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">
         <div className="mb-6">
-          <h1 className="font-heading text-2xl md:text-3xl font-extrabold text-navy tracking-tight mb-2">
+          <h1 className="font-heading text-2xl md:text-3xl font-extrabold text-navy dark:text-[#F0F4F8] tracking-tight mb-2">
             Your Learning History
           </h1>
-          <p className="font-sans text-sm text-navy/70">
+          <p className="font-sans text-sm text-navy/70 dark:text-[#BAC7D5]">
             Review your past explanations, track concept mastery, and practice identified gaps.
           </p>
         </div>
@@ -105,7 +105,7 @@ function SessionHistoryContent() {
 
         {/* Content List */}
         {loading ? (
-          <div className="py-20 text-center font-mono text-xs uppercase tracking-widest text-navy/50 flex items-center justify-center gap-2">
+          <div className="py-20 text-center font-mono text-xs uppercase tracking-widest text-navy/50 dark:text-[#829AB1] flex items-center justify-center gap-2">
             <span className="w-4 h-4 border-2 border-cobalt border-t-transparent rounded-full animate-spin" />
             LOADING SESSIONS...
           </div>
@@ -118,11 +118,11 @@ function SessionHistoryContent() {
               ))}
             </div>
           ) : (
-            <div className="bg-white border border-fog rounded-[8px] p-12 text-center shadow-xs">
-              <h3 className="font-heading text-lg font-bold text-navy mb-2">
+            <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-12 text-center shadow-xs">
+              <h3 className="font-heading text-lg font-bold text-navy dark:text-[#F0F4F8] mb-2">
                 Practice Queue Empty
               </h3>
-              <p className="font-sans text-sm text-navy/60 max-w-md mx-auto mb-6">
+              <p className="font-sans text-sm text-navy/60 dark:text-[#BAC7D5] max-w-md mx-auto mb-6">
                 You have no gaps saved for later. When exploring a Gap Report, click &quot;Save for Later&quot; to queue specific concepts for targeted practice.
               </p>
               <Link href="/topics">
@@ -141,11 +141,11 @@ function SessionHistoryContent() {
           </div>
         ) : (
           /* Empty State */
-          <div className="bg-white border border-fog rounded-[8px] p-12 text-center shadow-xs">
-            <h3 className="font-heading text-lg font-bold text-navy mb-2">
+          <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-12 text-center shadow-xs">
+            <h3 className="font-heading text-lg font-bold text-navy dark:text-[#F0F4F8] mb-2">
               No sessions found
             </h3>
-            <p className="font-sans text-sm text-navy/60 max-w-md mx-auto mb-6">
+            <p className="font-sans text-sm text-navy/60 dark:text-[#BAC7D5] max-w-md mx-auto mb-6">
               You haven&apos;t recorded any sessions under this filter yet. Teach Curio any concept to identify your understanding gaps.
             </p>
             <Link href="/topics">

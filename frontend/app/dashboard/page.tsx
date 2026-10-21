@@ -76,14 +76,14 @@ function DashboardContent() {
     };
   }, []);
 
-  const displayName = user?.email ? user.email.split("@")[0] : "Learner";
+  const displayName = user?.name || (user?.email ? user.email.split("@")[0] : "Learner");
   const activeSession = sessions.find((s) => s.status === "IN_PROGRESS");
   const completedSessionsCount = sessions.filter((s) => s.status === "COMPLETED").length;
   const totalConceptsTracked = progressData?.summary?.total_concepts_tracked || progressData?.concepts?.length || 0;
   const totalMisconceptions = progressData?.summary?.total_misconceptions || 0;
 
   return (
-    <div className="min-h-screen bg-ice text-navy flex flex-col selection:bg-cobalt selection:text-white">
+    <div className="min-h-screen bg-ice dark:bg-[#070D18] text-navy dark:text-[#F0F4F8] flex flex-col selection:bg-cobalt selection:text-white">
       <DiagonalSweepTransition />
 
       {/* Authenticated Application Shell Header */}
@@ -93,17 +93,17 @@ function DashboardContent() {
       <main className="max-w-6xl w-full mx-auto px-6 py-8 md:py-12 flex-1">
         {/* Welcome Section */}
         <section className="mb-10">
-          <div className="bg-white border-2 border-navy rounded-[10px] p-6 md:p-8 shadow-[6px_6px_0_0_#0F2B4A] relative overflow-hidden">
+          <div className="bg-white dark:bg-[#0B1524] border-2 border-navy dark:border-[#2F4D73] rounded-[10px] p-6 md:p-8 shadow-[6px_6px_0_0_#0F2B4A] dark:shadow-[6px_6px_0_0_#040910] relative overflow-hidden">
             <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-ice rounded-[4px] border border-fog text-[10px] font-mono uppercase tracking-widest text-navy/70 font-bold mb-3">
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-ice dark:bg-[#16273F] rounded-[4px] border border-fog dark:border-[#2F4D73] text-[10px] font-mono uppercase tracking-widest text-navy/70 dark:text-[#C5D0DE] font-bold mb-3">
                 <span className="w-2 h-2 rounded-full bg-cobalt" />
                 LEARNER WORKSPACE
               </div>
 
-              <h1 className="font-heading text-2xl md:text-3xl font-extrabold text-navy tracking-tight mb-2">
+              <h1 className="font-heading text-2xl md:text-3xl font-extrabold text-navy dark:text-[#F0F4F8] tracking-tight mb-2">
                 Welcome back, {displayName}.
               </h1>
-              <p className="font-sans text-sm md:text-base text-navy/70 leading-relaxed mb-6">
+              <p className="font-sans text-sm md:text-base text-navy/70 dark:text-[#BAC7D5] leading-relaxed mb-6">
                 Ready to reverse roles? Explain what you know to Curio, stress-test your understanding against edge cases, and discover your mental models.
               </p>
 
@@ -129,7 +129,7 @@ function DashboardContent() {
                 <Link href="/documents">
                   <KeycapButton variant="ghost" size="md">
                     <span className="inline-flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-navy/70" />
+                      <FileText className="w-4 h-4 text-navy/70 dark:text-[#BAC7D5]" />
                       DOCUMENTS
                     </span>
                   </KeycapButton>
@@ -141,7 +141,7 @@ function DashboardContent() {
 
         {/* Interactive Audio Learning Feature Showcase Card */}
         <section className="mb-10">
-          <div className="bg-gradient-to-r from-[#0F2B4A] via-[#163860] to-[#0F2B4A] border-2 border-navy text-white rounded-[10px] p-6 md:p-8 shadow-[6px_6px_0_0_#3B82F6] relative overflow-hidden">
+          <div className="bg-gradient-to-r from-[#0F2B4A] via-[#163860] to-[#0F2B4A] border-2 border-navy dark:border-[#2F4D73] text-white rounded-[10px] p-6 md:p-8 shadow-[6px_6px_0_0_#3B82F6] relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="max-w-xl">
                 <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/10 border border-white/20 rounded-[4px] text-[10px] font-mono uppercase tracking-widest text-white/90 font-bold mb-3 backdrop-blur-xs">
@@ -217,19 +217,19 @@ function DashboardContent() {
         {/* Resumable Session Alert (if user has active session) */}
         {activeSession && (
           <section className="mb-10">
-            <div className="bg-amber-50/80 border-2 border-amber-500/80 rounded-[8px] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+            <div className="bg-amber-50/80 dark:bg-amber-950/40 border-2 border-amber-500/80 dark:border-amber-600/70 rounded-[8px] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
               <div className="flex items-start gap-3.5">
-                <div className="p-2 bg-amber-100 rounded-md text-amber-800 shrink-0 mt-0.5">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-md text-amber-800 dark:text-amber-200 shrink-0 mt-0.5">
                   <Play className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-amber-800 font-bold block mb-1">
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-amber-800 dark:text-amber-300 font-bold block mb-1">
                     IN-PROGRESS SESSION DETECTED
                   </span>
-                  <h3 className="font-heading text-base font-bold text-navy">
+                  <h3 className="font-heading text-base font-bold text-navy dark:text-[#F0F4F8]">
                     {activeSession.topicName}
                   </h3>
-                  <p className="font-sans text-xs text-navy/70">
+                  <p className="font-sans text-xs text-navy/70 dark:text-[#BAC7D5]">
                     Confidence: {activeSession.understandingScore}%
                     {activeSession.turnCount > 0 ? ` · ${activeSession.turnCount} turns completed` : ""}
                   </p>
@@ -249,63 +249,63 @@ function DashboardContent() {
 
         {/* Metrics Grid */}
         <section className="mb-10">
-          <h2 className="font-mono text-xs uppercase tracking-wider text-navy/50 font-bold mb-4">
+          <h2 className="font-mono text-xs uppercase tracking-wider text-navy/50 dark:text-[#829AB1] font-bold mb-4">
             LEARNING OVERVIEW & PROGRESS
           </h2>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {/* Total Sessions */}
-            <div className="bg-white border border-fog rounded-[8px] p-5 shadow-xs">
-              <div className="flex items-center justify-between text-navy/50 mb-2">
+            <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-5 shadow-xs">
+              <div className="flex items-center justify-between text-navy/50 dark:text-[#829AB1] mb-2">
                 <span className="font-mono text-xs uppercase font-semibold">Total Sessions</span>
                 <BookOpen className="w-4 h-4" />
               </div>
-              <div className="font-mono text-2xl md:text-3xl font-extrabold text-navy">
+              <div className="font-mono text-2xl md:text-3xl font-extrabold text-navy dark:text-[#F0F4F8]">
                 {sessions.length}
               </div>
-              <span className="font-sans text-[11px] text-navy/50 mt-1 block">
+              <span className="font-sans text-[11px] text-navy/50 dark:text-[#829AB1] mt-1 block">
                 {completedSessionsCount} completed
               </span>
             </div>
 
             {/* Concepts Tracked */}
-            <div className="bg-white border border-fog rounded-[8px] p-5 shadow-xs">
-              <div className="flex items-center justify-between text-cobalt mb-2">
+            <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-5 shadow-xs">
+              <div className="flex items-center justify-between text-cobalt dark:text-[#4D7CFF] mb-2">
                 <span className="font-mono text-xs uppercase font-semibold">Concepts</span>
                 <Brain className="w-4 h-4" />
               </div>
-              <div className="font-mono text-2xl md:text-3xl font-extrabold text-navy">
+              <div className="font-mono text-2xl md:text-3xl font-extrabold text-navy dark:text-[#F0F4F8]">
                 {totalConceptsTracked}
               </div>
-              <span className="font-sans text-[11px] text-navy/50 mt-1 block">
+              <span className="font-sans text-[11px] text-navy/50 dark:text-[#829AB1] mt-1 block">
                 Across active topics
               </span>
             </div>
 
             {/* Misconceptions */}
-            <div className="bg-white border border-fog rounded-[8px] p-5 shadow-xs">
+            <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-5 shadow-xs">
               <div className="flex items-center justify-between text-gap-orange mb-2">
                 <span className="font-mono text-xs uppercase font-semibold">Misconceptions</span>
                 <AlertTriangle className="w-4 h-4" />
               </div>
-              <div className="font-mono text-2xl md:text-3xl font-extrabold text-navy">
+              <div className="font-mono text-2xl md:text-3xl font-extrabold text-navy dark:text-[#F0F4F8]">
                 {totalMisconceptions}
               </div>
-              <span className="font-sans text-[11px] text-navy/50 mt-1 block">
+              <span className="font-sans text-[11px] text-navy/50 dark:text-[#829AB1] mt-1 block">
                 Detected & targeted
               </span>
             </div>
 
             {/* Mastery Gate */}
-            <div className="bg-white border border-fog rounded-[8px] p-5 shadow-xs">
-              <div className="flex items-center justify-between text-emerald-600 mb-2">
+            <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-5 shadow-xs">
+              <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 mb-2">
                 <span className="font-mono text-xs uppercase font-semibold">Mastery Gate</span>
                 <Award className="w-4 h-4" />
               </div>
-              <div className="font-mono text-2xl md:text-3xl font-extrabold text-navy">
+              <div className="font-mono text-2xl md:text-3xl font-extrabold text-navy dark:text-[#F0F4F8]">
                 {progressData?.concepts?.filter((c) => c.mastery_score >= 0.8).length || 0}
               </div>
-              <span className="font-sans text-[11px] text-navy/50 mt-1 block">
+              <span className="font-sans text-[11px] text-navy/50 dark:text-[#829AB1] mt-1 block">
                 Verified high-mastery
               </span>
             </div>
@@ -317,25 +317,25 @@ function DashboardContent() {
           {/* Left: Recent Activity */}
           <div className="lg:col-span-7">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-mono text-xs uppercase tracking-wider text-navy/50 font-bold">
+              <h2 className="font-mono text-xs uppercase tracking-wider text-navy/50 dark:text-[#829AB1] font-bold">
                 RECENT LEARNING SESSIONS
               </h2>
-              <Link href="/history" className="font-mono text-xs text-cobalt hover:underline font-bold">
+              <Link href="/history" className="font-mono text-xs text-cobalt dark:text-[#4D7CFF] hover:underline font-bold">
                 VIEW ALL →
               </Link>
             </div>
 
             {loading ? (
-              <div className="bg-white border border-fog rounded-[8px] p-8 text-center font-mono text-xs text-navy/50 animate-pulse">
+              <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-8 text-center font-mono text-xs text-navy/50 dark:text-[#829AB1] animate-pulse">
                 LOADING SESSIONS...
               </div>
             ) : sessions.length === 0 ? (
-              <div className="bg-white border border-fog rounded-[8px] p-8 text-center">
-                <BookOpen className="w-8 h-8 text-navy/30 mx-auto mb-3" />
-                <h3 className="font-heading text-base font-bold text-navy mb-1">
+              <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-8 text-center">
+                <BookOpen className="w-8 h-8 text-navy/30 dark:text-[#829AB1]/40 mx-auto mb-3" />
+                <h3 className="font-heading text-base font-bold text-navy dark:text-[#F0F4F8] mb-1">
                   No sessions recorded yet
                 </h3>
-                <p className="font-sans text-xs text-navy/60 max-w-sm mx-auto mb-5 leading-relaxed">
+                <p className="font-sans text-xs text-navy/60 dark:text-[#BAC7D5] max-w-sm mx-auto mb-5 leading-relaxed">
                   Start teaching Curio to build your personalized mental models and track conceptual progress.
                 </p>
                 <Link href="/topics">
@@ -349,7 +349,7 @@ function DashboardContent() {
                 {sessions.slice(0, 5).map((session) => (
                   <div
                     key={session.sessionId}
-                    className="bg-white border border-fog hover:border-navy/60 rounded-[8px] p-4.5 flex items-center justify-between gap-4 transition-all hover:shadow-xs group"
+                    className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] hover:border-navy/60 dark:hover:border-cobalt rounded-[8px] p-4.5 flex items-center justify-between gap-4 transition-all hover:shadow-xs group"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -358,26 +358,26 @@ function DashboardContent() {
                             session.status === "COMPLETED" ? "bg-emerald-500" : "bg-amber-500"
                           }`}
                         />
-                        <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-navy/50">
+                        <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-navy/50 dark:text-[#829AB1]">
                           {session.status}
                         </span>
-                        <span className="text-fog">·</span>
-                        <span className="font-sans text-xs text-navy/50">
+                        <span className="text-fog dark:text-[#2F4D73]">·</span>
+                        <span className="font-sans text-xs text-navy/50 dark:text-[#829AB1]">
                           {session.createdAt ? new Date(session.createdAt).toLocaleDateString() : ""}
                         </span>
                       </div>
 
-                      <h3 className="font-heading text-sm font-bold text-navy truncate group-hover:text-cobalt transition-colors">
+                      <h3 className="font-heading text-sm font-bold text-navy dark:text-[#F0F4F8] truncate group-hover:text-cobalt dark:group-hover:text-[#4D7CFF] transition-colors">
                         {session.topicName}
                       </h3>
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right hidden sm:block">
-                        <span className="font-mono text-xs font-bold text-navy block">
+                        <span className="font-mono text-xs font-bold text-navy dark:text-[#F0F4F8] block">
                           {session.understandingScore}%
                         </span>
-                        <span className="font-sans text-[10px] text-navy/50 block">
+                        <span className="font-sans text-[10px] text-navy/50 dark:text-[#829AB1] block">
                           {session.masteryLevel}
                         </span>
                       </div>
@@ -396,21 +396,21 @@ function DashboardContent() {
 
           {/* Right: Tracked Concepts Mastery */}
           <div className="lg:col-span-5">
-            <h2 className="font-mono text-xs uppercase tracking-wider text-navy/50 font-bold mb-4">
+            <h2 className="font-mono text-xs uppercase tracking-wider text-navy/50 dark:text-[#829AB1] font-bold mb-4">
               CONCEPT MASTERY & REVIEWS
             </h2>
 
             {loading ? (
-              <div className="bg-white border border-fog rounded-[8px] p-8 text-center font-mono text-xs text-navy/50 animate-pulse">
+              <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-8 text-center font-mono text-xs text-navy/50 dark:text-[#829AB1] animate-pulse">
                 LOADING CONCEPTS...
               </div>
             ) : !progressData || progressData.concepts.length === 0 ? (
-              <div className="bg-white border border-fog rounded-[8px] p-8 text-center">
-                <Brain className="w-8 h-8 text-navy/30 mx-auto mb-3" />
-                <h3 className="font-heading text-base font-bold text-navy mb-1">
+              <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-8 text-center">
+                <Brain className="w-8 h-8 text-navy/30 dark:text-[#829AB1]/40 mx-auto mb-3" />
+                <h3 className="font-heading text-base font-bold text-navy dark:text-[#F0F4F8] mb-1">
                   No concepts mapped yet
                 </h3>
-                <p className="font-sans text-xs text-navy/60 leading-relaxed mb-4">
+                <p className="font-sans text-xs text-navy/60 dark:text-[#BAC7D5] leading-relaxed mb-4">
                   As you answer Curio&apos;s probing questions, concepts and mastery levels will populate here automatically.
                 </p>
                 <Link href="/topics">
@@ -420,22 +420,22 @@ function DashboardContent() {
                 </Link>
               </div>
             ) : (
-              <div className="bg-white border border-fog rounded-[8px] p-5 space-y-4">
+              <div className="bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-[8px] p-5 space-y-4">
                 {progressData.concepts.slice(0, 6).map((concept, idx) => {
                   const pct = Math.round(concept.mastery_score * 100);
                   return (
-                    <div key={idx} className="border-b border-fog/50 pb-3 last:border-b-0 last:pb-0">
+                    <div key={idx} className="border-b border-fog/50 dark:border-[#1E3652] pb-3 last:border-b-0 last:pb-0">
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-heading text-xs font-bold text-navy truncate max-w-[200px]">
+                        <span className="font-heading text-xs font-bold text-navy dark:text-[#F0F4F8] truncate max-w-[200px]">
                           {concept.concept}
                         </span>
-                        <span className="font-mono text-xs font-bold text-navy">
+                        <span className="font-mono text-xs font-bold text-navy dark:text-[#F0F4F8]">
                           {pct}%
                         </span>
                       </div>
 
                       {/* Progress Bar */}
-                      <div className="w-full h-1.5 bg-ice rounded-full overflow-hidden">
+                      <div className="w-full h-1.5 bg-ice dark:bg-[#16273F] rounded-full overflow-hidden">
                         <div
                           className={`h-full transition-all duration-500 ${
                             pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-cobalt" : "bg-gap-orange"
@@ -444,7 +444,7 @@ function DashboardContent() {
                         />
                       </div>
 
-                      <div className="flex items-center justify-between mt-1 text-[10px] font-mono text-navy/50">
+                      <div className="flex items-center justify-between mt-1 text-[10px] font-mono text-navy/50 dark:text-[#829AB1]">
                         <span>Attempts: {concept.total_attempts}</span>
                         {concept.misconception_count > 0 && (
                           <span className="text-gap-orange font-semibold">

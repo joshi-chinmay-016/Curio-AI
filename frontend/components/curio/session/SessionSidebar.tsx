@@ -91,24 +91,24 @@ export function SessionSidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-fog transition-all duration-300 ${
+        className={`fixed md:static inset-y-0 left-0 z-50 flex flex-col bg-white dark:bg-[#0B1524] border-r border-fog dark:border-[#1E3652] transition-all duration-300 ${
           isCollapsed ? "w-0 md:w-16 overflow-hidden" : "w-72 md:w-72"
         } ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
         {/* Header */}
-        <div className="p-4 border-b border-fog flex items-center justify-between shrink-0">
+        <div className="p-4 border-b border-fog dark:border-[#1E3652] flex items-center justify-between shrink-0">
           {!isCollapsed ? (
             <div className="flex items-center justify-between w-full">
               <Link
                 href="/"
-                className="font-mono text-lg font-bold tracking-wider text-navy flex items-center gap-1.5"
+                className="font-mono text-lg font-bold tracking-wider text-navy dark:text-[#F0F4F8] flex items-center gap-1.5"
               >
                 <span>CURIO</span>
                 <span className="text-gap-orange">.</span>
               </Link>
               <button
                 onClick={onToggleCollapse}
-                className="p-1.5 text-navy/60 hover:text-navy hover:bg-ice rounded-[4px] transition-colors hidden md:block cursor-pointer"
+                className="p-1.5 text-navy/60 dark:text-[#F0F4F8]/60 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] rounded-[4px] transition-colors hidden md:block cursor-pointer"
                 title="Collapse sidebar"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -116,7 +116,7 @@ export function SessionSidebar({
               {onMobileClose && (
                 <button
                   onClick={onMobileClose}
-                  className="p-1.5 text-navy/60 hover:text-navy md:hidden cursor-pointer"
+                  className="p-1.5 text-navy/60 dark:text-[#F0F4F8]/60 hover:text-navy dark:hover:text-white md:hidden cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -126,7 +126,7 @@ export function SessionSidebar({
             <div className="w-full flex justify-center">
               <button
                 onClick={onToggleCollapse}
-                className="p-1.5 text-navy/60 hover:text-navy hover:bg-ice rounded-[4px] transition-colors cursor-pointer"
+                className="p-1.5 text-navy/60 dark:text-[#F0F4F8]/60 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] rounded-[4px] transition-colors cursor-pointer"
                 title="Expand sidebar"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -172,19 +172,19 @@ export function SessionSidebar({
 
             {/* Search Filter */}
             <div className="relative mb-3">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-navy/40" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-navy/40 dark:text-[#F0F4F8]/40" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search sessions..."
-                className="w-full bg-ice/60 border border-fog/80 rounded-[4px] pl-8 pr-3 py-1.5 font-sans text-xs text-navy placeholder:text-navy/40 focus:outline-none focus:border-cobalt"
+                className="w-full bg-ice/60 dark:bg-[#101F33] border border-fog/80 dark:border-[#1E3652] rounded-[4px] pl-8 pr-3 py-1.5 font-sans text-xs text-navy dark:text-[#F0F4F8] placeholder:text-navy/40 dark:placeholder:text-[#627D98] focus:outline-none focus:border-cobalt"
               />
             </div>
 
             {/* Session List */}
             <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-              <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-navy/40 px-2 py-1">
+              <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-navy/40 dark:text-[#F0F4F8]/40 px-2 py-1">
                 RECENT SESSIONS
               </div>
 
@@ -195,19 +195,25 @@ export function SessionSidebar({
                     <div className="flex items-start gap-2.5 px-3 py-2 rounded-[4px] text-xs transition-colors group w-full text-left">
                       <MessageSquare
                         className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
-                          isActive ? "text-cobalt" : "text-navy/40 group-hover:text-navy"
+                          isActive
+                            ? "text-white"
+                            : "text-navy/40 dark:text-[#F0F4F8]/40 group-hover:text-navy dark:group-hover:text-white"
                         }`}
                       />
                       <div className="truncate flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <span className="truncate font-medium">{session.topicName}</span>
-                          <span className={`text-[9px] font-mono shrink-0 ${isActive ? "text-white/60" : "text-navy/40"}`}>
+                          <span
+                            className={`text-[9px] font-mono shrink-0 ${
+                              isActive ? "text-white/70" : "text-navy/40 dark:text-[#F0F4F8]/40"
+                            }`}
+                          >
                             {formatRelativeTime(session.createdAt)}
                           </span>
                         </div>
                         <div
                           className={`text-[10px] font-mono mt-0.5 ${
-                            isActive ? "text-white/60" : "text-navy/40"
+                            isActive ? "text-white/70" : "text-navy/40 dark:text-[#F0F4F8]/40"
                           }`}
                         >
                           {session.turnCount} turns · {session.understandingScore}%
@@ -222,8 +228,8 @@ export function SessionSidebar({
                         key={session.sessionId}
                         className={`flex items-center rounded-[4px] transition-colors group ${
                           isActive
-                            ? "bg-navy text-white font-medium shadow-sm"
-                            : "text-navy/80 hover:bg-ice hover:text-navy"
+                            ? "bg-navy dark:bg-cobalt text-white font-medium shadow-sm"
+                            : "text-navy/80 dark:text-[#F0F4F8]/80 hover:bg-ice dark:hover:bg-[#101F33] hover:text-navy dark:hover:text-white"
                         }`}
                       >
                         <button
@@ -241,8 +247,10 @@ export function SessionSidebar({
                             session.topicName
                           )}`}
                           title="Open session chat in full page"
-                          className={`p-1.5 mr-1.5 rounded hover:bg-black/10 transition-colors shrink-0 ${
-                            isActive ? "text-white/70 hover:text-white" : "text-navy/40 hover:text-navy"
+                          className={`p-1.5 mr-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors shrink-0 ${
+                            isActive
+                              ? "text-white/70 hover:text-white"
+                              : "text-navy/40 dark:text-[#F0F4F8]/40 hover:text-navy dark:hover:text-white"
                           }`}
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -259,25 +267,31 @@ export function SessionSidebar({
                       )}`}
                       className={`flex items-start gap-2.5 px-3 py-2 rounded-[4px] text-xs transition-colors group ${
                         isActive
-                          ? "bg-navy text-white font-medium shadow-sm"
-                          : "text-navy/80 hover:bg-ice hover:text-navy"
+                          ? "bg-navy dark:bg-cobalt text-white font-medium shadow-sm"
+                          : "text-navy/80 dark:text-[#F0F4F8]/80 hover:bg-ice dark:hover:bg-[#101F33] hover:text-navy dark:hover:text-white"
                       }`}
                     >
                       <MessageSquare
                         className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
-                          isActive ? "text-cobalt" : "text-navy/40 group-hover:text-navy"
+                          isActive
+                            ? "text-white"
+                            : "text-navy/40 dark:text-[#F0F4F8]/40 group-hover:text-navy dark:group-hover:text-white"
                         }`}
                       />
                       <div className="truncate flex-1">
                         <div className="flex items-center justify-between gap-1">
                           <span className="truncate">{session.topicName}</span>
-                          <span className={`text-[9px] font-mono shrink-0 ${isActive ? "text-white/60" : "text-navy/40"}`}>
+                          <span
+                            className={`text-[9px] font-mono shrink-0 ${
+                              isActive ? "text-white/70" : "text-navy/40 dark:text-[#F0F4F8]/40"
+                            }`}
+                          >
                             {formatRelativeTime(session.createdAt)}
                           </span>
                         </div>
                         <div
                           className={`text-[10px] font-mono mt-0.5 ${
-                            isActive ? "text-white/60" : "text-navy/40"
+                            isActive ? "text-white/70" : "text-navy/40 dark:text-[#F0F4F8]/40"
                           }`}
                         >
                           {session.turnCount} turns · {session.understandingScore}%
@@ -287,61 +301,61 @@ export function SessionSidebar({
                   );
                 })
               ) : (
-                <div className="text-center py-6 text-xs text-navy/40 font-sans">
+                <div className="text-center py-6 text-xs text-navy/40 dark:text-[#F0F4F8]/40 font-sans">
                   No sessions found
                 </div>
               )}
             </div>
 
             {/* Bottom Actions */}
-            <div className="pt-3 border-t border-fog mt-auto space-y-1">
+            <div className="pt-3 border-t border-fog dark:border-[#1E3652] mt-auto space-y-1">
               <Link
                 href="/dashboard"
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] transition-colors font-mono"
               >
                 <LayoutDashboard className="w-3.5 h-3.5 text-cobalt" />
                 <span>DASHBOARD</span>
               </Link>
               <Link
                 href="/audio-learning"
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] transition-colors font-mono"
               >
                 <Mic className="w-3.5 h-3.5 text-gap-orange" />
                 <span>AUDIO LEARNING</span>
               </Link>
               <Link
                 href="/topics"
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] transition-colors font-mono"
               >
-                <Sparkles className="w-3.5 h-3.5 text-navy/50" />
+                <Sparkles className="w-3.5 h-3.5 text-navy/50 dark:text-[#F0F4F8]/50" />
                 <span>EXPLORE TOPICS</span>
               </Link>
               <Link
                 href="/characters"
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] transition-colors font-mono"
               >
-                <Users className="w-3.5 h-3.5 text-navy/50" />
+                <Users className="w-3.5 h-3.5 text-navy/50 dark:text-[#F0F4F8]/50" />
                 <span>CHARACTERS</span>
               </Link>
               <Link
                 href="/documents"
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] transition-colors font-mono"
               >
-                <FileText className="w-3.5 h-3.5 text-navy/50" />
+                <FileText className="w-3.5 h-3.5 text-navy/50 dark:text-[#F0F4F8]/50" />
                 <span>MY DOCUMENTS</span>
               </Link>
               <Link
                 href="/history"
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] transition-colors font-mono"
               >
-                <BookOpen className="w-3.5 h-3.5 text-navy/50" />
+                <BookOpen className="w-3.5 h-3.5 text-navy/50 dark:text-[#F0F4F8]/50" />
                 <span>ALL SESSIONS</span>
               </Link>
               <Link
                 href="/settings"
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 hover:text-navy hover:bg-ice transition-colors font-mono"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-[4px] text-xs text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] transition-colors font-mono"
               >
-                <Settings className="w-3.5 h-3.5 text-navy/50" />
+                <Settings className="w-3.5 h-3.5 text-navy/50 dark:text-[#F0F4F8]/50" />
                 <span>SETTINGS</span>
               </Link>
             </div>
