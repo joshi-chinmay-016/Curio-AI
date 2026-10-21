@@ -1,7 +1,7 @@
 import { apiClient } from "@/services/apiClient";
 import { DocumentItem, DocumentListResponse } from "@/types/document";
 
-export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10 MB in bytes
+export const MAX_UPLOAD_SIZE = 100 * 1024 * 1024; // 100 MB in bytes
 export const ALLOWED_EXTENSIONS = [".pdf", ".txt", ".docx"];
 export const ALLOWED_MIME_TYPES = [
   "application/pdf",
@@ -29,7 +29,7 @@ export function validateDocumentFile(file: File): FileValidationResult {
   if (file.size > MAX_UPLOAD_SIZE) {
     return {
       valid: false,
-      error: `File exceeds maximum allowed size of 10 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB).`,
+      error: `File exceeds maximum allowed size of 100 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB).`,
     };
   }
 

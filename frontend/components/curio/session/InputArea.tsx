@@ -372,11 +372,10 @@ export function InputArea({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-white dark:bg-[#0B1524] border-2 rounded-[8px] p-3 transition-all duration-150 relative ${
-          isDragging
+        className={`bg-white dark:bg-[#0B1524] border-2 rounded-[8px] p-3 transition-all duration-150 relative ${isDragging
             ? "border-dashed border-cobalt bg-ice/40 dark:bg-cobalt/10 shadow-[0_4px_0_0_#3A63FF]"
             : "border-navy dark:border-[#2F4D73] shadow-[0_4px_0_0_#0F2B4A] dark:shadow-[0_4px_0_0_#040910] focus-within:border-cobalt dark:focus-within:border-cobalt focus-within:shadow-[0_4px_0_0_#3A63FF]"
-        }`}
+          }`}
       >
         {/* Drag Overlay Hint */}
         {isDragging && (
@@ -471,13 +470,12 @@ export function InputArea({
           >
             <div className="flex items-center gap-2 min-w-0">
               <div
-                className={`w-6 h-6 rounded-[3px] flex items-center justify-center shrink-0 text-[9px] font-bold uppercase ${
-                  ext === "PDF"
+                className={`w-6 h-6 rounded-[3px] flex items-center justify-center shrink-0 text-[9px] font-bold uppercase ${ext === "PDF"
                     ? "bg-rose-100 text-rose-700"
                     : ext === "DOCX"
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-emerald-100 text-emerald-700"
-                }`}
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-emerald-100 text-emerald-700"
+                  }`}
               >
                 {ext}
               </div>
@@ -568,11 +566,10 @@ export function InputArea({
               id="chat-attach-btn"
               type="button"
               onClick={() => setAttachMenuOpen((prev) => !prev)}
-              className={`p-2 rounded-[4px] transition-colors ${
-                attachedDoc
+              className={`p-2 rounded-[4px] transition-colors ${attachedDoc
                   ? "text-cobalt bg-ice/60 dark:bg-cobalt/20 hover:bg-ice dark:hover:bg-cobalt/30"
                   : "text-navy/40 dark:text-[#829AB1] hover:text-cobalt dark:hover:text-[#4D7CFF] hover:bg-ice dark:hover:bg-[#1A3254]"
-              }`}
+                }`}
               title="Attach grounding document (PDF, TXT, DOCX)"
               aria-label="Attach document options"
             >
@@ -650,23 +647,22 @@ export function InputArea({
               }
             }}
             disabled={disabled || isTranscribing || isRequestingPermission}
-            className={`h-[42px] w-[42px] rounded-[4px] inline-flex items-center justify-center transition-all shrink-0 cursor-pointer ${
-              isRecording
+            className={`h-[42px] w-[42px] rounded-[4px] inline-flex items-center justify-center transition-all shrink-0 cursor-pointer ${isRecording
                 ? "bg-rose-600 text-white border-2 border-rose-700 animate-pulse shadow-[0_0_12px_rgba(225,29,72,0.4)]"
                 : isTranscribing
-                ? "bg-cobalt/15 text-cobalt border-2 border-cobalt/40"
-                : isRequestingPermission
-                ? "bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-2 border-amber-300 dark:border-amber-700"
-                : "bg-white dark:bg-[#101F33] text-navy/70 dark:text-[#C5D0DE] border-2 border-navy/20 dark:border-[#2F4D73] hover:text-cobalt dark:hover:text-white hover:border-cobalt hover:bg-cobalt/5 dark:hover:bg-cobalt shadow-[0_2px_0_0_#0F2B4A] dark:shadow-[0_2px_0_0_#040910] active:translate-y-[2px] active:shadow-none"
-            }`}
+                  ? "bg-cobalt/15 text-cobalt border-2 border-cobalt/40"
+                  : isRequestingPermission
+                    ? "bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-2 border-amber-300 dark:border-amber-700"
+                    : "bg-white dark:bg-[#101F33] text-navy/70 dark:text-[#C5D0DE] border-2 border-navy/20 dark:border-[#2F4D73] hover:text-cobalt dark:hover:text-white hover:border-cobalt hover:bg-cobalt/5 dark:hover:bg-cobalt shadow-[0_2px_0_0_#0F2B4A] dark:shadow-[0_2px_0_0_#040910] active:translate-y-[2px] active:shadow-none"
+              }`}
             title={
               isRecording
                 ? "Click to finish recording and transcribe"
                 : isTranscribing
-                ? "Transcribing audio..."
-                : isRequestingPermission
-                ? "Requesting microphone permission..."
-                : "Record question with microphone (Whisper)"
+                  ? "Transcribing audio..."
+                  : isRequestingPermission
+                    ? "Requesting microphone permission..."
+                    : "Record question with microphone (Whisper)"
             }
             aria-label={isRecording ? "Stop recording voice" : "Start recording voice"}
           >

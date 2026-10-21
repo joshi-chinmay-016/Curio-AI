@@ -61,11 +61,11 @@ describe("Document-Grounded Chat Integration Tests", () => {
       assert.match(res.error || "", /empty/i);
     });
 
-    test("Rejects files exceeding backend 10 MB limit", () => {
-      const huge = { name: "huge.pdf", size: 11 * 1024 * 1024 } as File;
+    test("Rejects files exceeding backend 100 MB limit", () => {
+      const huge = { name: "huge.pdf", size: 101 * 1024 * 1024 } as File;
       const res = validateDocumentFile(huge);
       assert.strictEqual(res.valid, false);
-      assert.match(res.error || "", /10 MB/i);
+      assert.match(res.error || "", /100 MB/i);
     });
 
     test("Rejects unsupported extensions (.exe, .jpg, .py)", () => {

@@ -24,8 +24,8 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
   }, [mounted, isLoading, isAuthenticated, router, pathname]);
 
-  // If already authenticated, render children immediately without flicker
-  if (isAuthenticated) {
+  // If already authenticated and mounted on client, render children immediately without flicker
+  if (mounted && isAuthenticated) {
     return <>{children}</>;
   }
 

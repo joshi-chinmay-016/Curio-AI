@@ -20,7 +20,13 @@ import { useAuthStore } from "@/stores/authStore";
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuthStore();
-  const ctaDestination = isAuthenticated ? "/dashboard" : "/register";
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const ctaDestination = mounted && isAuthenticated ? "/dashboard" : "/register";
 
   const scrollToHowItWorks = () => {
     document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
