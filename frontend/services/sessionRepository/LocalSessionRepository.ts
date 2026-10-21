@@ -935,9 +935,28 @@ export class LocalSessionRepository implements SessionRepository {
     // -----------------------------------------------------------------------
     // B. IN STUDENT MODE: Check previous injected mistake & evaluate answer
     // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // B. IN STUDENT MODE: Check previous injected mistake & evaluate answer
+    // -----------------------------------------------------------------------
     if (session.injectedMistake?.active) {
       const inj = session.injectedMistake;
       const lowerAns = userAnswer.toLowerCase();
+      session.injectedMistake = undefined;
+
+      const clarificationSignals = [
+        "what do you mean",
+        "can you clarify",
+        "could you explain what",
+        "rephrase",
+        "not sure what you're asking",
+        "i don't understand the question",
+        "could you elaborate",
+        "what are you referring to",
+        "which part",
+      ];
+      const isClarificationRequest =
+        clarificationSignals.some((sig) => lowerAns.includes(sig)) && userAnswer.split(/\s+/).length < 12;
+
       const isRefuted =
         lowerAns.includes("no") ||
         lowerAns.includes("not") ||
@@ -949,11 +968,39 @@ export class LocalSessionRepository implements SessionRepository {
         lowerAns.includes("actually") ||
         lowerAns.includes("instead");
 
-      session.injectedMistake = undefined;
-      if (isRefuted) {
+      if (isClarificationRequest) {
+        // INCONCLUSIVE: Learner asked for clarification; rephrase without penalty
+        const clarifyQ = `Sorry, let me clarify what I was asking! I was trying to understand: ${inj.question || `in **${topic}**, what specifically happens under boundary limits`}? Could you help me see what happens there?`;
+        const evalData: TurnEvaluationData = {
+          correctness: 0.75,
+          clarity: 0.7,
+          completeness: 0.65,
+          depth: 0.6,
+          relevance: 0.9,
+          stuck_probability: 0.1,
+          misconceptions: [],
+          missing_concepts: [],
+          undefined_terms: [],
+          mastered_concepts: [],
+          knowledge_gap: null,
+          recommended_strategy: "CLARIFY_TERM",
+          recommended_difficulty: currentDiff,
+        };
+        const decData: LearningDecisionData = {
+          next_mode: "STUDENT",
+          strategy: "CLARIFY_TERM",
+          difficulty: currentDiff,
+          confidence: currentConf,
+          reason: `Learner requested clarification on edge-case challenge. Curio rephrased without penalty.`,
+          active_concept: inj.concept,
+          should_offer_termination: false,
+          should_restore_interrupted_question: false,
+        };
+        return { evaluation: evalData, decision: decData, aiResponseContent: clarifyQ };
+      } else if (isRefuted) {
         // Master teacher caught the student's injected misconception!
         const evalData: TurnEvaluationData = {
-          correctness: 0.95,
+          correctness: 0.94,
           clarity: 0.9,
           completeness: 0.9,
           depth: 0.85,
@@ -971,7 +1018,7 @@ export class LocalSessionRepository implements SessionRepository {
           next_mode: "STUDENT",
           strategy: "DEPTH_EXPANSION",
           difficulty: Math.min(5, currentDiff + 1),
-          confidence: Math.min(100, currentConf + 10),
+          confidence: Math.min(100, currentConf + 6),
           reason: `Learner brilliantly caught injected subtle misconception on '${inj.concept}'.`,
           active_concept: inj.concept,
           should_offer_termination: false,
@@ -980,20 +1027,20 @@ export class LocalSessionRepository implements SessionRepository {
         const praiseResponse = `Whoa, great catch! You're totally right that ${inj.counterReason || "that assumption fails in that edge case"}. That was a tricky edge case I was wondering about!\n\nSo how does **${topic}** handle that scenario in practice?`;
         return { evaluation: evalData, decision: decData, aiResponseContent: praiseResponse };
       } else {
-        // Teacher missed the misconception: Curio raises a student doubt
+        // Teacher missed the misconception: Curio raises an inquisitive student doubt
         const doubtQ = `Wait, really? But doesn't ${inj.counterReason || "that break the standard expectation"}? Wouldn't that cause unexpected issues in **${topic}**?`;
         const evalData: TurnEvaluationData = {
-          correctness: 0.60,
+          correctness: 0.50,
           clarity: 0.7,
-          completeness: 0.6,
-          depth: 0.5,
+          completeness: 0.5,
+          depth: 0.4,
           relevance: 0.95,
-          stuck_probability: 0.20,
-          misconceptions: [],
+          stuck_probability: 0.2,
+          misconceptions: [inj.counterReason || `Misconception on ${inj.concept}`],
           missing_concepts: [],
           undefined_terms: [],
           mastered_concepts: [],
-          knowledge_gap: null,
+          knowledge_gap: inj.counterReason || null,
           recommended_strategy: "CHALLENGE_MISCONCEPTION",
           recommended_difficulty: currentDiff,
         };
@@ -1001,7 +1048,7 @@ export class LocalSessionRepository implements SessionRepository {
           next_mode: "STUDENT",
           strategy: "CHALLENGE_MISCONCEPTION",
           difficulty: currentDiff,
-          confidence: currentConf,
+          confidence: Math.max(15, currentConf - 5),
           reason: `Learner accepted subtle edge case premise. Raising student doubt to explore boundaries.`,
           active_concept: inj.concept,
           should_offer_termination: false,
@@ -1139,6 +1186,11 @@ export class LocalSessionRepository implements SessionRepository {
         misconception: misconceptionQ,
         concept: currentObjective.title,
         counterReason,
+        claim: misconceptionQ,
+        whyFalse: counterReason,
+        question: misconceptionQ,
+        verified: true,
+        status: "PENDING",
       };
       session.lastMistakeInjectedTurn = turnNumber;
 
@@ -1704,9 +1756,44 @@ export class LocalSessionRepository implements SessionRepository {
   }
 
   private generateSubtleMisconception(topic: string, concept: string): { misconceptionQ: string; counterReason: string } {
+    const cleanTopic = topic.trim();
+    const lowerTopic = cleanTopic.toLowerCase();
+
+    // 1. Algorithms & Search / Sorting (e.g. Binary Search, QuickSort)
+    if (lowerTopic.includes("binary search") || lowerTopic.includes("search")) {
+      return {
+        misconceptionQ: `Wait, so if we sort any unsorted collection first and then run **${cleanTopic}**, does that make the entire overall operation O(log n)?`,
+        counterReason: `sorting an unsorted collection first requires O(n log n), which dominates the overall time complexity`,
+      };
+    }
+
+    if (lowerTopic.includes("sort") || lowerTopic.includes("quicksort") || lowerTopic.includes("merge")) {
+      return {
+        misconceptionQ: `Wait, so if an input collection is already completely sorted, does **${cleanTopic}** always execute in its absolute minimum time complexity without any risk of worst-case behavior?`,
+        counterReason: `unbalanced partitioning on already-sorted data can degrade algorithms like QuickSort to O(n^2) worst-case unless randomized or optimized pivots are used`,
+      };
+    }
+
+    // 2. Physics & Electronics (e.g. Ohm's Law)
+    if (lowerTopic.includes("ohm") || lowerTopic.includes("circuit") || lowerTopic.includes("voltage") || lowerTopic.includes("resistance")) {
+      return {
+        misconceptionQ: `Wait, so under Ohm's Law, if resistance doubles while voltage remains constant, the current also doubles, right?`,
+        counterReason: `under Ohm's Law (V = IR), current is inversely proportional to resistance at constant voltage, so doubling resistance halves the current`,
+      };
+    }
+
+    // 3. Systems, Networking, Database
+    if (lowerTopic.includes("network") || lowerTopic.includes("tcp") || lowerTopic.includes("http")) {
+      return {
+        misconceptionQ: `Wait, so does the initial TCP handshake transfer the entire user payload in the first SYN packet to reduce round-trip latency?`,
+        counterReason: `standard TCP handshakes require completing synchronization (SYN, SYN-ACK, ACK) before user payload data can be reliably transmitted`,
+      };
+    }
+
+    // 4. General / Universal Fallback
     return {
-      misconceptionQ: `Wait, so if we apply **${topic}** under boundary edge cases, does that guarantee the exact same performance without any additional trade-offs, right?`,
-      counterReason: `edge case constraints introduce trade-offs that prevent identical performance guarantees`,
+      misconceptionQ: `Wait, I think I follow the standard process, but if we apply **${cleanTopic}** under boundary edge cases, does that guarantee the exact same performance without any additional trade-offs, right?`,
+      counterReason: `boundary edge cases introduce trade-offs that prevent identical performance guarantees`,
     };
   }
 

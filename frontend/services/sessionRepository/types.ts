@@ -37,6 +37,11 @@ export interface InjectedMistakeState {
   misconception: string;
   concept: string;
   counterReason: string;
+  claim?: string;
+  whyFalse?: string;
+  question?: string;
+  verified?: boolean;
+  status?: "PENDING" | "CAUGHT" | "MISSED" | "INCONCLUSIVE";
 }
 
 export interface StoredSession {
