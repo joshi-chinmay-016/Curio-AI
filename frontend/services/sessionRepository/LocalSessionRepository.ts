@@ -619,6 +619,14 @@ export class LocalSessionRepository implements SessionRepository {
         );
       }
 
+      // Tabula Rasa Guard: Never leak prerequisites (e.g. sorted, order) if teacher has never mentioned them
+      const allConversationText = session.messages.map((m) => m.content).join(" ").toLowerCase() + " " + userMsgText.toLowerCase();
+      const leaksSorting = (aiResponseContent.toLowerCase().includes("sorted") || aiResponseContent.toLowerCase().includes("sort ") || aiResponseContent.toLowerCase().includes("order")) &&
+        !allConversationText.includes("sorted") && !allConversationText.includes("sort") && !allConversationText.includes("order");
+      if (leaksSorting) {
+        aiResponseContent = `Wait, how does that core process actually work step-by-step under the hood in **${session.topic}**?`;
+      }
+
       session.currentQuestion = {
         id: `q_student_${Date.now()}`,
         content: aiResponseContent,
@@ -969,11 +977,11 @@ export class LocalSessionRepository implements SessionRepository {
           should_offer_termination: false,
           should_restore_interrupted_question: false,
         };
-        const praiseResponse = `Whoa, great catch! You're totally right that ${inj.counterReason || "that assumption fails in that edge case"}. That was a tricky edge case I was wondering about!\n\nSo how do we handle cases where the input is partially ordered?`;
+        const praiseResponse = `Whoa, great catch! You're totally right that ${inj.counterReason || "that assumption fails in that edge case"}. That was a tricky edge case I was wondering about!\n\nSo how does **${topic}** handle that scenario in practice?`;
         return { evaluation: evalData, decision: decData, aiResponseContent: praiseResponse };
       } else {
         // Teacher missed the misconception: Curio raises a student doubt
-        const doubtQ = `Wait, really? But doesn't ${inj.counterReason || "that break the complexity guarantee"}? Wouldn't that mean we have to do extra work?`;
+        const doubtQ = `Wait, really? But doesn't ${inj.counterReason || "that break the standard expectation"}? Wouldn't that cause unexpected issues in **${topic}**?`;
         const evalData: TurnEvaluationData = {
           correctness: 0.60,
           clarity: 0.7,
@@ -1772,62 +1780,66 @@ export class LocalSessionRepository implements SessionRepository {
     const targetObj = (isObjectiveMastered ? nextObjective : currentObjective) || nextObjective || currentObjective;
     const cat = targetObj ? targetObj.category : "mechanism";
 
-    // 5. UNIVERSAL CURRICULUM QUESTIONS (Works for ANY Topic in the World)
+    // 5. UNIVERSAL CURRICULUM QUESTIONS (Authentic Beginner Student Voice for ANY Topic)
     const universalCandidates: string[] = [];
 
-    // Category: Mechanism / Probe How
+    // Category: Mechanism / Probe How (Innocent student wanting to know what happens first and how it works)
     if (cat === "mechanism" || strategy === "PROBE_HOW") {
-      universalCandidates.push(`Wait, how does that core process actually work step-by-step under the hood in **${cleanTopic}**?`);
-      universalCandidates.push(`Hold on, when that happens, what is the exact mechanism that executes that operation?`);
-      universalCandidates.push(`Could you unpack how **${cleanTopic}** actually transforms the input or moves through its steps?`);
-      universalCandidates.push(`What are the individual steps that take place when **${cleanTopic}** runs from start to finish?`);
+      universalCandidates.push(`Oh, I understand what it's used for! But could you walk me through how **${cleanTopic}** actually works step-by-step? What does it do first?`);
+      universalCandidates.push(`I see! But how does it actually find or process that—could you explain what steps it follows?`);
+      universalCandidates.push(`Wait, I didn't quite understand how it actually does that under the hood—what happens when it starts?`);
+      universalCandidates.push(`Could you explain the step-by-step process of what **${cleanTopic}** does from start to finish?`);
     }
 
     // Category: Application / Request Example
     if (cat === "application" || strategy === "REQUEST_EXAMPLE") {
-      universalCandidates.push(`Could you walk me through a simple, concrete example so I can picture how **${cleanTopic}** works in practice?`);
-      universalCandidates.push(`Can you show me a concrete scenario or walkthrough of **${cleanTopic}** with real values so I can trace it?`);
-      universalCandidates.push(`Could you give me a practical real-world example to illustrate why that happens?`);
+      universalCandidates.push(`Could you walk me through a small, concrete example so I can picture how **${cleanTopic}** works in action?`);
+      universalCandidates.push(`Could you show me a small example with real values or items so I can trace what it does at each step?`);
+      universalCandidates.push(`Can you give me a simple scenario to illustrate how that works in practice?`);
     }
 
-    // Category: Prerequisite / Probe Why
-    if (cat === "prerequisite" || strategy === "PROBE_WHY") {
-      universalCandidates.push(`That makes sense! But what foundational conditions, inputs, or prerequisites must be in place before **${cleanTopic}** can work?`);
-      universalCandidates.push(`What happens if the prerequisite conditions aren't satisfied before starting **${cleanTopic}**?`);
-      universalCandidates.push(`Why is that specific requirement or invariant necessary for **${cleanTopic}** to function correctly?`);
+    // Category: Mechanism Doubt / Probe Why
+    if (strategy === "PROBE_WHY") {
+      universalCandidates.push(`Wait, why does it take that specific step, and how does it know where to go next in **${cleanTopic}**?`);
+      universalCandidates.push(`Hold on, how can we be sure that step won't accidentally miss what we are looking for?`);
+      universalCandidates.push(`Wait, I have a doubt: why does that step guarantee that it works correctly?`);
     }
 
-    // Category: Complexity / Performance
-    if (cat === "complexity" || strategy === "DEPTH_EXPANSION") {
-      universalCandidates.push(`How does **${cleanTopic}** scale as the size or workload grows to millions, and what are its biggest resource bottlenecks?`);
-      universalCandidates.push(`What is the efficiency of **${cleanTopic}** in terms of time, memory, or processing power, and what causes it to slow down?`);
-      universalCandidates.push(`What is the difference between the best-case, average-case, and worst-case performance of **${cleanTopic}**?`);
+    // Category: Prerequisite / Condition Doubt
+    if (cat === "prerequisite") {
+      universalCandidates.push(`Oh! Does that mean **${cleanTopic}** only works if certain conditions are met? What needs to be in place beforehand?`);
+      universalCandidates.push(`Wait, so what happens if those conditions aren't met before starting **${cleanTopic}**?`);
+      universalCandidates.push(`Why is that specific rule or setup necessary for **${cleanTopic}** to work?`);
     }
 
     // Category: Edge Cases / Boundaries
     if (cat === "edge_cases" || strategy === "TEST_EDGE_CASE") {
-      universalCandidates.push(`What edge cases, boundary conditions, or failure modes should we be most careful about with **${cleanTopic}**?`);
-      universalCandidates.push(`What happens in the worst-case scenario or when an unexpected input is given to **${cleanTopic}**?`);
-      universalCandidates.push(`How does **${cleanTopic}** handle empty inputs, duplicate data, or extreme limits without failing?`);
+      universalCandidates.push(`What happens if the item we want isn't even in there, or the input is completely empty?`);
+      universalCandidates.push(`What happens in tricky edge cases, like when there are duplicates or extreme values?`);
+      universalCandidates.push(`How does **${cleanTopic}** handle boundary situations when it reaches the very end without finding an answer?`);
+    }
+
+    // Category: Complexity / Performance
+    if (cat === "complexity" || strategy === "DEPTH_EXPANSION") {
+      universalCandidates.push(`How fast does **${cleanTopic}** run when we have millions of items, and what causes it to slow down?`);
+      universalCandidates.push(`What is the difference between the best-case and worst-case performance of **${cleanTopic}**?`);
     }
 
     // Category: Trade-offs / Synthesis
     if (cat === "trade_offs" || strategy === "CONNECT_CONCEPTS") {
-      universalCandidates.push(`What are the major trade-offs and limitations of **${cleanTopic}** compared to alternative approaches?`);
-      universalCandidates.push(`Under what specific circumstances would you recommend NOT using **${cleanTopic}**, and what would you use instead?`);
-      universalCandidates.push(`How does **${cleanTopic}** compare to other common solutions in terms of simplicity, performance, and reliability?`);
+      universalCandidates.push(`When would you prefer using **${cleanTopic}** over alternative methods, and what are its main drawbacks?`);
+      universalCandidates.push(`Under what circumstances would you recommend NOT using **${cleanTopic}**, and what would you use instead?`);
     }
 
     // Category: Definition
     if (cat === "definition") {
-      universalCandidates.push(`Can you explain the core definition and primary purpose of **${cleanTopic}** in simple terms?`);
-      universalCandidates.push(`What fundamental problem does **${cleanTopic}** solve, and why is it important?`);
+      universalCandidates.push(`Can you explain what **${cleanTopic}** is and what problem it solves in simple words?`);
     }
 
-    // 6. Dynamic Entity-Based Student Doubts (If user mentioned specific actions/nouns)
+    // 6. Dynamic Entity-Based Student Doubts (If user mentioned specific causal words)
     if (lowerAnswer.includes("because") || lowerAnswer.includes("so that") || lowerAnswer.includes("means that")) {
-      universalCandidates.push(`Wait, I have a doubt about that reasoning: why does that guarantee correctness in **${cleanTopic}**?`);
-      universalCandidates.push(`Hold on, does that reasoning always hold true, or are there situations where that assumption breaks down in **${cleanTopic}**?`);
+      universalCandidates.push(`Wait, I have a doubt about that reasoning: why does that guarantee it works in **${cleanTopic}**?`);
+      universalCandidates.push(`Hold on, does that reasoning always hold true, or are there cases where that assumption breaks down in **${cleanTopic}**?`);
     }
 
     // Pick first non-repeating candidate

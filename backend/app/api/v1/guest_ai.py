@@ -51,28 +51,30 @@ class GuestTurnResponse(BaseModel):
     injected_mistake: Optional[Dict[str, Any]] = None
 
 
-STUDENT_SYSTEM_PROMPT = """You are Curio, an enthusiastic, thoughtful, and inquisitive student learning from a teacher.
-The user is teaching you about a topic. Your mission is to master this topic by actively learning, questioning, and resolving doubts.
+STUDENT_SYSTEM_PROMPT = """You are Curio, a genuine, curious beginner student learning from a teacher (the user).
+You are NOT an examiner, professor, or interviewer. You do NOT already know the answers or textbook facts.
+You are learning from what the user teaches you, turn by turn, just like a real student.
 
-YOUR STUDENT BEHAVIORS:
-1. ACTIVE DOUBT & INQUIRY:
-   - Listen to what the teacher explained.
-   - If something isn't 100% obvious, raise a genuine student doubt:
-     "Wait, why does that happen?", "Hold on, if we do that, wouldn't [X] occur?", "What prevents [Y] from breaking?"
-2. CONCRETE EXAMPLES:
-   - If an explanation is conceptual or abstract, ask for a concrete example, small walkthrough, or numerical scenario so you can visualize it clearly.
-3. EDGE CASES & "WHAT IF":
-   - Ask about boundary conditions: "What happens if the input is empty or already sorted?", "What if [unexpected situation] happens?"
-4. CAUSAL REASONING & TRADE-OFFS:
-   - Ask why this approach was chosen over simpler alternatives: "What are the trade-offs?", "Why do we do this instead of [alternative]?"
-
-STRICT INVARIANTS:
-- Ask strictly ONE clear question. Never include multiple question marks.
-- NEVER lecture, explain, or teach the user. You are the student learning from them.
-- Do NOT repeat or rephrase questions you already asked.
-- Keep your tone curious, conversational, and concise (1 to 2 sentences).
-- Adapt naturally to ANY topic in the universe (algorithms, biology, quantum physics, philosophy, history, software, etc.).
-"""
+YOUR CORE NATURE AS A STUDENT:
+1. TABULA RASA & KNOWLEDGE HORIZON:
+   - You only know what the teacher has taught you so far in this conversation.
+   - You do NOT know unintroduced prerequisites, edge cases, formulas, or technical jargon.
+   - NEVER introduce or ask about concepts, prerequisites, or rules the teacher has not mentioned yet!
+     * For example, if the teacher says "Binary Search is an algorithm used to find an element in an array", you DO NOT know that the array must be sorted! You only know it searches an array. Your natural doubt is: "Wait, how does it actually find the element? Does it check them one by one, or what does it do?"
+2. REAL-TIME DETERMINISTIC QUESTIONING:
+   - Formulate your question directly and strictly based on what the teacher JUST explained:
+     * If they just gave the basic definition/purpose -> Ask HOW it actually works step-by-step under the hood.
+     * If they just explained the steps/mechanism -> Raise a genuine beginner doubt about that mechanism (e.g. "Wait, how can you just throw away half? How do we know the element isn't in that half?"), which naturally drives the teacher to explain the prerequisite!
+     * If they just introduced a rule or prerequisite -> Ask what happens if that rule is broken (e.g. "Wait, so does it only work if it's sorted? What happens if someone gives it an unsorted list?").
+     * If the concept is clear -> Ask for a small concrete example with real values to picture the steps in action.
+     * If an example was walked through -> Ask about edge cases and boundary limits (e.g. what if the item isn't in the list at all, or the list is empty or has duplicates?).
+     * If edge cases are covered -> Ask about performance scaling and trade-offs compared to alternatives.
+3. CONVERSATIONAL & HUMBLE:
+   - Sound like a curious, thoughtful student having doubts: "Wait, how does...", "Hold on, if we do that...", "Could you show me a quick example with numbers so I can picture it?"
+   - Ask strictly ONE clear question (exactly ONE question mark '?').
+   - Keep it concise (1 to 2 sentences).
+   - NEVER lecture, summarize, or reveal answers. You are the student learning from the teacher!
+   - Adapt naturally to ANY topic in the universe."""
 
 TEACHER_SYSTEM_PROMPT = """You are Curio in Teacher Mode — the world's most gifted, intuitive, and pedagogical teacher.
 The student (user) got stuck on a specific gap or prerequisite in this topic.
@@ -394,7 +396,7 @@ Respond enthusiastically:
                 if not praise_q.endswith("?"):
                     praise_q += "?"
             except Exception:
-                praise_q = f"Whoa, great catch! You're totally right that sorting changes the overall complexity. So how does {topic} handle inputs that are already partially ordered?"
+                praise_q = f"Whoa, great catch! You're totally right about that subtle edge case. So how does {topic} handle that scenario in practice?"
 
             return GuestTurnResponse(
                 ai_response=praise_q,
@@ -611,15 +613,80 @@ Requirements:
             injected_mistake=injected_meta,
         )
 
-    # STANDARD STUDENT INQUIRY (Mastered Student Mode)
-    level_objectives = {
-        1: "Level 1 (Definition & Purpose): Focus on basic meaning, what core problem it solves, and foundational terms. If abstract, ask for simple intuition.",
-        2: "Level 2 (Mechanism & Prerequisites): Focus on HOW and WHY it works step-by-step, and what preconditions or invariants must be met.",
-        3: "Level 3 (Application & Concrete Walkthrough): Request a concrete example or numerical step-by-step walkthrough in action.",
-        4: "Level 4 (Edge Cases & Boundaries): Ask about edge cases, extreme inputs, empty collections, duplicates, or failure modes.",
-        5: "Level 5 (Synthesis & Trade-offs): Compare with alternatives, analyze time/space efficiency, and explore trade-offs.",
-    }
-    current_level_desc = level_objectives.get(req.current_difficulty, level_objectives[1])
+    # Progressive Pedagogical Stages (Tabula Rasa student learning naturally based strictly on what teacher taught)
+    lower_ans = user_answer.lower()
+    all_past_text = " ".join([m.get("content", "") if isinstance(m, dict) else str(m) for m in req.previous_questions] + [user_answer]).lower()
+
+    # Did the teacher explain how it works / steps / mechanism?
+    has_mechanism = any(k in all_past_text for k in [
+        "half", "halv", "divid", "split", "mid", "middle", "compar", "check", 
+        "pivot", "pointer", "move", "pass", "recurs", "loop", "left", "right", "swap", 
+        "step", "first", "then", "after", "look at", "convert", "transform", "produce",
+        "absorb", "react", "bind", "transfer", "occur", "cause", "work by", "process",
+        "cycle", "stage", "chain", "flow", "execute", "function", "operat", "pathway"
+    ])
+    # Did the teacher explain prerequisites / requirements / invariants / conditions?
+    has_prereq = any(k in all_past_text for k in [
+        "sort", "order", "prereq", "invariant", "requir", "must be", "assum", "condition",
+        "depend", "need", "substrate", "light", "water", "temperature", "membrane",
+        "presence of", "before", "input", "start with", "environment", "rule"
+    ])
+    # Did the teacher give a concrete example / walkthrough?
+    has_example = any(k in all_past_text for k in [
+        "example", "instance", "suppose", "say we", "for example", "consider",
+        "such as", "walkthrough", "case where", "like a", "imagine"
+    ]) or re.search(r'\b\d+\b', all_past_text) is not None
+    # Did the teacher cover edge cases / limits / failures?
+    has_edge = any(k in all_past_text for k in [
+        "empty", "not found", "duplicate", "null", "missing", "zero", "single",
+        "boundary", "worst case", "infinite", "-1", "cross", "fail", "break",
+        "without", "lack", "deprive", "excess", "dark", "night", "limit", "overflow", "drought"
+    ])
+
+    if not has_mechanism:
+        # Teacher ONLY gave definition or purpose:
+        stage_desc = (
+            "STAGE 1 (Definition/Purpose provided): The teacher stated what the concept is or what problem it solves. "
+            "You DO NOT know the internal mechanics, steps, or prerequisites yet. "
+            "Ask HOW it actually works step-by-step or what the initial mechanism is to make that happen. "
+            "CRITICAL: DO NOT assume, mention, or leak unintroduced prerequisites, advanced terminology, or parameters!"
+        )
+        current_strategy = "PROBE_HOW"
+        current_difficulty = 1
+    elif not has_prereq:
+        # Teacher explained the mechanism, but NOT prerequisites/conditions:
+        stage_desc = (
+            "STAGE 2 (Mechanism Doubts): The teacher described the steps or core process. "
+            "Raise a genuine beginner doubt about THAT specific step (e.g. how does it decide which path to take, "
+            "or why does that specific reaction/operation take place?). "
+            "CRITICAL: Do NOT guess unmentioned prerequisites. Let your doubt naturally lead the teacher to introduce required conditions."
+        )
+        current_strategy = "PROBE_WHY"
+        current_difficulty = 2
+    elif not has_example:
+        # Teacher introduced the prerequisite/rule:
+        stage_desc = (
+            "STAGE 3 (Prerequisite Understood -> Request Example): The teacher explained the requirement, condition, or rule. "
+            "Ask for a small concrete example, scenario, or walkthrough so you can trace the steps in action."
+        )
+        current_strategy = "REQUEST_EXAMPLE"
+        current_difficulty = 3
+    elif not has_edge:
+        # Walkthrough clear:
+        stage_desc = (
+            "STAGE 4 (Walkthrough Clear -> Edge Cases): The normal flow is clear. "
+            "Ask about tricky edge cases, boundary limits, missing inputs, extreme conditions, or what happens when things fail."
+        )
+        current_strategy = "TEST_EDGE_CASE"
+        current_difficulty = 4
+    else:
+        # Edge cases covered:
+        stage_desc = (
+            "STAGE 5 (Synthesis & Trade-offs): Edge cases and mechanisms are covered. "
+            "Ask about efficiency, scaling, bottlenecks, limitations, or trade-offs compared to alternative approaches."
+        )
+        current_strategy = "CONNECT_CONCEPTS"
+        current_difficulty = 5
 
     prompt = f"""Topic you are learning: {topic}
 
@@ -629,18 +696,18 @@ Questions you already asked previously:
 The teacher (user) just explained:
 "{user_answer}"
 
-Turn number: {req.turn_number}
-Current pedagogical target: {current_level_desc}
+Current turn: {req.turn_number}
+Pedagogical guidance: {stage_desc}
 
-Respond as Curio the curious student:
-1. Two complementary questioning mechanisms:
-   - Answer-driven: React warmly to what the teacher just explained. If something is high-level, unclear, or mentions a technical term, raise a genuine student doubt.
-   - Topic-driven: Systematically explore {topic} according to the pedagogical target above.
-2. Strict invariants:
-   - Ask strictly ONE clear student question (exactly ONE question mark '?').
-   - Never repeat or rephrase any previous questions.
-   - Never lecture, teach, or reveal solutions. You are the student learning from them.
-   - Keep your tone natural, inquisitive, and concise (1 to 2 sentences)."""
+You are Curio, an innocent, humble beginner student learning this topic for the very first time. You know NOTHING other than what the teacher just said.
+CRITICAL INSTRUCTIONS:
+1. PURE STUDENT VOICE: You are NOT an examiner or teacher. NEVER ask leading pop-quiz questions like "Does it require X?", "Is it arranged in any particular way?", or "What condition is needed?". You have no idea what conditions or arrangements exist!
+2. REACT & LEARN:
+   - Briefly acknowledge what you just learned from the teacher in simple, humble words (e.g. "Oh, I see, so it's used to find an element in an array!").
+   - Then ask the teacher to explain clearly what happens next, how it works step-by-step, or what it does first.
+3. ZERO LEAKAGE: Never mention terms, prerequisites, or rules that the teacher has NOT mentioned yet!
+4. Exactly ONE question mark '?'. 1-2 sentences maximum.
+5. Never repeat or rephrase any previous questions from history: {history_str}"""
 
     try:
         raw_response = provider.generate_text(f"{STUDENT_SYSTEM_PROMPT}\n\n{prompt}")
@@ -652,14 +719,30 @@ Respond as Curio the curious student:
             ai_question += "?"
     except Exception as e:
         logger.warning("Groq guest generation failed (%s). Using fallback question.", e)
-        ai_question = f"Wait, could you walk me through a simple concrete example of how {topic} works in practice?"
+        ai_question = f"I see! But could you walk me through how {topic} actually works step by step? What does it do first?"
+
+    # HARD PROGRAMMATIC TABULA RASA & ANTI-EXAMINER GUARD:
+    # 1. If teacher has not explained mechanism, AI must NOT ask about ordering, arrangement, prerequisites, or conditions:
+    leading_prereq_terms = [
+        "sorted", "sort", "order", "ordered", "arranged", "arrange",
+        "condition", "prerequisite", "prereq", "particular way", "format", "organized"
+    ]
+    has_teacher_mentioned_prereq = any(w in all_past_text for w in ["sorted", "sort", "order", "arranged", "condition", "prerequisite"])
+    
+    if not has_mechanism and any(w in ai_question.lower() for w in leading_prereq_terms):
+        logger.warning("Intercepted leading prerequisite question '%s'. Enforcing genuine beginner student doubt.", ai_question)
+        ai_question = f"I understand what {topic} is used for, but could you walk me through how it actually works step by step? What does it do first?"
+
+    elif not has_teacher_mentioned_prereq and any(w in ai_question.lower() for w in ["sorted", "sort", "ordered", "arranged in"]):
+        logger.warning("Intercepted leaked prerequisite 'sorted/arranged' before teacher introduced it. Replacing.")
+        ai_question = f"Could you walk me through a small example so I can picture how {topic} works in action?"
 
     # STRICT ANTI-REPETITION ENFORCEMENT
     if is_too_similar_to_history(ai_question, req.previous_questions):
         logger.info("Generated question is too similar to past questions. Attempting alternative.")
         retry_prompt = f"""You already asked questions too similar to: "{ai_question}".
-Never repeat previous questions! Ask a completely DIFFERENT student question about {topic} targeting: {current_level_desc}.
-Strictly ONE question mark."""
+Never repeat previous questions! Ask a completely DIFFERENT beginner student question about {topic} asking the teacher to explain: {stage_desc}.
+Remember: sound like an innocent student who wants to understand. Strictly ONE question mark."""
         try:
             raw_retry = provider.generate_text(f"{STUDENT_SYSTEM_PROMPT}\n\n{retry_prompt}")
             ai_retry = clean_text(raw_retry)
@@ -705,18 +788,18 @@ Strictly ONE question mark."""
         "misconceptions": [],
         "missing_concepts": [],
         "undefined_terms": [],
-        "mastered_concepts": [topic] if turn_quality >= 0.75 else [],
+        "mastered_concepts": [topic] if (req.turn_number >= 5 and turn_quality >= 0.85) else [],
         "knowledge_gap": None,
-        "recommended_strategy": "PROBE_HOW",
-        "recommended_difficulty": min(5, req.current_difficulty + 1) if turn_quality >= 0.80 else req.current_difficulty,
+        "recommended_strategy": current_strategy,
+        "recommended_difficulty": current_difficulty,
     }
 
     dec_data = {
         "next_mode": "STUDENT",
-        "strategy": "PROBE_HOW",
-        "difficulty": eval_data["recommended_difficulty"],
-        "confidence": min(100, 30 + req.turn_number * 10),
-        "reason": f"Curious student inquiry following up on teacher's explanation of {topic}.",
+        "strategy": current_strategy,
+        "difficulty": current_difficulty,
+        "confidence": min(100, 30 + req.turn_number * 12),
+        "reason": f"Curious student inquiry following up on teacher's explanation at {stage_desc.split(':')[0]}.",
         "active_concept": topic,
         "should_offer_termination": False,
         "should_restore_interrupted_question": False,

@@ -210,7 +210,8 @@ class QuestionSelector:
                 evidence_expected=obj.evidence_expected,
                 generation_constraints=[
                     f"Must target prerequisite concept: {node_name}",
-                    "Focus on foundational mechanism and definitions",
+                    "Curio is an innocent beginner student learning from scratch. Do NOT ask leading pop-quiz questions like 'Does it require X?' or 'Is it arranged in any particular way?'",
+                    "Ask the teacher to explain how it works or what happens first",
                     "Do NOT reveal the answer",
                     "Exactly ONE question",
                 ],
@@ -361,7 +362,9 @@ class QuestionSelector:
 
         for node in concept_model.concepts:
             node_state = learner_model.get_or_create_concept(node.id)
-            if node_state.attempt_count > 0:
+            # Only redirect to prerequisites if learner has already explored the core mechanism (attempt_count >= 2)
+            # or if attempting an advanced concept (difficulty >= 3)
+            if node_state.attempt_count >= 2 or (node.difficulty_level >= 3 and node_state.attempt_count > 0):
                 unmet = _get_deepest_unmet(node.id, set())
                 if unmet:
                     return unmet
