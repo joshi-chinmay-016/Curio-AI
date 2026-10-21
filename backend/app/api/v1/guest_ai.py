@@ -69,10 +69,13 @@ YOUR CORE NATURE AS A STUDENT:
      * If the concept is clear -> Ask for a small concrete example with real values to picture the steps in action.
      * If an example was walked through -> Ask about edge cases and boundary limits (e.g. what if the item isn't in the list at all, or the list is empty or has duplicates?).
      * If edge cases are covered -> Ask about performance scaling and trade-offs compared to alternatives.
-3. CONVERSATIONAL & HUMBLE:
-   - Sound like a curious, thoughtful student having doubts: "Wait, how does...", "Hold on, if we do that...", "Could you show me a quick example with numbers so I can picture it?"
-   - Ask strictly ONE clear question (exactly ONE question mark '?').
-   - Keep it concise (1 to 2 sentences).
+3. CONVERSATIONAL & PROPER STUDENT QUESTIONING:
+   - Ask thoughtful, descriptive questions that sound like an authentic, curious student (2 to 4 sentences):
+     * Briefly reflect what you understood from what the teacher just taught you.
+     * Voice your specific doubt, confusion, or what you are struggling to picture or understand.
+     * Ask the teacher to explain descriptively in simple, understandable terms or clarify with a concrete walkthrough.
+   - Strictly ONE question mark '?' at the very end of your response.
+   - Do NOT ask dry, one-line quiz queries! Ask like an engaged human student actively learning.
    - NEVER lecture, summarize, or reveal answers. You are the student learning from the teacher!
    - Adapt naturally to ANY topic in the universe."""
 
@@ -564,9 +567,9 @@ The teacher (user) just explained:
 
 Intentionally propose ONE subtle, plausible student misconception or tricky edge-case question to test if the teacher catches it!
 Requirements:
-- Must sound like a genuine, curious student asking: "Wait, so if [subtle flaw], that's always true, right?"
+- Sound like a curious student having a doubt about an edge case: acknowledge what they taught, express your doubt, and ask for clarification.
 - It must be plausible and tricky, but factually false or an invalid assumption.
-- Exactly ONE question mark. Keep it concise (1-2 sentences)."""
+- Exactly ONE question mark at the end (2-3 sentences)."""
         try:
             raw_inj = provider.generate_text(f"{STUDENT_SYSTEM_PROMPT}\n\n{inject_prompt}")
             ai_question = clean_text(raw_inj)
@@ -702,11 +705,13 @@ Pedagogical guidance: {stage_desc}
 You are Curio, an innocent, humble beginner student learning this topic for the very first time. You know NOTHING other than what the teacher just said.
 CRITICAL INSTRUCTIONS:
 1. PURE STUDENT VOICE: You are NOT an examiner or teacher. NEVER ask leading pop-quiz questions like "Does it require X?", "Is it arranged in any particular way?", or "What condition is needed?". You have no idea what conditions or arrangements exist!
-2. REACT & LEARN:
-   - Briefly acknowledge what you just learned from the teacher in simple, humble words (e.g. "Oh, I see, so it's used to find an element in an array!").
-   - Then ask the teacher to explain clearly what happens next, how it works step-by-step, or what it does first.
+2. PROPER DESCRIPTIVE STUDENT QUESTION (2 TO 4 SENTENCES):
+   - First, briefly reflect what you understood so far from the teacher's explanation.
+   - Next, express your genuine doubt, confusion, or what you are struggling to picture or understand.
+   - Then, ask the teacher to explain descriptively in simple, understandable terms, clarify the mechanism, or walk through a concrete example.
+   - Avoid dry, one-line queries. Formulate an engaged, descriptive question just like a real student.
 3. ZERO LEAKAGE: Never mention terms, prerequisites, or rules that the teacher has NOT mentioned yet!
-4. Exactly ONE question mark '?'. 1-2 sentences maximum.
+4. Exactly ONE question mark '?' at the very end of your entire response. Preceding sentences must be declarative reflections or doubts.
 5. Never repeat or rephrase any previous questions from history: {history_str}"""
 
     try:
@@ -719,7 +724,7 @@ CRITICAL INSTRUCTIONS:
             ai_question += "?"
     except Exception as e:
         logger.warning("Groq guest generation failed (%s). Using fallback question.", e)
-        ai_question = f"I see! But could you walk me through how {topic} actually works step by step? What does it do first?"
+        ai_question = f"I think I understand the general purpose so far, but I'm having trouble visualizing the mechanism. Could you walk me through how {topic} actually works step by step from the beginning?"
 
     # HARD PROGRAMMATIC TABULA RASA & ANTI-EXAMINER GUARD:
     # 1. If teacher has not explained mechanism, AI must NOT ask about ordering, arrangement, prerequisites, or conditions:
@@ -731,11 +736,11 @@ CRITICAL INSTRUCTIONS:
     
     if not has_mechanism and any(w in ai_question.lower() for w in leading_prereq_terms):
         logger.warning("Intercepted leading prerequisite question '%s'. Enforcing genuine beginner student doubt.", ai_question)
-        ai_question = f"I understand what {topic} is used for, but could you walk me through how it actually works step by step? What does it do first?"
+        ai_question = f"I understand what {topic} is used for, but I'm having trouble picturing how it actually works under the hood. Could you explain what happens first and walk me through the step-by-step process?"
 
     elif not has_teacher_mentioned_prereq and any(w in ai_question.lower() for w in ["sorted", "sort", "ordered", "arranged in"]):
         logger.warning("Intercepted leaked prerequisite 'sorted/arranged' before teacher introduced it. Replacing.")
-        ai_question = f"Could you walk me through a small example so I can picture how {topic} works in action?"
+        ai_question = f"I follow the main idea on paper, but I'm having trouble picturing it with real values. Could you walk me through a small, concrete example so I can clearly see how {topic} works in action?"
 
     # STRICT ANTI-REPETITION ENFORCEMENT
     if is_too_similar_to_history(ai_question, req.previous_questions):
@@ -758,13 +763,13 @@ Remember: sound like an innocent student who wants to understand. Strictly ONE q
     # If still repeating, pick a guaranteed novel question from the universal pool
     if is_too_similar_to_history(ai_question, req.previous_questions):
         universal_pool = [
-            f"Wait, how does that core process actually work step-by-step under the hood in {topic}?",
-            f"Could you walk me through a simple, concrete example so I can picture how {topic} works in practice?",
-            f"What foundational conditions, inputs, or prerequisites must be in place before {topic} can work?",
-            f"How does {topic} scale as the workload grows, and what are its biggest resource bottlenecks?",
-            f"What edge cases, boundary conditions, or failure modes should we be most careful about with {topic}?",
-            f"What are the major trade-offs and limitations of {topic} compared to alternative approaches?",
-            f"Hold on, what is the single biggest pitfall or mistake people make when working with {topic}?",
+            f"I think I follow the general idea so far, but I'm having trouble visualizing the mechanism. Could you walk me through how {topic} actually works step-by-step under the hood?",
+            f"I understand the theory on paper, but I learn best from concrete illustrations. Could you walk me through a simple, descriptive example so I can picture how {topic} works in practice?",
+            f"I see how the process runs, but does {topic} require certain conditions or setup before starting? What happens if someone tries to run it without meeting those requirements?",
+            f"I understand how it works on a small scale, but I'm curious about performance. How does {topic} scale as the workload grows, and what are its biggest resource bottlenecks?",
+            f"I feel like I grasp the standard path, but I want to be prepared for tricky situations. What edge cases, boundary conditions, or failure modes should we watch out for in {topic}?",
+            f"Now that I understand how {topic} operates, what are its biggest trade-offs or limitations compared to alternative approaches?",
+            f"Hold on, I want to make sure I don't form the wrong mental model. What is the single biggest pitfall or misconception people have when working with {topic}?",
             f"Under what specific circumstances would you recommend NOT using {topic}, and what would you use instead?",
         ]
         for cand in universal_pool:

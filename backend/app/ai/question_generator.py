@@ -54,7 +54,7 @@ class QuestionGenerator:
 
         # 1. First generation attempt (3 candidates)
         candidates = self._generate_candidates(spec, context, recent_q, assessment=assessment)
-        validations = [self.validator.validate_candidate(c, spec, recent_q) for c in candidates]
+        validations = [self.validator.validate_candidate(c, spec, recent_q, context=context) for c in candidates]
 
         valid_candidates = [
             (c, v) for c, v in zip(candidates, validations) if v.is_valid
@@ -83,7 +83,7 @@ class QuestionGenerator:
         )
         retry_spec = self._strengthen_spec_constraints(spec, rejection_summary)
         retry_candidates = self._generate_candidates(retry_spec, context, recent_q, assessment=assessment)
-        retry_validations = [self.validator.validate_candidate(c, spec, recent_q) for c in retry_candidates]
+        retry_validations = [self.validator.validate_candidate(c, spec, recent_q, context=context) for c in retry_candidates]
 
         retry_valid = [
             (c, v) for c, v in zip(retry_candidates, retry_validations) if v.is_valid
@@ -107,7 +107,7 @@ class QuestionGenerator:
             spec.target_concept,
         )
         fallback_candidate = self._construct_specification_fallback(spec)
-        fallback_val = self.validator.validate_candidate(fallback_candidate, spec, recent_q)
+        fallback_val = self.validator.validate_candidate(fallback_candidate, spec, recent_q, context=context)
 
         return QuestionSelectionResult(
             specification=spec,
@@ -183,6 +183,8 @@ class QuestionGenerator:
         new_constraints = list(spec.generation_constraints)
         new_constraints.append("STRICT RULE: Exactly ONE primary question. Do not include second question mark.")
         new_constraints.append("STRICT RULE: Do NOT explain or lecture. Ask a curious student question.")
+        if "Tabula rasa" in failure_summary or "unintroduced" in failure_summary:
+            new_constraints.append("STRICT TABULA RASA: Do NOT introduce or ask about unmentioned assumptions or prerequisites (like 'sorted')! Ask ONLY how the mechanism works step-by-step from what the teacher explicitly taught.")
         new_constraints.append(f"STRICT RULE: Avoid previous failure patterns: {failure_summary[:120]}")
         return QuestionSpecification(
             target_concept=spec.target_concept,

@@ -1,21 +1,22 @@
 import requests
 import json
 
-url = "http://127.0.0.1:8000/api/v1/ai/guest-student-turn"
-topic = "Event Loop in JavaScript"
+def run_live_test():
+    url = "http://127.0.0.1:8000/api/v1/ai/guest-student-turn"
+    topic = "Event Loop in JavaScript"
 
-print("--- TESTING UNIVERSAL MULTI-TURN FLOW ---")
+    print("--- TESTING UNIVERSAL MULTI-TURN FLOW ---")
 
-# Turn 1: Definition
-data1 = {
-    "topic": topic,
-    "user_answer": "The event loop is a single-threaded concurrency model in JavaScript that coordinates the execution of code, processing events, and running queued tasks without blocking the main execution thread.",
-    "turn_number": 1,
-    "current_difficulty": 1,
-    "previous_questions": ["What is Event Loop in JavaScript?"],
-    "mode": "STUDENT",
-}
-r1 = requests.post(url, json=data1).json()
+    # Turn 1: Definition
+    data1 = {
+        "topic": topic,
+        "user_answer": "The event loop is a single-threaded concurrency model in JavaScript that coordinates the execution of code, processing events, and running queued tasks without blocking the main execution thread.",
+        "turn_number": 1,
+        "current_difficulty": 1,
+        "previous_questions": ["What is Event Loop in JavaScript?"],
+        "mode": "STUDENT",
+    }
+    r1 = requests.post(url, json=data1).json()
 q1 = r1.get("ai_response")
 print("\n=== TURN 1 RESPONSE ===")
 print("AI Question:", q1)

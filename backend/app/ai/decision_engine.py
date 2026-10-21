@@ -12,6 +12,7 @@ from backend.app.ai.schemas import (
     AIContext,
     LearningDecision,
     Mode,
+    Role,
     Strategy,
     TurnEvaluation,
     TurnIntent,
@@ -556,6 +557,21 @@ class DecisionEngine:
 
         active_concept = context.active_concept or context.topic
 
+        # Tabula Rasa Check: Has the teacher actually explained the mechanism/steps yet?
+        user_msgs = [
+            m.content for m in (context.history or [])
+            if getattr(m, "role", None) == Role.USER or getattr(m, "sender", "").upper() == "USER"
+        ]
+        all_user_text = " ".join(user_msgs).lower()
+        has_explained_mechanism = any(
+            w in all_user_text
+            for w in [
+                "step", "first", "then", "compare", "half", "halves", "middle", "left", "right",
+                "divide", "pivot", "partition", "recurse", "recursive", "base case",
+                "condition", "check", "process", "pointer", "loop", "iterate"
+            ]
+        )
+
         # Strategy Priority Policy (Section 5):
         # 1. Undefined terms blocking foundational understanding
         if has_undefined_term:
@@ -567,12 +583,16 @@ class DecisionEngine:
             strategy = Strategy.CHALLENGE_MISCONCEPTION
             active_concept = evaluation.misconceptions[0]
             reason = f"Misconception detected: '{active_concept}'. Challenging with counterexample."
-        # 3. Unsupported assumption or premature premise
+        # 3. Unsupported assumption or premature premise (Valid after mechanism has been introduced)
         elif has_assumption:
-            strategy = Strategy.CHALLENGE_ASSUMPTION
-            reason = f"Implicit assumption or unverified premise detected. Probing boundaries and validity of '{active_concept}'."
+            if not has_explained_mechanism and current_difficulty <= 2:
+                strategy = Strategy.PROBE_HOW
+                reason = f"Premature assumption check deferred: teacher provided definition/purpose for '{active_concept}'. Probing step-by-step process (how) under the hood."
+            else:
+                strategy = Strategy.CHALLENGE_ASSUMPTION
+                reason = f"Implicit assumption or unverified premise detected. Probing boundaries and validity of '{active_concept}'."
         # 4. Missing foundational concept / prerequisite gap
-        elif has_missing_concept:
+        elif has_missing_concept and evaluation.recommended_strategy == Strategy.PROBE_MISSING_CONCEPT:
             strategy = Strategy.PROBE_MISSING_CONCEPT
             active_concept = evaluation.missing_concepts[0]
             reason = f"Missing concept '{active_concept}' identified. Probing prerequisite/component."
@@ -678,10 +698,10 @@ class DecisionEngine:
 
         # Difficulty Transitions (Section 4)
         # Driven strictly by demonstrated evidence, concept coverage, and misconception absence.
-        if has_misconception:
-            next_difficulty = current_difficulty
-        elif is_major_gap:
+        if is_major_gap:
             next_difficulty = max(1, current_difficulty - 1)
+        elif has_misconception:
+            next_difficulty = current_difficulty
         elif is_strong:
             next_difficulty = min(5, current_difficulty + 1)
         else:

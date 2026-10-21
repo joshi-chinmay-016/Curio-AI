@@ -8,6 +8,7 @@ WHAT should the learner understand next? -> Question Selector (Deterministic).
 HOW should it be phrased? -> LLM Generator.
 """
 import logging
+import re
 from typing import List, Optional
 
 from backend.app.ai.schemas import (
@@ -210,8 +211,9 @@ class QuestionSelector:
                 evidence_expected=obj.evidence_expected,
                 generation_constraints=[
                     f"Must target prerequisite concept: {node_name}",
+                    f"TABULA RASA: You are a student who does NOT know about '{node_name}' yet! Do NOT name or leak '{node_name}' or any preconditions!",
                     "Curio is an innocent beginner student learning from scratch. Do NOT ask leading pop-quiz questions like 'Does it require X?' or 'Is it arranged in any particular way?'",
-                    "Ask the teacher to explain how it works or what happens first",
+                    "Ask the teacher to explain how the mechanism works step-by-step from what they already described",
                     "Do NOT reveal the answer",
                     "Exactly ONE question",
                 ],
@@ -360,11 +362,17 @@ class QuestionSelector:
                     return pid
             return None
 
+        norm_topic = re.sub(r"[^a-zA-Z0-9]+", "", (concept_model.topic or "").lower())
         for node in concept_model.concepts:
             node_state = learner_model.get_or_create_concept(node.id)
-            # Only redirect to prerequisites if learner has already explored the core mechanism (attempt_count >= 2)
-            # or if attempting an advanced concept (difficulty >= 3)
-            if node_state.attempt_count >= 2 or (node.difficulty_level >= 3 and node_state.attempt_count > 0):
+            norm_node_id = re.sub(r"[^a-zA-Z0-9]+", "", node.id.lower())
+            norm_node_name = re.sub(r"[^a-zA-Z0-9]+", "", node.name.lower())
+            is_main_topic = bool(norm_topic and (norm_topic in norm_node_id or norm_node_id in norm_topic or norm_topic in norm_node_name))
+
+            # The main topic node itself stays focused for at least 2 attempts before redirecting to prerequisites.
+            # Sub-concepts (especially advanced ones difficulty >= 3) can redirect immediately if their prereq is unmet.
+            min_attempts = 2 if is_main_topic else (1 if node.difficulty_level >= 3 else 2)
+            if node_state.attempt_count >= min_attempts:
                 unmet = _get_deepest_unmet(node.id, set())
                 if unmet:
                     return unmet
@@ -403,7 +411,23 @@ class QuestionSelector:
                     return False
             return True
 
+        # Identify anchor concept matching the overall topic
+        norm_topic = re.sub(r"[^a-zA-Z0-9]+", "", (concept_model.topic or "").lower())
+        topic_anchor = None
+        if norm_topic:
+            for n in concept_model.concepts:
+                norm_id = re.sub(r"[^a-zA-Z0-9]+", "", n.id.lower())
+                norm_name = re.sub(r"[^a-zA-Z0-9]+", "", n.name.lower())
+                if norm_topic in norm_id or norm_id in norm_topic or norm_topic in norm_name:
+                    topic_anchor = n
+                    break
+
         eligible_nodes = [node for node in concept_model.concepts if prereqs_satisfied(node)]
+        # The primary topic node must ALWAYS remain eligible in early turns (< 3 attempts) so the student learns the selected topic
+        if topic_anchor and learner_model.get_or_create_concept(topic_anchor.id).attempt_count < 3:
+            if topic_anchor not in eligible_nodes:
+                eligible_nodes.append(topic_anchor)
+
         if not eligible_nodes:
             # Fallback to foundational concepts (nodes with no prerequisites)
             foundation_nodes = [node for node in concept_model.concepts if not node.prerequisites]
@@ -418,7 +442,10 @@ class QuestionSelector:
             importance = getattr(node, "importance", "CORE") or "CORE"
             is_core = importance.upper() in ("CORE", "PREREQUISITE")
 
-            if status == CoverageStatus.NEEDS_REVIEW:
+            # Prioritize the topic anchor in early turns (< 2 attempts) so we establish the foundation of what the user chose
+            if topic_anchor and node.id == topic_anchor.id and state.attempt_count < 2:
+                tier = -1
+            elif status == CoverageStatus.NEEDS_REVIEW:
                 tier = 0
             elif status == CoverageStatus.UNASSESSED and is_core:
                 tier = 1

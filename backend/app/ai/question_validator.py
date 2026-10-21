@@ -14,9 +14,11 @@ from typing import List, Optional, Tuple
 
 from backend.app.ai.novelty import QuestionNoveltyChecker
 from backend.app.ai.schemas import (
+    AIContext,
     QuestionCandidate,
     QuestionSpecification,
     QuestionValidation,
+    Role,
 )
 
 logger = logging.getLogger("curio.ai.question_validator")
@@ -104,9 +106,9 @@ def has_compound_interrogatives(text: str) -> bool:
         return True
 
     # Pattern 3: Distinct sentence ending in a period or semicolon followed by a second interrogative clause ending in ?
-    # e.g. "What is virtual memory. How does paging implement it?"
+    # only if the preceding sentence was ALSO an interrogative clause (e.g. "What is virtual memory. How does paging implement it?")
     if re.search(
-        r"[.;]\s+(?:what|how|why|where|when|which|can you|could you|explain|describe)\b.*?\?",
+        r"(?:^|[.!?]\s+)(?:what|how|why|where|when|which|is|are|can|could|do|does)\b[^.!?]*[.;]\s+(?:what|how|why|where|when|which|can you|could you|explain|describe)\b.*?\?",
         lower,
     ):
         return True
@@ -186,7 +188,7 @@ def _build_safe_fallback_question(
         return cand.question_text
 
     c_name = (fallback_concept or "this concept").replace("_", " ").title()
-    return f"Could you walk me through how {c_name} functions in this context?"
+    return f"I think I understand the general idea so far, but I'm having trouble visualizing the details. Could you explain how {c_name} works in simple, descriptive terms and walk me through a clear example?"
 
 
 def enforce_single_student_question(
@@ -261,6 +263,7 @@ class QuestionValidator:
         candidate: QuestionCandidate,
         spec: QuestionSpecification,
         recent_questions: List[str] = None,
+        context: Optional[AIContext] = None,
     ) -> QuestionValidation:
         rejection_reasons: List[str] = []
         raw_text = (candidate.question_text or "").strip()
@@ -290,10 +293,10 @@ class QuestionValidator:
         if any(p in lower_text for p in TEACHER_LECTURE_PHRASES):
             rejection_reasons.append("Accidental teacher explanation or lecturing in Student mode.")
 
-        # Word count check: student question should be concise (typically < 50 words)
+        # Word count check: student question should be descriptive but not a wall of text (typically 20-90 words)
         words = raw_text.split()
-        if len(words) > 55:
-            rejection_reasons.append(f"Question exceeds concise limit ({len(words)} words; max 55).")
+        if len(words) > 120:
+            rejection_reasons.append(f"Question exceeds descriptive limit ({len(words)} words; max 120).")
 
         # 4. Answer Leakage
         shallow_tag_match = re.search(r"[,.]\s*(?:right|does that make sense|isn't it|is that correct)\?$", lower_text)
@@ -313,11 +316,57 @@ class QuestionValidator:
         overlap = len(target_words & cand_words)
         relevance_score = 1.0 if overlap > 0 else 0.7
 
+        # 7. Strict Tabula Rasa / Knowledge Horizon Check
+        # A student cannot claim an assumption or ask why something assumes/requires unmentioned terms
+        # that the teacher has never introduced in the conversation.
+        if context and context.conversation and context.conversation.recent_messages:
+            user_texts = [
+                m.content.lower() for m in context.conversation.recent_messages
+                if getattr(m, "role", None) == Role.USER or getattr(m, "sender", "").upper() == "USER"
+            ]
+            combined_user_text = " ".join(user_texts)
+
+            # Heuristic 7a: Stating or asking about assumptions on unintroduced terms
+            # e.g., "why the algorithm assumes the array is sorted", "why does it assume that...", "what if the assumption that..."
+            assume_search = re.search(
+                r"\b(?:assumes?|assumption(?: that)?|assumed(?: that)?)\s+(?:the\s+)?([^?.,]+)",
+                lower_text,
+            )
+            if assume_search:
+                clause = assume_search.group(1).strip()
+                clause_words = [
+                    w for w in re.findall(r"[a-z0-9]+", clause)
+                    if w not in {"the", "is", "are", "a", "an", "that", "it", "to", "be", "of", "in", "and", "or", "for", "with", "any", "all", "its", "by"}
+                ]
+                unmentioned = [w for w in clause_words if w not in combined_user_text]
+                if unmentioned:
+                    rejection_reasons.append(
+                        f"Tabula rasa violation: student claims or challenges unintroduced assumption words ({', '.join(unmentioned)}) never stated by teacher."
+                    )
+
+            # Heuristic 7b: Leading pop-quiz question about unmentioned prerequisite/condition
+            # e.g., "does it require/need the array to be sorted?", "must it be sorted?"
+            pop_quiz_match = re.search(
+                r"\b(?:does it (?:require|need|rely on)|must (?:the|it) be|is (?:it|the [a-z]+) (?:assumed to be|required to be))\s+([^?.,]+)",
+                lower_text,
+            )
+            if pop_quiz_match:
+                clause = pop_quiz_match.group(1).strip()
+                clause_words = [
+                    w for w in re.findall(r"[a-z0-9]+", clause)
+                    if w not in {"the", "is", "are", "a", "an", "that", "it", "to", "be", "of", "in", "and", "or", "for", "with", "any", "all", "its", "by"}
+                ]
+                unmentioned = [w for w in clause_words if w not in combined_user_text]
+                if unmentioned:
+                    rejection_reasons.append(
+                        f"Tabula rasa violation: student asks leading pop-quiz question about unmentioned requirement ({', '.join(unmentioned)})."
+                    )
+
         # Composite score
         is_valid = len(rejection_reasons) == 0
         score = 0.0
         if is_valid:
-            brevity_bonus = 0.2 if 10 <= len(words) <= 35 else 0.0
+            brevity_bonus = 0.2 if 15 <= len(words) <= 90 else 0.0
             score = round(0.8 * relevance_score + brevity_bonus, 3)
 
         return QuestionValidation(
