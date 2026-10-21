@@ -55,10 +55,10 @@ export function AudioControls({
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const vadIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const liveTranscriptRef = useRef<string>("");
   const hasSpokenRef = useRef<boolean>(false);
   const silenceStartRef = useRef<number | null>(null);
+  const isStoppingRef = useRef<boolean>(false);
+  const prevIsPlayingSpeechRef = useRef<boolean>(false);
 
   useEffect(() => {
     setIsSupported(isVoiceRecordingSupported());
@@ -84,17 +84,23 @@ export function AudioControls({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-      recognitionRef.current = null;
-    }
   }, []);
 
   const stopRecording = useCallback(() => {
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
+
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.warn("Error stopping media recorder:", err);
+      }
     }
     setIsRecording(false);
     onRecordingStateChange?.(false);
@@ -102,12 +108,14 @@ export function AudioControls({
     setSilenceCountdown(null);
   }, [onRecordingStateChange]);
 
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
     if (disabled || isBusyProcessing || isTranscribing || isPlayingSpeech) return;
+    if (isRecording) return;
+
     setPermissionError(null);
     hasSpokenRef.current = false;
     silenceStartRef.current = null;
-    liveTranscriptRef.current = "";
+    isStoppingRef.current = false;
     setSpeechDetected(false);
     setSilenceCountdown(null);
 
@@ -121,7 +129,7 @@ export function AudioControls({
       });
       streamRef.current = stream;
 
-      // 1. Initialize Web Audio API Analyser for Voice Activity & Silence Detection
+      // 1. Initialize Web Audio API Analyser for Voice Activity & Silence Detection (NO frontend transcription)
       try {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtx) {
@@ -135,18 +143,18 @@ export function AudioControls({
           const bufferLength = analyser.frequencyBinCount;
           const dataArray = new Uint8Array(bufferLength);
 
-          const SILENCE_TIMEOUT_MS = 1800; // 1.8 seconds of silence after speech triggers auto-send
-          const SPEECH_VOLUME_THRESHOLD = 12; // Volume threshold for human speech
+          const SILENCE_TIMEOUT_MS = 1400; // 1.4 seconds of silence after speech triggers automatic submission
+          const SPEECH_VOLUME_THRESHOLD = 10; // Volume threshold for human speech
 
           vadIntervalRef.current = setInterval(() => {
-            if (!analyser) return;
+            if (!analyser || isStoppingRef.current) return;
             analyser.getByteFrequencyData(dataArray);
             let sum = 0;
             for (let i = 0; i < bufferLength; i++) {
               sum += dataArray[i];
             }
             const avg = sum / bufferLength;
-            setVolumeLevel(Math.min(100, Math.round(avg * 2.5)));
+            setVolumeLevel(Math.min(100, Math.round(avg * 2.8)));
 
             if (avg >= SPEECH_VOLUME_THRESHOLD) {
               // Active speech detected!
@@ -155,7 +163,7 @@ export function AudioControls({
               setSpeechDetected(true);
               setSilenceCountdown(null);
             } else if (hasSpokenRef.current) {
-              // User has spoken at least once and is currently pausing
+              // User has spoken and is now pausing
               const now = Date.now();
               if (!silenceStartRef.current) {
                 silenceStartRef.current = now;
@@ -165,8 +173,7 @@ export function AudioControls({
               setSilenceCountdown(parseFloat(remainingSec.toFixed(1)));
 
               if (elapsed >= SILENCE_TIMEOUT_MS) {
-                // Auto-endpoint reached: Automatically finish and submit!
-                console.log("[Curio Audio] Silence detected after speech. Automatically sending answer!");
+                // Auto-endpoint: user paused talking, automatically submit speech without frontend transcription!
                 if (vadIntervalRef.current) {
                   clearInterval(vadIntervalRef.current);
                   vadIntervalRef.current = null;
@@ -174,41 +181,13 @@ export function AudioControls({
                 stopRecording();
               }
             }
-          }, 80);
+          }, 70);
         }
       } catch (audioErr) {
         console.warn("Web Audio Analyser not available:", audioErr);
       }
 
-      // 2. Parallel Browser Speech Recognition for instant zero-delay transcript
-      const SpeechRecognitionClass =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognitionClass) {
-        try {
-          const recognition = new SpeechRecognitionClass();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-          recognition.lang = "en-US";
-
-          recognition.onresult = (event: any) => {
-            let fullText = "";
-            for (let i = 0; i < event.results.length; ++i) {
-              fullText += event.results[i][0].transcript + " ";
-            }
-            if (fullText.trim()) {
-              liveTranscriptRef.current = fullText.trim();
-              hasSpokenRef.current = true;
-              setSpeechDetected(true);
-            }
-          };
-
-          recognition.onerror = () => {};
-          recognition.start();
-          recognitionRef.current = recognition;
-        } catch {}
-      }
-
-      // 3. MediaRecorder for high-fidelity audio capture to Whisper
+      // 2. MediaRecorder captures high-fidelity audio directly for backend Whisper
       const mimeType = getSupportedAudioMimeType();
       const options = mimeType ? { mimeType } : undefined;
       const mediaRecorder = new MediaRecorder(stream, options);
@@ -227,40 +206,36 @@ export function AudioControls({
           type: mimeType || "audio/webm",
         });
 
-        // Begin Automatic Transcription & Submission
+        // If no speech was spoken and audio is negligible, dismiss cleanly
+        if (audioBlob.size === 0 || !hasSpokenRef.current) {
+          setIsTranscribing(false);
+          onTranscribingStateChange?.(false);
+          isStoppingRef.current = false;
+          return;
+        }
+
+        // Automatic Backend Transcription & Immediate Submission (NO Frontend Transcription)
         setIsTranscribing(true);
         onTranscribingStateChange?.(true);
 
         try {
-          let recognizedText = "";
-
-          // First try Whisper backend
-          if (audioBlob.size > 0) {
-            try {
-              const res = await transcribeAudio(audioBlob);
-              recognizedText = (res.text || "").trim();
-            } catch (whisperErr) {
-              console.warn("Whisper transcription fallback to browser recognition:", whisperErr);
-            }
-          }
-
-          // If Whisper was empty or errored, use browser Web Speech transcript
-          if (!recognizedText && liveTranscriptRef.current) {
-            recognizedText = liveTranscriptRef.current.trim();
-          }
+          // Send audio file directly to backend faster-whisper endpoint
+          const res = await transcribeAudio(audioBlob);
+          const recognizedText = (res.text || "").trim();
 
           if (recognizedText.length > 0) {
-            // AUTOMATICALLY SUBMIT SPEECH (No confirm dialog, no text input)
+            // AUTOMATICALLY SUBMIT (Never ask the user to confirm or send)
             await onSendAnswer(recognizedText);
           } else {
-            curioToast.info("UNHEARD", "I couldn't hear you clearly. Please tap to speak again.");
+            curioToast.info("UNHEARD", "Could not catch that clearly. Please speak again.");
           }
         } catch (err: any) {
-          console.error("Transcription & Submission error:", err);
-          curioToast.error("SUBMISSION FAILED", "Could not submit speech. Please try again.");
+          console.error("Audio submission error:", err);
+          curioToast.error("VOICE ERROR", "Failed to process audio. Please tap to try again.");
         } finally {
           setIsTranscribing(false);
           onTranscribingStateChange?.(false);
+          isStoppingRef.current = false;
         }
       };
 
@@ -278,17 +253,46 @@ export function AudioControls({
       setPermissionError("Microphone access was denied. Please allow microphone permission in your browser.");
       curioToast.error("MIC PERMISSION REQUIRED", "Please allow microphone access to speak.");
       cleanupResources();
+      isStoppingRef.current = false;
     }
-  };
+  }, [
+    disabled,
+    isBusyProcessing,
+    isTranscribing,
+    isPlayingSpeech,
+    isRecording,
+    cleanupResources,
+    onRecordingStateChange,
+    onTranscribingStateChange,
+    onSendAnswer,
+    stopRecording,
+  ]);
+
+  // Hands-free continuous auto-listen: When AI finishes speaking, automatically open mic
+  useEffect(() => {
+    if (prevIsPlayingSpeechRef.current && !isPlayingSpeech) {
+      // AI speech just ended! Give natural 450ms pause, then automatically begin listening
+      if (!isBusyProcessing && !isTranscribing && !disabled) {
+        const autoTimer = setTimeout(() => {
+          if (!isBusyProcessing && !isTranscribing && !isPlayingSpeech) {
+            startRecording();
+          }
+        }, 450);
+        return () => clearTimeout(autoTimer);
+      }
+    }
+    prevIsPlayingSpeechRef.current = isPlayingSpeech;
+  }, [isPlayingSpeech, isBusyProcessing, isTranscribing, disabled, startRecording]);
 
   const cancelRecording = () => {
     audioChunksRef.current = [];
-    liveTranscriptRef.current = "";
+    hasSpokenRef.current = false;
     cleanupResources();
     setIsRecording(false);
     onRecordingStateChange?.(false);
     setSpeechDetected(false);
     setSilenceCountdown(null);
+    isStoppingRef.current = false;
   };
 
   const formatTime = (secs: number) => {
@@ -317,7 +321,7 @@ export function AudioControls({
         </div>
       )}
 
-      {/* Main Touch-To-Speak Pod */}
+      {/* Main Hands-Free Voice Pod */}
       <div className="w-full bg-white border-2 border-navy rounded-[16px] p-5 shadow-[4px_6px_0_0_#0F2B4A] flex flex-col items-center gap-4">
         {/* Central Giant Voice Action Button */}
         <div className="relative">
@@ -351,11 +355,11 @@ export function AudioControls({
             }`}
             title={
               isRecording
-                ? "Tap to finish speaking (or simply pause to auto-submit)"
+                ? "Tap to finish speaking (or simply pause to auto-send)"
                 : isPlayingSpeech
                 ? "Listening to response..."
                 : isBusyProcessing
-                ? "Evaluating answer..."
+                ? "Character taking notes..."
                 : "Tap to speak your answer"
             }
             aria-label={isRecording ? "Finish speaking" : "Start speaking"}
@@ -370,7 +374,7 @@ export function AudioControls({
           </button>
         </div>
 
-        {/* Dynamic Voice State & Auto-Sending Label */}
+        {/* Dynamic Voice State Label */}
         <div className="text-center">
           {isRecording ? (
             <div className="flex flex-col items-center gap-1.5">
@@ -383,7 +387,7 @@ export function AudioControls({
                   }`}
                 />
                 <span className="font-mono text-sm font-bold text-navy tracking-wider">
-                  {speechDetected ? "SPEECH DETECTED" : "LISTENING..."} ({formatTime(recordingSeconds)})
+                  {speechDetected ? "CAPTURING VOICE" : "LISTENING TO YOU..."} ({formatTime(recordingSeconds)})
                 </span>
               </div>
 
@@ -394,7 +398,7 @@ export function AudioControls({
                 </div>
               ) : (
                 <span className="font-mono text-[11px] text-navy/60">
-                  Speak naturally — auto-submits when you pause
+                  Speak naturally — automatically sends when you pause
                 </span>
               )}
             </div>
@@ -402,7 +406,7 @@ export function AudioControls({
             <div className="flex items-center gap-2 text-amber-800">
               <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
               <span className="font-mono text-xs font-bold uppercase tracking-wider">
-                Recognizing speech & submitting automatically...
+                Sending audio directly to Curio...
               </span>
             </div>
           ) : isPlayingSpeech ? (
@@ -411,17 +415,17 @@ export function AudioControls({
               Listen to the response...
             </div>
           ) : isBusyProcessing ? (
-            <div className="flex items-center gap-2 text-navy/60 font-mono text-xs font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-cobalt font-mono text-xs font-bold uppercase tracking-wider">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-cobalt" />
-              Evaluating answer...
+              Character is taking notes & reflecting...
             </div>
           ) : (
             <div className="flex flex-col items-center gap-0.5">
               <span className="font-heading text-sm font-bold text-navy">
-                Tap to speak
+                Hands-Free Voice Active
               </span>
               <span className="font-mono text-[11px] text-navy/50">
-                Speaks naturally — automatically submits when you stop
+                Speak naturally — automatically sends when you stop talking
               </span>
             </div>
           )}
@@ -455,7 +459,7 @@ export function AudioControls({
               style={{ height: `${Math.max(6, volumeLevel * 0.4)}px` }}
             />
             <span className="font-mono text-[11px] uppercase text-navy font-bold ml-2">
-              {speechDetected ? "Capturing voice" : "Waiting for voice"}
+              {speechDetected ? "Capturing voice" : "Listening..."}
             </span>
           </div>
         )}
@@ -473,7 +477,7 @@ export function AudioControls({
             </button>
           ) : (
             <div className="text-[11px] font-mono text-navy/40">
-              Audio-only mode · No typing needed
+              Hands-Free Mode · No typing or confirm buttons
             </div>
           )}
 

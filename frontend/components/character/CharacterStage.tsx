@@ -13,6 +13,8 @@ interface CharacterStageProps {
   performanceState: PerformanceState;
   prefersReducedMotion?: boolean;
   isPlayingSpeech?: boolean;
+  captionText?: string;
+  spokenCharIndex?: number;
   statusLabel?: string;
   clipboardMark?: "none" | "check" | "cross" | "in-progress";
   onStopSpeech?: () => void;
@@ -24,6 +26,8 @@ export const CharacterStage = memo(function CharacterStage({
   performanceState,
   prefersReducedMotion = false,
   isPlayingSpeech = false,
+  captionText,
+  spokenCharIndex = 0,
   statusLabel,
   clipboardMark = "none",
   onStopSpeech,
@@ -145,8 +149,36 @@ export const CharacterStage = memo(function CharacterStage({
             clipboardMark={clipboardMark}
           />
 
-          {/* Speaking Voice Equalizer Waveform Pill */}
-          {isPlayingSpeech && (
+          {/* Live Spoken Captions Card for Character (Student / Professor / Teacher) */}
+          {isPlayingSpeech && captionText ? (
+            <div
+              className="absolute bottom-2 left-2 right-2 z-30 p-3 rounded-2xl bg-[#071322]/95 border border-emerald-500/50 backdrop-blur-md shadow-[0_12px_36px_rgba(0,0,0,0.7)] flex flex-col gap-1.5 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 select-text"
+              data-testid="character-spoken-captions"
+            >
+              {/* Header with animated equalizer and speaker badge */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-3 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-4.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.1s]" />
+                  <span className="w-1.5 h-3 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.4s]" />
+                  <span className="w-1.5 h-5 bg-emerald-400 rounded-full animate-bounce" />
+                  <span className="w-1.5 h-3.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.2s]" />
+                  <span className="font-mono text-[10px] text-emerald-300 font-bold ml-1 tracking-wider uppercase">
+                    {characterName} is speaking
+                  </span>
+                </div>
+
+                <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-[9px] font-mono text-emerald-300 font-bold uppercase tracking-wider">
+                  Captions
+                </span>
+              </div>
+
+              {/* Caption Text Body */}
+              <div className="max-h-[75px] md:max-h-[85px] overflow-y-auto pr-1 text-xs sm:text-[13px] font-sans text-white/95 leading-relaxed tracking-normal">
+                "{captionText}"
+              </div>
+            </div>
+          ) : isPlayingSpeech ? (
             <div className="absolute bottom-4 z-20 flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-[#0F2B4A]/95 border border-emerald-400/60 backdrop-blur-md shadow-[0_0_24px_rgba(16,185,129,0.4)]">
               <span className="w-1.5 h-3.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
               <span className="w-1.5 h-6 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.1s]" />
@@ -158,7 +190,7 @@ export const CharacterStage = memo(function CharacterStage({
                 SPEAKING...
               </span>
             </div>
-          )}
+          ) : null}
 
           {/* Listening Active Pulse Pill */}
           {performanceState === "LISTENING_ACTIVE" && !isPlayingSpeech && (
@@ -166,6 +198,26 @@ export const CharacterStage = memo(function CharacterStage({
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
               <span className="font-mono text-xs text-rose-300 font-bold tracking-wider">
                 LISTENING TO YOU...
+              </span>
+            </div>
+          )}
+
+          {/* Taking Notes Pill */}
+          {performanceState === "TAKING_NOTES" && !isPlayingSpeech && (
+            <div className="absolute bottom-4 z-20 flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-[#0F2B4A]/95 border border-cobalt/60 backdrop-blur-md shadow-[0_0_24px_rgba(58,99,255,0.45)] animate-pulse">
+              <span className="w-2.5 h-2.5 rounded-full bg-cobalt animate-ping" />
+              <span className="font-mono text-xs text-blue-200 font-bold tracking-wider">
+                TAKING NOTES ON YOUR EXPLANATION...
+              </span>
+            </div>
+          )}
+
+          {/* Marking Clipboard Pill */}
+          {performanceState === "MARKING" && !isPlayingSpeech && (
+            <div className="absolute bottom-4 z-20 flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-[#0F2B4A]/95 border border-amber-400/60 backdrop-blur-md shadow-[0_0_24px_rgba(245,158,11,0.45)] animate-pulse">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+              <span className="font-mono text-xs text-amber-300 font-bold tracking-wider">
+                MARKING RUBRIC ON CLIPBOARD...
               </span>
             </div>
           )}

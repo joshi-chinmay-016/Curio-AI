@@ -107,6 +107,34 @@ export const teacherAskingVerification: AnimationDefinition = {
   onComplete: "LISTENING_ACTIVE",
 };
 
+export const teacherListening: AnimationDefinition = {
+  id: "teacher-listening",
+  character: "TEACHER",
+  performanceState: "LISTENING_ACTIVE",
+  duration: 2400,
+  loop: true,
+  interruptible: true,
+  bodyAnimation: {
+    translateY: [0, -6, -1, -5, 0],
+    rotate: [0, 1.2, -0.4, 0.8, 0],
+    scale: [1, 1.02, 1.01, 1.018, 1],
+    times: [0, 0.25, 0.5, 0.75, 1],
+    transition: {
+      type: "tween",
+      ease: "easeInOut",
+      repeat: Infinity,
+      duration: 2.4,
+    },
+  },
+  props: [
+    {
+      type: "BOOK",
+      position: "held-left",
+    },
+  ],
+  onComplete: "LISTENING_ACTIVE",
+};
+
 export const teacherSpeaking: AnimationDefinition = {
   id: "teacher-speaking",
   character: "TEACHER",
@@ -163,8 +191,8 @@ export const teacherAnimations: Record<string, AnimationDefinition> = {
   IDLE: teacherIdle,
   EXPLAINING: teacherExplaining,
   ASKING: teacherAskingVerification,
-  LISTENING_ACTIVE: teacherIdle,
-  LISTENING_IDLE: teacherIdle,
+  LISTENING_ACTIVE: teacherListening,
+  LISTENING_IDLE: teacherListening,
   SPEAKING: teacherSpeaking,
   EXITING: teacherExit,
 };

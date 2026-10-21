@@ -1,8 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   CharacterId,
   PerformanceState,
@@ -11,12 +10,9 @@ import {
 import { studentAnimations } from "./animations/student.animations";
 import { teacherAnimations } from "./animations/teacher.animations";
 import { professorAnimations } from "./animations/professor.animations";
-import { Notebook } from "./props/Notebook";
-import { Book } from "./props/Book";
-import { Clipboard } from "./props/Clipboard";
-import { ThoughtBubble } from "./props/ThoughtBubble";
-import { QuestionMark } from "./props/QuestionMark";
-import { CheckMark } from "./props/CheckMark";
+import { StudentCharacter } from "./characters/StudentCharacter";
+import { TeacherCharacter } from "./characters/TeacherCharacter";
+import { ProfessorCharacter } from "./characters/ProfessorCharacter";
 
 interface CharacterRendererProps {
   character: CharacterId;
@@ -35,19 +31,12 @@ export const CharacterRenderer = memo(function CharacterRenderer({
     return null;
   }
 
-  // Lookup animation definition
+  // Lookup animation definition for stage-level transforms
   let animMap: Record<string, AnimationDefinition> = studentAnimations;
-  let imageSrc = "/characters/student.png";
-  let altText = "Leo - Curious Student";
-
   if (character === "TEACHER") {
     animMap = teacherAnimations;
-    imageSrc = "/characters/teacher.png";
-    altText = "Ms. Clara - Pedagogical Guide";
   } else if (character === "PROFESSOR") {
     animMap = professorAnimations;
-    imageSrc = "/characters/professor.png";
-    altText = "Prof. Sterling - Strict Oral Examiner";
   }
 
   const animDef = animMap[performanceState] || animMap["IDLE"];
@@ -75,98 +64,73 @@ export const CharacterRenderer = memo(function CharacterRenderer({
         ...(bodyAnim.times ? { times: bodyAnim.times } : {}),
       };
 
-  // State checks for props & overlays
   const isTakingNotes = character === "STUDENT" && performanceState === "TAKING_NOTES";
-  const isTeacherPresent = character === "TEACHER";
-  const isTeacherExplaining =
-    isTeacherPresent && (performanceState === "EXPLAINING" || performanceState === "SPEAKING");
-  const isProfessorPresent = character === "PROFESSOR";
-  const isThinking = performanceState === "THINKING";
-  const isAsking = performanceState === "ASKING";
-  const isConfused = performanceState === "REACTING_CONFUSED";
-  const isPositive = performanceState === "REACTING_POSITIVE";
 
   return (
     <div className="relative w-full h-full flex items-center justify-center select-none overflow-hidden">
-      {/* 1. Behind-Character Prop Layer (Teacher Book if idle) */}
-      <Book
-        visible={isTeacherPresent && !isTeacherExplaining}
-        open={false}
-        position="held-left"
-      />
-
-      {/* 2. Main Character Render with Performance Transform */}
+      {/* Main Layered SVG Character with Performance Animation */}
       <motion.div
         key={`${character}-${performanceState}`}
         animate={animateTarget}
         transition={transitionConfig as any}
         className="relative w-[280px] h-[340px] md:w-[320px] md:h-[380px] flex items-center justify-center"
       >
-        <Image
-          src={imageSrc}
-          alt={altText}
-          fill
-          priority
-          sizes="(max-width: 768px) 280px, 320px"
-          className="object-contain drop-shadow-2xl pointer-events-none"
-        />
-
-        {/* Listening ear audio pulse indicator for Student */}
-        {character === "STUDENT" && performanceState === "LISTENING_ACTIVE" && (
-          <motion.div
-            className="absolute top-16 right-14 w-6 h-6 rounded-full border-2 border-cobalt/80 pointer-events-none"
-            animate={{ scale: [1, 1.8, 1], opacity: [0.9, 0, 0.9] }}
-            transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
+        {character === "STUDENT" && (
+          <StudentCharacter
+            performance={performanceState}
+            prefersReducedMotion={prefersReducedMotion}
           />
         )}
+        {character === "TEACHER" && (
+          <TeacherCharacter
+            performance={performanceState}
+            prefersReducedMotion={prefersReducedMotion}
+          />
+        )}
+        {character === "PROFESSOR" && (
+          <ProfessorCharacter
+            performance={performanceState}
+            prefersReducedMotion={prefersReducedMotion}
+            clipboardMark={clipboardMark}
+          />
+        )}
+
+        {/* Dynamic Listening Soundwave Pulse Rings */}
+        {(performanceState === "LISTENING_ACTIVE" || (performanceState as string) === "LISTENING") && (
+          <div className="absolute top-14 right-10 pointer-events-none z-10">
+            <motion.div
+              className={`w-8 h-8 rounded-full border-2 ${
+                character === "PROFESSOR"
+                  ? "border-amber-400/80"
+                  : character === "TEACHER"
+                  ? "border-gap-orange/80"
+                  : "border-cobalt/80"
+              }`}
+              animate={{ scale: [1, 2.2, 1], opacity: [0.9, 0, 0.9] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
+            />
+            <motion.div
+              className={`absolute inset-0 rounded-full border-2 ${
+                character === "PROFESSOR"
+                  ? "border-amber-300/60"
+                  : character === "TEACHER"
+                  ? "border-gap-orange/60"
+                  : "border-cobalt/60"
+              }`}
+              animate={{ scale: [1, 2.8, 1], opacity: [0.7, 0, 0.7] }}
+              transition={{ duration: 1.6, repeat: Infinity, delay: 0.4, ease: "easeOut" }}
+            />
+          </div>
+        )}
+
+        {/* Ambient Character Focus Glow */}
+        {isTakingNotes && (
+          <div className="absolute -bottom-6 w-48 h-24 bg-cobalt/25 blur-2xl rounded-full pointer-events-none" />
+        )}
+        {(performanceState === "MARKING" || performanceState === "EVALUATING") && (
+          <div className="absolute -bottom-6 right-0 w-48 h-24 bg-amber-500/20 blur-2xl rounded-full pointer-events-none" />
+        )}
       </motion.div>
-
-      {/* 3. Foreground Props Layer */}
-      {/* Student Notebook */}
-      <Notebook visible={isTakingNotes} position="student-front" />
-
-      {/* Teacher Active Book (open when explaining) */}
-      <Book
-        visible={isTeacherExplaining}
-        open={true}
-        position="held-left"
-      />
-
-      {/* Professor Clipboard */}
-      <Clipboard
-        visible={isProfessorPresent && performanceState !== "EXITING"}
-        markState={
-          performanceState === "MARKING"
-            ? "in-progress"
-            : clipboardMark
-        }
-        position={
-          performanceState === "ASKING" || performanceState === "MARKING"
-            ? "raised"
-            : performanceState === "REACTING_GRUMPY"
-            ? "lowered"
-            : "held-front"
-        }
-      />
-
-      {/* 4. Overlays Layer */}
-      {/* Thought bubble (Appears ONLY in THINKING state) */}
-      <ThoughtBubble
-        visible={isThinking}
-        content="thinking-dots"
-        position="above-right"
-      />
-
-      {/* Question mark (Cobalt for asking, orange for confused) */}
-      <QuestionMark
-        visible={isAsking || isConfused}
-        color={isConfused ? "#FF6B1A" : "#3A63FF"}
-        size={isAsking ? 28 : 24}
-        position="above-head"
-      />
-
-      {/* Checkmark (Approval on positive reaction) */}
-      <CheckMark visible={isPositive} color="#3A63FF" />
     </div>
   );
 });

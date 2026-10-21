@@ -21,6 +21,7 @@ import {
   Mic,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
+import { CurioNav } from "@/components/curio/CurioNav";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { useAuthStore } from "@/stores/authStore";
@@ -86,74 +87,7 @@ function DashboardContent() {
       <DiagonalSweepTransition />
 
       {/* Authenticated Application Shell Header */}
-      <header className="w-full bg-white border-b border-fog px-6 py-4 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link
-              href="/"
-              className="font-mono text-xl font-bold tracking-wider text-navy hover:text-cobalt transition-colors"
-            >
-              CURIO<span className="text-gap-orange">.</span>
-            </Link>
-
-            <nav className="hidden md:flex items-center gap-5 text-xs font-mono font-semibold uppercase">
-              <Link
-                href="/dashboard"
-                className="text-cobalt border-b-2 border-cobalt pb-0.5 transition-colors"
-              >
-                DASHBOARD
-              </Link>
-              <Link
-                href="/audio-learning"
-                className="text-navy/70 hover:text-navy transition-colors pb-0.5 inline-flex items-center gap-1.5"
-              >
-                <Mic className="w-3.5 h-3.5 text-cobalt" />
-                AUDIO LEARNING
-              </Link>
-              <Link
-                href="/documents"
-                className="text-navy/70 hover:text-navy transition-colors pb-0.5"
-              >
-                DOCUMENTS
-              </Link>
-              <Link
-                href="/history"
-                className="text-navy/70 hover:text-navy transition-colors pb-0.5"
-              >
-                HISTORY
-              </Link>
-              <Link
-                href="/topics"
-                className="text-navy/70 hover:text-navy transition-colors pb-0.5"
-              >
-                TOPICS
-              </Link>
-            </nav>
-          </div>
-
-          {/* User Profile & Actions */}
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 bg-ice/60 border border-fog/80 rounded-[6px]">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-mono text-xs text-navy/80 font-medium truncate max-w-[160px]">
-                {user?.email}
-              </span>
-            </div>
-
-            <button
-              onClick={() => {
-                logout();
-                router.replace("/");
-              }}
-              title="Sign Out"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono uppercase font-bold text-navy/70 hover:text-red-700 hover:bg-red-50 border border-fog rounded-[6px] transition-colors cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">LOGOUT</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <CurioNav activeRoute="dashboard" />
 
       {/* Main Dashboard Stage */}
       <main className="max-w-6xl w-full mx-auto px-6 py-8 md:py-12 flex-1">
@@ -223,9 +157,13 @@ function DashboardContent() {
 
                 <div className="flex flex-wrap items-center gap-3">
                   <Link href="/audio-learning">
-                    <KeycapButton variant="default" size="md">
-                      <span className="inline-flex items-center gap-2 font-bold text-navy">
-                        <Mic className="w-4 h-4 text-cobalt" />
+                    <KeycapButton
+                      variant="default"
+                      size="md"
+                      className="group border-white bg-white text-navy shadow-[0_4px_0_0_#CBD5E1] hover:bg-gap-orange hover:border-gap-orange hover:text-white hover:shadow-[0_4px_0_0_#C24E05,0_6px_16px_rgba(255,107,26,0.35)] active:translate-y-1 active:shadow-[0_0px_0_0_#C24E05] transition-all duration-150"
+                    >
+                      <span className="inline-flex items-center gap-2 font-bold text-navy group-hover:text-white transition-colors duration-150">
+                        <Mic className="w-4 h-4 text-gap-orange group-hover:text-white transition-colors duration-150" />
                         START AUDIO SESSION →
                       </span>
                     </KeycapButton>

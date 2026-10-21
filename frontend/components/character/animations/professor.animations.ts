@@ -76,18 +76,51 @@ export const professorAsking: AnimationDefinition = {
   onComplete: "LISTENING_ACTIVE",
 };
 
+export const professorListening: AnimationDefinition = {
+  id: "professor-listening",
+  character: "PROFESSOR",
+  performanceState: "LISTENING_ACTIVE",
+  duration: 2500,
+  loop: true,
+  interruptible: true,
+  bodyAnimation: {
+    translateY: [0, -5, -1, -4, 0],
+    rotate: [0, -1.2, 0.4, -0.8, 0],
+    scale: [1, 1.018, 1.008, 1.015, 1],
+    times: [0, 0.25, 0.5, 0.75, 1],
+    transition: {
+      type: "tween",
+      ease: "easeInOut",
+      repeat: Infinity,
+      duration: 2.5,
+    },
+  },
+  props: [
+    {
+      type: "CLIPBOARD",
+      position: "held-front",
+    },
+  ],
+  onComplete: "LISTENING_ACTIVE",
+};
+
 export const professorMarking: AnimationDefinition = {
   id: "professor-marking",
   character: "PROFESSOR",
   performanceState: "MARKING",
   duration: 1800,
-  loop: false,
-  interruptible: false,
+  loop: true,
+  interruptible: true,
   bodyAnimation: {
-    translateY: [0, 5, 4, 5, 3],
-    rotate: [0, 2, 1.5, 2, 1],
-    times: [0, 0.15, 0.4, 0.7, 1],
-    transition: { type: "spring", stiffness: 100, damping: 16 },
+    translateY: [2, 8, 4, 7, 2],
+    rotate: [0.5, 2, 1, 2, 0.5],
+    times: [0, 0.25, 0.5, 0.75, 1],
+    transition: {
+      type: "tween",
+      ease: "easeInOut",
+      repeat: Infinity,
+      duration: 1.4,
+    },
   },
   props: [
     {
@@ -205,8 +238,8 @@ export const professorAnimations: Record<string, AnimationDefinition> = {
   ENTERING: professorEntrance,
   IDLE: professorIdle,
   ASKING: professorAsking,
-  LISTENING_ACTIVE: professorIdle,
-  LISTENING_IDLE: professorIdle,
+  LISTENING_ACTIVE: professorListening,
+  LISTENING_IDLE: professorListening,
   MARKING: professorMarking,
   REACTING_STRICT: professorStrict,
   REACTING_POSITIVE: professorPositive,

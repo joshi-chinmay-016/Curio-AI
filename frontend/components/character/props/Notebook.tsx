@@ -22,9 +22,9 @@ export function Notebook({
       return;
     }
     // Animate lines sequential drawing
-    const t1 = setTimeout(() => setInternalProgress(0.35), 400);
-    const t2 = setTimeout(() => setInternalProgress(0.7), 1000);
-    const t3 = setTimeout(() => setInternalProgress(1), 1600);
+    const t1 = setTimeout(() => setInternalProgress(0.35), 300);
+    const t2 = setTimeout(() => setInternalProgress(0.7), 800);
+    const t3 = setTimeout(() => setInternalProgress(1), 1400);
 
     return () => {
       clearTimeout(t1);
@@ -40,121 +40,211 @@ export function Notebook({
       {visible && (
         <motion.div
           key="student-notebook"
-          initial={{ y: 30, opacity: 0, scale: 0.9 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
-          exit={{ y: 25, opacity: 0, scale: 0.9 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none drop-shadow-xl"
+          initial={{ y: 50, opacity: 0, scale: 0.85, rotate: -4 }}
+          animate={{
+            y: 0,
+            opacity: 1,
+            scale: 1,
+            rotate: 0,
+            transition: { type: "spring", stiffness: 220, damping: 18 },
+          }}
+          exit={{ y: 40, opacity: 0, scale: 0.85, rotate: 2 }}
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none drop-shadow-[0_12px_28px_rgba(0,0,0,0.5)]"
           data-testid="student-notebook-prop"
         >
+          {/* Subtle note illumination glow */}
+          <div className="absolute inset-0 bg-cobalt/20 blur-xl rounded-full pointer-events-none" />
+
           <svg
-            width="90"
-            height="65"
-            viewBox="0 0 90 65"
+            width="130"
+            height="95"
+            viewBox="0 0 130 95"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
+            className="relative"
           >
-            {/* Book spine & cover */}
+            {/* Hardcover Outer Frame */}
             <rect
               x="2"
               y="2"
-              width="86"
-              height="61"
-              rx="4"
+              width="126"
+              height="91"
+              rx="6"
               fill="#0F2B4A"
-              stroke="#1E3A5F"
-              strokeWidth="2"
+              stroke="#2A4D7A"
+              strokeWidth="2.5"
             />
-            {/* Left page */}
+
+            {/* Left Page (Grid / ruled) */}
             <rect
-              x="6"
-              y="6"
-              width="38"
-              height="53"
-              rx="2"
+              x="8"
+              y="7"
+              width="54"
+              height="80"
+              rx="3"
               fill="#FFFFFF"
             />
-            {/* Right page */}
+            {/* Right Page (Ruled note paper) */}
             <rect
-              x="46"
-              y="6"
-              width="38"
-              height="53"
-              rx="2"
+              x="68"
+              y="7"
+              width="54"
+              height="80"
+              rx="3"
               fill="#F8FAFC"
             />
-            {/* Center binding crease */}
-            <line
-              x1="44"
-              y1="6"
-              x2="44"
-              y2="59"
-              stroke="#CBD5E1"
-              strokeWidth="1.5"
+
+            {/* Center Spiral / Binding */}
+            <rect
+              x="62"
+              y="5"
+              width="6"
+              height="84"
+              rx="3"
+              fill="#1E293B"
             />
+            {/* Spiral loops */}
+            {[14, 26, 38, 50, 62, 74].map((y) => (
+              <ellipse
+                key={y}
+                cx="65"
+                cy={y}
+                rx="3.5"
+                ry="2.5"
+                fill="#94A3B8"
+                stroke="#0F172A"
+                strokeWidth="1"
+              />
+            ))}
 
-            {/* Left page notes (decorative) */}
-            <line x1="10" y1="14" x2="38" y2="14" stroke="#E2E8F0" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="10" y1="22" x2="34" y2="22" stroke="#E2E8F0" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="10" y1="30" x2="36" y2="30" stroke="#E2E8F0" strokeWidth="1.5" strokeLinecap="round" />
+            {/* Left page notes (printed diagram/text) */}
+            <line x1="14" y1="18" x2="52" y2="18" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+            <line x1="14" y1="28" x2="48" y2="28" stroke="#E2E8F0" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="14" y1="38" x2="54" y2="38" stroke="#E2E8F0" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="14" y1="48" x2="44" y2="48" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+            <line x1="14" y1="58" x2="50" y2="58" stroke="#E2E8F0" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="14" y1="68" x2="40" y2="68" stroke="#E2E8F0" strokeWidth="1.5" strokeLinecap="round" />
 
-            {/* Right page dynamic writing lines */}
+            {/* Small lightbulb / formula icon on left */}
+            <circle cx="48" cy="74" r="5" fill="#FEF08A" stroke="#EAB308" strokeWidth="1" />
+
+            {/* Right Page Dynamic Note Writing Lines */}
             {/* Line 1 */}
             <motion.line
-              x1="50"
-              y1="16"
-              x2="78"
-              y2="16"
+              x1="74"
+              y1="20"
+              x2="114"
+              y2="20"
               stroke="#0F2B4A"
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeLinecap="round"
               initial={{ pathLength: 0 }}
-              animate={{ pathLength: activeProgress >= 0.3 ? 1 : 0 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
+              animate={{ pathLength: activeProgress >= 0.25 ? 1 : 0 }}
+              transition={{ duration: 0.35, ease: "easeInOut" }}
             />
             {/* Line 2 */}
             <motion.line
-              x1="50"
-              y1="26"
-              x2="74"
-              y2="26"
+              x1="74"
+              y1="32"
+              x2="110"
+              y2="32"
               stroke="#3A63FF"
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeLinecap="round"
               initial={{ pathLength: 0 }}
-              animate={{ pathLength: activeProgress >= 0.65 ? 1 : 0 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
+              animate={{ pathLength: activeProgress >= 0.55 ? 1 : 0 }}
+              transition={{ duration: 0.35, ease: "easeInOut" }}
             />
             {/* Line 3 */}
             <motion.line
-              x1="50"
-              y1="36"
-              x2="80"
-              y2="36"
+              x1="74"
+              y1="44"
+              x2="116"
+              y2="44"
               stroke="#0F2B4A"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: activeProgress >= 0.8 ? 1 : 0 }}
+              transition={{ duration: 0.35, ease: "easeInOut" }}
+            />
+            {/* Line 4 */}
+            <motion.line
+              x1="74"
+              y1="56"
+              x2="105"
+              y2="56"
+              stroke="#FF6B1A"
               strokeWidth="2"
               strokeLinecap="round"
               initial={{ pathLength: 0 }}
               animate={{ pathLength: activeProgress >= 0.95 ? 1 : 0 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
             />
 
-            {/* Little pencil accent */}
+            {/* Dynamic Animated Pencil with Hand */}
             <motion.g
               animate={{
-                x: activeProgress > 0 && activeProgress < 1 ? [0, 4, 0] : 0,
-                y: activeProgress > 0 && activeProgress < 1 ? [0, -2, 0] : 0,
+                x: [0, 8, -4, 6, 0],
+                y: [0, -3, 2, -1, 0],
+                rotate: [-2, 3, -4, 2, -2],
               }}
-              transition={{ repeat: Infinity, duration: 0.3 }}
+              transition={{
+                repeat: Infinity,
+                duration: 0.55,
+                ease: "easeInOut",
+              }}
+              style={{ originX: "105px", originY: "45px" }}
             >
+              {/* Pencil body */}
               <rect
-                x="76"
-                y="42"
+                x="102"
+                y="30"
                 width="8"
-                height="3"
-                rx="1"
-                transform="rotate(-40 76 42)"
+                height="32"
+                rx="2"
+                transform="rotate(38 102 30)"
                 fill="#FF6B1A"
+                stroke="#C2410C"
+                strokeWidth="1"
+              />
+              {/* Eraser */}
+              <rect
+                x="117"
+                y="20"
+                width="7"
+                height="8"
+                rx="1"
+                transform="rotate(38 117 20)"
+                fill="#FDA4AF"
+              />
+              {/* Metal Ferrule */}
+              <rect
+                x="113"
+                y="25"
+                width="7.5"
+                height="4"
+                transform="rotate(38 113 25)"
+                fill="#94A3B8"
+              />
+              {/* Sharpened Wood Tip */}
+              <polygon
+                points="95,57 99,52 92,49"
+                fill="#FED7AA"
+              />
+              {/* Graphite Tip touching paper */}
+              <polygon
+                points="93,56 95,57 92,53"
+                fill="#0F172A"
+              />
+
+              {/* Sparkle at pen tip */}
+              <circle
+                cx="94"
+                cy="56"
+                r="1.8"
+                fill="#3A63FF"
+                className="animate-ping"
               />
             </motion.g>
           </svg>

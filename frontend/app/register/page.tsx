@@ -75,19 +75,40 @@ export default function RegisterPage() {
       <DiagonalSweepTransition />
 
       {/* Top Navbar */}
-      <header className="w-full bg-white/80 backdrop-blur-sm border-b border-fog px-6 py-4">
+      <header className="w-full bg-white/80 backdrop-blur-sm border-b border-fog px-4 md:px-6 py-3.5">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link
-            href="/"
-            className="font-mono text-xl font-bold tracking-wider text-navy hover:text-cobalt transition-colors"
-          >
-            CURIO<span className="text-gap-orange">.</span>
-          </Link>
-          <div className="flex items-center gap-3 text-xs font-mono">
-            <span className="text-navy/50">ALREADY HAVE AN ACCOUNT?</span>
-            <Link href="/login" className="text-cobalt font-bold hover:underline">
-              SIGN IN →
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 font-mono text-xs uppercase font-semibold text-navy/70 hover:text-navy transition-colors px-2.5 py-1 bg-ice/60 border border-fog rounded-[4px]"
+            >
+              <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+              <span>HOME</span>
             </Link>
+
+            <Link
+              href="/"
+              className="font-mono text-xl font-bold tracking-wider text-navy hover:text-cobalt transition-colors"
+            >
+              CURIO<span className="text-gap-orange">.</span>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs font-mono">
+            <div className="hidden sm:flex items-center gap-3 text-navy/60">
+              <Link href="/topics" className="hover:text-navy transition-colors">
+                TOPICS
+              </Link>
+              <Link href="/characters" className="hover:text-navy transition-colors">
+                CHARACTERS
+              </Link>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-navy/50 hidden md:inline">ALREADY HAVE AN ACCOUNT?</span>
+              <Link href="/login" className="text-cobalt font-bold hover:underline">
+                SIGN IN →
+              </Link>
+            </div>
           </div>
         </div>
       </header>
