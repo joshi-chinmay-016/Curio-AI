@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
 import { CurioNav } from "@/components/curio/CurioNav";
+import { CurioFooter } from "@/components/curio/CurioFooter";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { useAuthStore } from "@/stores/authStore";
@@ -460,6 +461,9 @@ function DashboardContent() {
           </div>
         </div>
       </main>
+
+      {/* Global Footer */}
+      <CurioFooter />
     </div>
   );
 }
