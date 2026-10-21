@@ -6,6 +6,7 @@ export interface SpeechOptions {
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (error: Error) => void;
+  onBoundary?: (charIndex: number, charLength: number) => void;
 }
 
 export interface SpeechPlaybackState {

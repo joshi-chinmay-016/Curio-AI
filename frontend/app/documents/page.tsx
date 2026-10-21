@@ -15,6 +15,7 @@ import {
   Plus,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
+import { CurioNav } from "@/components/curio/CurioNav";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { DocumentUploadZone } from "@/components/curio/documents/DocumentUploadZone";
@@ -173,66 +174,7 @@ function DocumentsLibraryContent() {
       <DiagonalSweepTransition />
 
       {/* Authenticated Global Navigation Bar */}
-      <header className="w-full bg-white border-b border-fog px-6 py-4 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link
-              href="/"
-              className="font-mono text-xl font-bold tracking-wider text-navy hover:text-cobalt transition-colors"
-            >
-              CURIO<span className="text-gap-orange">.</span>
-            </Link>
-
-            <nav className="hidden md:flex items-center gap-5 text-xs font-mono font-semibold uppercase">
-              <Link
-                href="/dashboard"
-                className="text-navy/70 hover:text-navy transition-colors pb-0.5"
-              >
-                DASHBOARD
-              </Link>
-              <Link
-                href="/documents"
-                className="text-cobalt border-b-2 border-cobalt pb-0.5 transition-colors"
-              >
-                DOCUMENTS
-              </Link>
-              <Link
-                href="/history"
-                className="text-navy/70 hover:text-navy transition-colors pb-0.5"
-              >
-                HISTORY
-              </Link>
-              <Link
-                href="/topics"
-                className="text-navy/70 hover:text-navy transition-colors pb-0.5"
-              >
-                TOPICS
-              </Link>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 bg-ice/60 border border-fog/80 rounded-[6px]">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-mono text-xs text-navy/80 font-medium truncate max-w-[160px]">
-                {user?.email}
-              </span>
-            </div>
-
-            <button
-              onClick={() => {
-                logout();
-                router.replace("/");
-              }}
-              title="Sign Out"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono uppercase font-bold text-navy/70 hover:text-red-700 hover:bg-red-50 border border-fog rounded-[6px] transition-colors cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">LOGOUT</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <CurioNav activeRoute="documents" />
 
       {/* Main Document Library Stage */}
       <main className="max-w-6xl w-full mx-auto px-6 py-8 md:py-12 flex-1">

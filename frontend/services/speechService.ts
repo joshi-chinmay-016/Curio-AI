@@ -191,6 +191,12 @@ export class BrowserSpeechService implements SpeechProvider {
       options.onEnd?.();
     };
 
+    utterance.onboundary = (event: any) => {
+      if (event.name === "word" || event.charIndex !== undefined) {
+        options.onBoundary?.(event.charIndex, event.charLength || 0);
+      }
+    };
+
     utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
       // Ignore "canceled" or "interrupted" event caused by intentional user stop
       if (event.error === "canceled" || event.error === "interrupted") {

@@ -17,6 +17,8 @@ interface CharacterStageProps {
   activeConcept?: string;
   isTeacherIntervention?: boolean;
   isPlayingSpeech?: boolean;
+  captionText?: string;
+  spokenCharIndex?: number;
   onStopSpeech?: () => void;
   onReplaySpeech?: () => void;
   statusLabel?: string;
@@ -28,6 +30,8 @@ export const CharacterStage = memo(function CharacterStage({
   activeConcept,
   isTeacherIntervention = false,
   isPlayingSpeech = false,
+  captionText,
+  spokenCharIndex,
   onStopSpeech,
   onReplaySpeech,
   statusLabel,
@@ -135,6 +139,8 @@ export const CharacterStage = memo(function CharacterStage({
       character={characterId}
       performanceState={performanceState}
       isPlayingSpeech={isPlayingSpeech}
+      captionText={captionText}
+      spokenCharIndex={spokenCharIndex}
       statusLabel={statusLabel}
       clipboardMark={clipboardMark}
       onStopSpeech={onStopSpeech}

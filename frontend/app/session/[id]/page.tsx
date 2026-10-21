@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Menu, BookOpen, ChevronLeft, FileText } from "lucide-react";
+import { Menu, BookOpen, ChevronLeft, FileText, ArrowLeft, Mic, LayoutDashboard } from "lucide-react";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useSessionWebSocket } from "@/hooks/useSessionWebSocket";
 import { SessionSidebar } from "@/components/curio/session/SessionSidebar";
@@ -88,6 +88,17 @@ export default function LearningSessionPage() {
               <Menu className="w-5 h-5" />
             </button>
 
+            {/* Quick Link to Dashboard */}
+            <Link
+              href="/dashboard"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-[3px] font-mono text-xs font-semibold text-navy/70 hover:text-navy hover:bg-ice transition-colors border border-fog/60 shrink-0"
+              title="Return to Dashboard"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-cobalt" />
+              <span>DASHBOARD</span>
+            </Link>
+            <span className="text-fog hidden sm:inline">/</span>
+
             <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-navy/40 hidden sm:inline">
               TOPIC:
             </span>
@@ -128,6 +139,26 @@ export default function LearningSessionPage() {
                 <span className="hidden sm:inline">Evaluating</span>
               </span>
             )}
+
+            {/* Quick Access to Gap Report */}
+            <Link
+              href={`/session/${sessionId}/report`}
+              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-ice hover:bg-white text-navy/80 border border-fog transition-colors"
+              title="View Real-Time Gap Analysis Report"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-cobalt" />
+              <span>GAP REPORT</span>
+            </Link>
+
+            {/* Quick Audio Practice */}
+            <Link
+              href="/audio-learning"
+              className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-gap-orange/10 hover:bg-gap-orange/20 text-gap-orange border border-gap-orange/30 transition-colors"
+              title="Practice with Voice Characters"
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>AUDIO</span>
+            </Link>
 
             <KeycapButton
               variant="ghost"

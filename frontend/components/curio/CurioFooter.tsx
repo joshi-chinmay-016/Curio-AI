@@ -105,13 +105,38 @@ export function CurioFooter() {
               <span className="w-1.5 h-1.5 rounded-full bg-cobalt" />
               Explore
             </h4>
-            <ul className="space-y-2.5 font-sans text-sm text-fog/80">
+            <ul className="space-y-2 font-sans text-sm text-fog/80">
+              <li>
+                <Link
+                  href="/dashboard"
+                  className="hover:text-white hover:translate-x-0.5 transition-all inline-block"
+                >
+                  Dashboard
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/audio-learning"
+                  className="hover:text-gap-orange hover:translate-x-0.5 transition-all inline-flex items-center gap-1.5"
+                >
+                  <span>Interactive Audio</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 bg-gap-orange/20 text-gap-orange border border-gap-orange/30 rounded">NEW</span>
+                </Link>
+              </li>
               <li>
                 <Link
                   href="/topics"
                   className="hover:text-white hover:translate-x-0.5 transition-all inline-block"
                 >
                   Topics Catalog
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/documents"
+                  className="hover:text-white hover:translate-x-0.5 transition-all inline-block"
+                >
+                  Document Notes (RAG)
                 </Link>
               </li>
               <li>
@@ -123,20 +148,20 @@ export function CurioFooter() {
                 </Link>
               </li>
               <li>
-                <a
-                  href="#how-it-works"
+                <Link
+                  href="/characters"
                   className="hover:text-white hover:translate-x-0.5 transition-all inline-block"
                 >
-                  5-Stage Feynman Loop
-                </a>
+                  Animated Characters
+                </Link>
               </li>
               <li>
-                <a
-                  href="#teacher-mode"
+                <Link
+                  href="/settings"
                   className="hover:text-white hover:translate-x-0.5 transition-all inline-block"
                 >
-                  Teacher Mode
-                </a>
+                  Settings & Preferences
+                </Link>
               </li>
             </ul>
           </div>

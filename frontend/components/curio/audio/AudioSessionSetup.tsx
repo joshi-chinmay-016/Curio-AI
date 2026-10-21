@@ -393,7 +393,7 @@ export function AudioSessionSetup({
             disabled={isStarting || (sourceType === "DOCUMENT" && !selectedDocId)}
             variant="navy"
             size="lg"
-            className="w-full sm:w-auto px-8"
+            className="group w-full sm:w-auto px-8 hover:bg-gap-orange hover:border-gap-orange hover:shadow-[0_5px_0_0_#C24E05,0_8px_16px_rgba(255,107,26,0.35)] transition-all duration-150"
           >
             {isStarting ? (
               <span className="inline-flex items-center gap-2">
@@ -401,8 +401,8 @@ export function AudioSessionSetup({
                 INITIALIZING AUDIO ENGINE...
               </span>
             ) : (
-              <span className="inline-flex items-center gap-2 text-base font-bold">
-                <Sparkles className="w-5 h-5 text-gap-orange" />
+              <span className="inline-flex items-center gap-2 text-base font-bold text-white">
+                <Sparkles className="w-5 h-5 text-gap-orange group-hover:text-white transition-colors duration-150" />
                 START AUDIO LEARNING SESSION →
               </span>
             )}

@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Layers } from "lucide-react";
+import { ArrowLeft, BookOpen, Layers, Sparkles } from "lucide-react";
 import { ProtectedRoute } from "@/components/curio/auth/ProtectedRoute";
+import { CurioNav } from "@/components/curio/CurioNav";
 import { KeycapButton } from "@/components/curio/KeycapButton";
 import { DiagonalSweepTransition } from "@/components/curio/DiagonalSweepTransition";
 import { SessionFilter, HistoryFilterType } from "@/components/curio/history/SessionFilter";
@@ -53,30 +54,36 @@ function SessionHistoryContent() {
     <div className="min-h-screen bg-ice text-navy flex flex-col selection:bg-cobalt selection:text-white">
       <DiagonalSweepTransition />
 
-      {/* Header */}
-      <header className="w-full bg-white border-b border-fog px-6 py-4 sticky top-0 z-20 shadow-xs">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 font-mono text-xs uppercase font-semibold text-navy/70 hover:text-navy transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>DASHBOARD</span>
+      {/* Global Navigation */}
+      <CurioNav activeRoute="history" />
+
+      {/* Sub-bar with Breadcrumb & Quick Actions */}
+      <div className="w-full bg-white/70 border-b border-fog/80 px-6 py-2.5">
+        <div className="max-w-4xl mx-auto flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center gap-2 text-navy/60">
+            <Link href="/dashboard" className="hover:text-navy transition-colors">
+              DASHBOARD
             </Link>
             <span className="text-fog">/</span>
-            <span className="font-mono text-xs uppercase tracking-wider text-navy/50 font-bold">
-              LEARNING HISTORY
-            </span>
+            <span className="font-bold text-navy">LEARNING HISTORY</span>
           </div>
 
-          <Link href="/topics">
-            <KeycapButton variant="navy" size="sm">
-              NEW SESSION +
-            </KeycapButton>
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <Link
+              href="/audio-learning"
+              className="hidden sm:inline-flex items-center gap-1.5 text-gap-orange hover:text-gap-orange/80 font-bold transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AUDIO PRACTICE</span>
+            </Link>
+            <Link href="/topics">
+              <KeycapButton variant="navy" size="sm">
+                NEW SESSION +
+              </KeycapButton>
+            </Link>
+          </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">

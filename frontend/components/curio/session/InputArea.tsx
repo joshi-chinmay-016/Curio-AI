@@ -87,22 +87,22 @@ export function InputArea({
     isTranscribing,
     isRequestingPermission,
   } = useAudioRecorder({
-    onTranscriptionSuccess: (transcribedText) => {
-      setContent((prev) => {
-        const trimmed = prev.trim();
-        return trimmed ? `${trimmed} ${transcribedText}` : transcribedText;
-      });
+    onTranscriptionSuccess: async (transcribedText) => {
+      const clean = transcribedText.trim();
+      if (!clean) return;
       curioToast.success(
-        "TRANSCRIPTION COMPLETE",
-        `Recognized: "${transcribedText.length > 50 ? transcribedText.slice(0, 50) + "..." : transcribedText}"`
+        "VOICE SENT",
+        `Sent: "${clean.length > 50 ? clean.slice(0, 50) + "..." : clean}"`
       );
-      setTimeout(() => {
+      try {
+        await onSendMessage(clean);
+        setContent("");
         if (textareaRef.current) {
-          textareaRef.current.focus();
           textareaRef.current.style.height = "auto";
-          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
         }
-      }, 50);
+      } catch (err: any) {
+        console.error("Failed to automatically send voice message:", err);
+      }
     },
     onError: (err) => {
       curioToast.error("VOICE ERROR", err.message || "Failed to record or transcribe audio.");
