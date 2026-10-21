@@ -322,7 +322,7 @@ export function AudioControls({
       )}
 
       {/* Main Hands-Free Voice Pod */}
-      <div className="w-full bg-white border-2 border-navy rounded-[16px] p-5 shadow-[4px_6px_0_0_#0F2B4A] flex flex-col items-center gap-4">
+      <div className="w-full bg-white dark:bg-[#0B1524] border-2 border-navy dark:border-[#2F4D73] rounded-[16px] p-5 shadow-[4px_6px_0_0_#0F2B4A] dark:shadow-[4px_6px_0_0_#040910] flex flex-col items-center gap-4">
         {/* Central Giant Voice Action Button */}
         <div className="relative">
           {/* Subtle pulse rings when recording */}
@@ -340,7 +340,7 @@ export function AudioControls({
             type="button"
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isLocked && !isRecording}
-            className={`h-20 w-20 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-[0_4px_0_0_#0F2B4A] active:translate-y-[2px] active:shadow-none ${
+            className={`h-20 w-20 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-[0_4px_0_0_#0F2B4A] dark:shadow-[0_4px_0_0_#040910] active:translate-y-[2px] active:shadow-none ${
               isRecording
                 ? speechDetected
                   ? "bg-emerald-600 text-white shadow-[0_0_30px_rgba(16,185,129,0.7)] border-3 border-emerald-700 animate-pulse"
@@ -348,10 +348,10 @@ export function AudioControls({
                 : isTranscribing
                 ? "bg-amber-100 text-amber-700 border-3 border-amber-400"
                 : isPlayingSpeech
-                ? "bg-emerald-50 text-emerald-700 border-3 border-emerald-400 opacity-60 cursor-not-allowed"
+                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-3 border-emerald-400 opacity-60 cursor-not-allowed"
                 : isBusyProcessing
-                ? "bg-cobalt/10 text-cobalt border-3 border-cobalt/30 opacity-60 cursor-not-allowed"
-                : "bg-white text-navy hover:text-cobalt hover:border-cobalt border-3 border-navy hover:bg-ice/50"
+                ? "bg-cobalt/10 dark:bg-cobalt/20 text-cobalt border-3 border-cobalt/30 opacity-60 cursor-not-allowed"
+                : "bg-white dark:bg-[#101F33] text-navy dark:text-[#F0F4F8] hover:text-cobalt dark:hover:text-cobalt hover:border-cobalt border-3 border-navy dark:border-[#2F4D73] hover:bg-ice/50 dark:hover:bg-[#162B47]"
             }`}
             title={
               isRecording
@@ -386,45 +386,45 @@ export function AudioControls({
                       : "bg-rose-600 animate-pulse"
                   }`}
                 />
-                <span className="font-mono text-sm font-bold text-navy tracking-wider">
+                <span className="font-mono text-sm font-bold text-navy dark:text-[#F0F4F8] tracking-wider">
                   {speechDetected ? "CAPTURING VOICE" : "LISTENING TO YOU..."} ({formatTime(recordingSeconds)})
                 </span>
               </div>
 
               {/* Automatic Silence Countdown indicator */}
               {silenceCountdown !== null && silenceCountdown > 0 ? (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-300 rounded-full text-amber-900 font-mono text-xs font-semibold animate-pulse">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 rounded-full text-amber-900 dark:text-amber-200 font-mono text-xs font-semibold animate-pulse">
                   <span>Auto-sending in {silenceCountdown}s...</span>
                 </div>
               ) : (
-                <span className="font-mono text-[11px] text-navy/60">
+                <span className="font-mono text-[11px] text-navy/60 dark:text-[#829AB1]">
                   Speak naturally — automatically sends when you pause
                 </span>
               )}
             </div>
           ) : isTranscribing ? (
-            <div className="flex items-center gap-2 text-amber-800">
-              <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+              <Loader2 className="w-4 h-4 animate-spin text-amber-600 dark:text-amber-400" />
               <span className="font-mono text-xs font-bold uppercase tracking-wider">
                 Sending audio directly to Curio...
               </span>
             </div>
           ) : isPlayingSpeech ? (
-            <div className="flex items-center gap-2 text-emerald-700 font-mono text-xs font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-mono text-xs font-bold uppercase tracking-wider">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               Listen to the response...
             </div>
           ) : isBusyProcessing ? (
-            <div className="flex items-center gap-2 text-cobalt font-mono text-xs font-bold uppercase tracking-wider">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-cobalt" />
+            <div className="flex items-center gap-2 text-cobalt dark:text-blue-400 font-mono text-xs font-bold uppercase tracking-wider">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-cobalt dark:text-blue-400" />
               Character is taking notes & reflecting...
             </div>
           ) : (
             <div className="flex flex-col items-center gap-0.5">
-              <span className="font-heading text-sm font-bold text-navy">
+              <span className="font-heading text-sm font-bold text-navy dark:text-[#F0F4F8]">
                 Hands-Free Voice Active
               </span>
-              <span className="font-mono text-[11px] text-navy/50">
+              <span className="font-mono text-[11px] text-navy/50 dark:text-[#829AB1]">
                 Speak naturally — automatically sends when you stop talking
               </span>
             </div>
@@ -433,7 +433,7 @@ export function AudioControls({
 
         {/* Live Audio Volume Visualizer during active speech */}
         {isRecording && (
-          <div className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-ice/70 border border-fog rounded-[8px]">
+          <div className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-ice/70 dark:bg-[#101F33] border border-fog dark:border-[#1E3652] rounded-[8px]">
             <span
               className="w-1.5 bg-emerald-500 rounded-full transition-all duration-75"
               style={{ height: `${Math.max(6, volumeLevel * 0.4)}px` }}
@@ -458,7 +458,7 @@ export function AudioControls({
               className="w-1.5 bg-emerald-500 rounded-full transition-all duration-75"
               style={{ height: `${Math.max(6, volumeLevel * 0.4)}px` }}
             />
-            <span className="font-mono text-[11px] uppercase text-navy font-bold ml-2">
+            <span className="font-mono text-[11px] uppercase text-navy dark:text-[#F0F4F8] font-bold ml-2">
               {speechDetected ? "Capturing voice" : "Listening..."}
             </span>
           </div>
@@ -470,13 +470,13 @@ export function AudioControls({
             <button
               type="button"
               onClick={cancelRecording}
-              className="inline-flex items-center gap-1 text-xs font-mono font-bold text-navy/50 hover:text-rose-600 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 text-xs font-mono font-bold text-navy/50 dark:text-[#829AB1] hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
               Cancel recording
             </button>
           ) : (
-            <div className="text-[11px] font-mono text-navy/40">
+            <div className="text-[11px] font-mono text-navy/40 dark:text-[#829AB1]/70">
               Hands-Free Mode · No typing or confirm buttons
             </div>
           )}
@@ -486,7 +486,7 @@ export function AudioControls({
               type="button"
               onClick={onSkipQuestion}
               disabled={isLocked}
-              className="inline-flex items-center gap-1.5 px-3 py-1 bg-ice hover:bg-fog/30 text-navy/70 hover:text-navy text-xs font-mono font-bold rounded-[6px] border border-fog transition-colors disabled:opacity-40 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-ice dark:bg-[#101F33] hover:bg-fog/30 dark:hover:bg-[#162B47] text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white text-xs font-mono font-bold rounded-[6px] border border-fog dark:border-[#1E3652] transition-colors disabled:opacity-40 cursor-pointer"
               title="Skip this question (counts as unanswered strike)"
             >
               <FastForward className="w-3 h-3 text-gap-orange" />

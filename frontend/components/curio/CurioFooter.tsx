@@ -10,7 +10,7 @@ export function CurioFooter() {
   };
 
   return (
-    <footer className="relative bg-[#091B2E] text-white border-t-2 border-navy overflow-hidden">
+    <footer className="relative bg-[#091B2E] dark:bg-[#060D17] text-white border-t-2 border-navy dark:border-[#1E3652] overflow-hidden">
       {/* Decorative technical blueprint grid overlay */}
       <div
         aria-hidden="true"

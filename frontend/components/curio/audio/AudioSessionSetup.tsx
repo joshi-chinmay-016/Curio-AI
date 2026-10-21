@@ -117,14 +117,14 @@ export function AudioSessionSetup({
     <div className="w-full max-w-3xl mx-auto p-6 md:p-8">
       {/* Header */}
       <div className="mb-8 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-fog rounded-full text-xs font-mono font-bold uppercase tracking-wider text-navy/70 mb-3 shadow-xs">
+        <div className="inline-flex items-center gap-2 px-3 py-1 bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] rounded-full text-xs font-mono font-bold uppercase tracking-wider text-navy/70 dark:text-[#F0F4F8]/80 mb-3 shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-gap-orange" />
           SESSION CONFIGURATION
         </div>
-        <h1 className="font-heading text-2xl md:text-3xl font-extrabold text-navy tracking-tight">
+        <h1 className="font-heading text-2xl md:text-3xl font-extrabold text-navy dark:text-[#F0F4F8] tracking-tight">
           Configure Your Audio Learning Session
         </h1>
-        <p className="font-sans text-sm text-navy/60 mt-1 max-w-lg mx-auto">
+        <p className="font-sans text-sm text-navy/60 dark:text-[#829AB1] mt-1 max-w-lg mx-auto">
           Choose your animated AI companion, choose a topic or upload document notes, and speak naturally.
         </p>
       </div>
@@ -132,7 +132,7 @@ export function AudioSessionSetup({
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Step 1: Mode Selection */}
         <div>
-          <label className="font-mono text-xs uppercase font-bold text-navy/60 block mb-3 tracking-wider">
+          <label className="font-mono text-xs uppercase font-bold text-navy/60 dark:text-[#829AB1] block mb-3 tracking-wider">
             1. SELECT AUDIO LEARNING COMPANION
           </label>
 
@@ -142,26 +142,26 @@ export function AudioSessionSetup({
               onClick={() => setSelectedMode("STUDENT")}
               className={`p-5 rounded-[10px] border-2 cursor-pointer transition-all ${
                 selectedMode === "STUDENT"
-                  ? "bg-white border-navy shadow-[4px_4px_0_0_#0F2B4A] ring-2 ring-cobalt/30"
-                  : "bg-white/70 border-fog hover:border-navy/40"
+                  ? "bg-white dark:bg-[#0E1A2B] border-navy dark:border-cobalt shadow-[4px_4px_0_0_#0F2B4A] dark:shadow-[4px_4px_0_0_#040910] ring-2 ring-cobalt/30"
+                  : "bg-white/70 dark:bg-[#0B1524] border-fog dark:border-[#1E3652] hover:border-navy/40 dark:hover:border-cobalt/40"
               }`}
             >
               <div className="flex items-start gap-4">
                 <img
                   src="/characters/student.png"
                   alt="Student Character"
-                  className="w-16 h-20 object-cover rounded-[8px] border border-fog shadow-xs shrink-0"
+                  className="w-16 h-20 object-cover rounded-[8px] border border-fog dark:border-[#1E3652] shadow-xs shrink-0"
                 />
                 <div className="min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-heading text-base font-bold text-navy">
+                    <span className="font-heading text-base font-bold text-navy dark:text-[#F0F4F8]">
                       Student Mode
                     </span>
-                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-bold rounded-full">
+                    <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 text-[10px] font-mono font-bold rounded-full">
                       TEACHING
                     </span>
                   </div>
-                  <p className="font-sans text-xs text-navy/70 leading-relaxed">
+                  <p className="font-sans text-xs text-navy/70 dark:text-[#829AB1] leading-relaxed">
                     Teach a curious young student aloud. When you struggle, a female teacher appears to help you recover.
                   </p>
                 </div>
@@ -173,26 +173,26 @@ export function AudioSessionSetup({
               onClick={() => setSelectedMode("PROFESSOR")}
               className={`p-5 rounded-[10px] border-2 cursor-pointer transition-all ${
                 selectedMode === "PROFESSOR"
-                  ? "bg-white border-navy shadow-[4px_4px_0_0_#0F2B4A] ring-2 ring-navy/30"
-                  : "bg-white/70 border-fog hover:border-navy/40"
+                  ? "bg-white dark:bg-[#0E1A2B] border-navy dark:border-cobalt shadow-[4px_4px_0_0_#0F2B4A] dark:shadow-[4px_4px_0_0_#040910] ring-2 ring-navy/30 dark:ring-cobalt/30"
+                  : "bg-white/70 dark:bg-[#0B1524] border-fog dark:border-[#1E3652] hover:border-navy/40 dark:hover:border-cobalt/40"
               }`}
             >
               <div className="flex items-start gap-4">
                 <img
                   src="/characters/professor.png"
                   alt="Professor Character"
-                  className="w-16 h-20 object-cover rounded-[8px] border border-fog shadow-xs shrink-0"
+                  className="w-16 h-20 object-cover rounded-[8px] border border-fog dark:border-[#1E3652] shadow-xs shrink-0"
                 />
                 <div className="min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-heading text-base font-bold text-navy">
+                    <span className="font-heading text-base font-bold text-navy dark:text-[#F0F4F8]">
                       Professor Mode
                     </span>
-                    <span className="px-2 py-0.5 bg-navy/10 text-navy border border-navy/20 text-[10px] font-mono font-bold rounded-full">
+                    <span className="px-2 py-0.5 bg-navy/10 dark:bg-cobalt/20 text-navy dark:text-[#F0F4F8] border border-navy/20 dark:border-cobalt/40 text-[10px] font-mono font-bold rounded-full">
                       INTERVIEW
                     </span>
                   </div>
-                  <p className="font-sans text-xs text-navy/70 leading-relaxed">
+                  <p className="font-sans text-xs text-navy/70 dark:text-[#829AB1] leading-relaxed">
                     Strict oral exam simulation. The professor asks questions, tests under pressure, and evaluates depth.
                   </p>
                 </div>
@@ -203,7 +203,7 @@ export function AudioSessionSetup({
 
         {/* Step 2: Topic Selection */}
         <div>
-          <label className="font-mono text-xs uppercase font-bold text-navy/60 block mb-2 tracking-wider">
+          <label className="font-mono text-xs uppercase font-bold text-navy/60 dark:text-[#829AB1] block mb-2 tracking-wider">
             2. TOPIC OR CONCEPT TO PRACTICE
           </label>
           <input
@@ -211,12 +211,12 @@ export function AudioSessionSetup({
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder="e.g. Distributed Consensus, QuickSort, Photosynthesis..."
-            className="w-full p-3 bg-white border-2 border-navy rounded-[8px] font-sans text-sm md:text-base text-navy shadow-xs focus:outline-none focus:ring-2 focus:ring-cobalt"
+            className="w-full p-3 bg-white dark:bg-[#101F33] border-2 border-navy dark:border-[#2F4D73] rounded-[8px] font-sans text-sm md:text-base text-navy dark:text-[#F0F4F8] placeholder:text-navy/40 dark:placeholder:text-[#627D98] shadow-xs focus:outline-none focus:ring-2 focus:ring-cobalt"
           />
 
           {/* Quick suggestions */}
           <div className="flex flex-wrap items-center gap-2 mt-2.5">
-            <span className="font-mono text-[10px] uppercase font-bold text-navy/40">
+            <span className="font-mono text-[10px] uppercase font-bold text-navy/40 dark:text-[#829AB1]">
               Suggestions:
             </span>
             {DEFAULT_TOPICS.map((t, idx) => (
@@ -224,7 +224,7 @@ export function AudioSessionSetup({
                 key={idx}
                 type="button"
                 onClick={() => setTopic(t)}
-                className="px-2.5 py-1 bg-white border border-fog hover:border-navy rounded-[4px] font-mono text-[11px] text-navy/70 hover:text-navy transition-colors cursor-pointer"
+                className="px-2.5 py-1 bg-white dark:bg-[#0E1A2B] border border-fog dark:border-[#1E3652] hover:border-navy dark:hover:border-cobalt rounded-[4px] font-mono text-[11px] text-navy/70 dark:text-[#C5D0DE] hover:text-navy dark:hover:text-white transition-colors cursor-pointer"
               >
                 {t.split("&")[0].trim()}
               </button>
@@ -235,7 +235,7 @@ export function AudioSessionSetup({
         {/* Step 3: Document Grounding (Optional) */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="font-mono text-xs uppercase font-bold text-navy/60 tracking-wider">
+            <label className="font-mono text-xs uppercase font-bold text-navy/60 dark:text-[#829AB1] tracking-wider">
               3. ATTACH KNOWLEDGE DOCUMENT (OPTIONAL RAG)
             </label>
             <div className="flex items-center gap-2 text-xs font-mono">
@@ -246,7 +246,9 @@ export function AudioSessionSetup({
                   setSelectedDocId(undefined);
                 }}
                 className={`px-2 py-0.5 rounded cursor-pointer ${
-                  sourceType === "GENERAL" ? "bg-navy text-white font-bold" : "text-navy/50 hover:text-navy"
+                  sourceType === "GENERAL"
+                    ? "bg-navy dark:bg-cobalt text-white font-bold"
+                    : "text-navy/50 dark:text-[#829AB1] hover:text-navy dark:hover:text-white"
                 }`}
               >
                 GENERAL KNOWLEDGE
@@ -255,7 +257,9 @@ export function AudioSessionSetup({
                 type="button"
                 onClick={() => setSourceType("DOCUMENT")}
                 className={`px-2 py-0.5 rounded cursor-pointer ${
-                  sourceType === "DOCUMENT" ? "bg-navy text-white font-bold" : "text-navy/50 hover:text-navy"
+                  sourceType === "DOCUMENT"
+                    ? "bg-navy dark:bg-cobalt text-white font-bold"
+                    : "text-navy/50 dark:text-[#829AB1] hover:text-navy dark:hover:text-white"
                 }`}
               >
                 DOCUMENT GROUNDED
@@ -264,25 +268,25 @@ export function AudioSessionSetup({
           </div>
 
           {sourceType === "DOCUMENT" && (
-            <div className="bg-white border-2 border-navy rounded-[8px] p-4 shadow-xs space-y-4">
+            <div className="bg-white dark:bg-[#0E1A2B] border-2 border-navy dark:border-[#2F4D73] rounded-[8px] p-4 shadow-xs space-y-4">
               {/* Document upload drop target */}
-              <div className="flex items-center justify-between gap-4 p-3 bg-ice/60 border border-dashed border-fog rounded-[6px]">
+              <div className="flex items-center justify-between gap-4 p-3 bg-ice/60 dark:bg-[#101F33] border border-dashed border-fog dark:border-[#1E3652] rounded-[6px]">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-md text-cobalt border border-fog">
+                  <div className="p-2 bg-white dark:bg-[#0B1524] rounded-md text-cobalt border border-fog dark:border-[#1E3652]">
                     <Upload className="w-4 h-4" />
                   </div>
                   <div>
-                    <span className="font-heading text-xs font-bold text-navy block">
+                    <span className="font-heading text-xs font-bold text-navy dark:text-[#F0F4F8] block">
                       Upload PDF, TXT, or DOCX
                     </span>
-                    <span className="font-mono text-[10px] text-navy/50">
+                    <span className="font-mono text-[10px] text-navy/50 dark:text-[#829AB1]">
                       Up to 10 MB per file
                     </span>
                   </div>
                 </div>
 
                 <label className="cursor-pointer">
-                  <span className="px-3 py-1.5 bg-white border border-navy rounded-[4px] font-mono text-xs font-bold text-navy hover:bg-ice transition-colors inline-flex items-center gap-1.5 shadow-xs">
+                  <span className="px-3 py-1.5 bg-white dark:bg-[#0B1524] border border-navy dark:border-[#2F4D73] rounded-[4px] font-mono text-xs font-bold text-navy dark:text-[#F0F4F8] hover:bg-ice dark:hover:bg-[#101F33] transition-colors inline-flex items-center gap-1.5 shadow-xs">
                     {uploadingDoc ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -304,11 +308,11 @@ export function AudioSessionSetup({
 
               {/* Existing documents list */}
               {loadingDocs ? (
-                <div className="p-4 text-center font-mono text-xs text-navy/40 animate-pulse">
+                <div className="p-4 text-center font-mono text-xs text-navy/40 dark:text-[#829AB1] animate-pulse">
                   LOADING DOCUMENTS...
                 </div>
               ) : documents.length === 0 ? (
-                <div className="p-4 text-center font-sans text-xs text-navy/50">
+                <div className="p-4 text-center font-sans text-xs text-navy/50 dark:text-[#829AB1]">
                   No documents found. Upload notes or syllabus above to ground the session.
                 </div>
               ) : (
@@ -324,14 +328,14 @@ export function AudioSessionSetup({
                         }}
                         className={`p-2.5 rounded-[6px] border flex items-center justify-between gap-3 transition-colors ${
                           isSelected
-                            ? "bg-cobalt/5 border-cobalt text-navy font-medium"
+                            ? "bg-cobalt/5 dark:bg-cobalt/20 border-cobalt text-navy dark:text-[#F0F4F8] font-medium"
                             : isReady
-                            ? "bg-white border-fog hover:border-navy/40 cursor-pointer"
-                            : "bg-fog/30 border-fog text-navy/40 cursor-not-allowed"
+                            ? "bg-white dark:bg-[#101F33] border-fog dark:border-[#1E3652] hover:border-navy/40 dark:hover:border-cobalt/40 text-navy dark:text-[#F0F4F8] cursor-pointer"
+                            : "bg-fog/30 dark:bg-[#0B1524] border-fog dark:border-[#1E3652] text-navy/40 dark:text-[#829AB1] cursor-not-allowed"
                         }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <FileText className={`w-4 h-4 shrink-0 ${isSelected ? "text-cobalt" : "text-navy/40"}`} />
+                          <FileText className={`w-4 h-4 shrink-0 ${isSelected ? "text-cobalt" : "text-navy/40 dark:text-[#829AB1]"}`} />
                           <span className="font-sans text-xs truncate font-medium">
                             {doc.filename}
                           </span>
@@ -339,11 +343,11 @@ export function AudioSessionSetup({
 
                         <div className="flex items-center gap-2 shrink-0">
                           {isReady ? (
-                            <span className="inline-flex items-center gap-1 font-mono text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <span className="inline-flex items-center gap-1 font-mono text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
                               <CheckCircle2 className="w-3 h-3" /> READY
                             </span>
                           ) : (
-                            <span className="font-mono text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            <span className="font-mono text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800/60">
                               {doc.status}
                             </span>
                           )}
@@ -360,7 +364,7 @@ export function AudioSessionSetup({
         {/* Step 4: Professor Mode Difficulty Ordering */}
         {selectedMode === "PROFESSOR" && (
           <div>
-            <label className="font-mono text-xs uppercase font-bold text-navy/60 block mb-2 tracking-wider">
+            <label className="font-mono text-xs uppercase font-bold text-navy/60 dark:text-[#829AB1] block mb-2 tracking-wider">
               4. PROFESSOR QUESTION DIFFICULTY PROGRESSION
             </label>
             <div className="grid grid-cols-3 gap-3">
@@ -374,12 +378,12 @@ export function AudioSessionSetup({
                   onClick={() => setDifficultyOrder(diff.id as DifficultyOrdering)}
                   className={`p-3 rounded-[6px] border-2 cursor-pointer transition-all text-center ${
                     difficultyOrder === diff.id
-                      ? "bg-white border-navy shadow-[2px_2px_0_0_#0F2B4A] font-bold"
-                      : "bg-white/70 border-fog text-navy/60"
+                      ? "bg-white dark:bg-[#0E1A2B] border-navy dark:border-cobalt shadow-[2px_2px_0_0_#0F2B4A] dark:shadow-[2px_2px_0_0_#040910] text-navy dark:text-[#F0F4F8] font-bold"
+                      : "bg-white/70 dark:bg-[#101F33] border-fog dark:border-[#1E3652] text-navy/60 dark:text-[#829AB1]"
                   }`}
                 >
                   <span className="font-heading text-xs block">{diff.label}</span>
-                  <span className="font-mono text-[10px] text-navy/50">{diff.desc}</span>
+                  <span className="font-mono text-[10px] text-navy/50 dark:text-[#829AB1]">{diff.desc}</span>
                 </div>
               ))}
             </div>

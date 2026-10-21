@@ -149,20 +149,20 @@ function SettingsContent() {
       <CurioNav activeRoute="settings" />
 
       {/* Sub-bar with Breadcrumb & Save Action */}
-      <div className="w-full bg-white/80 border-b border-fog px-4 md:px-8 py-2.5 sticky top-0 z-20 backdrop-blur-xs">
+      <div className="w-full bg-white/80 dark:bg-[#080F1A]/90 border-b border-fog dark:border-[#1E3652] px-4 md:px-8 py-2.5 sticky top-0 z-20 backdrop-blur-xs">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-mono">
-            <Link href="/dashboard" className="text-navy/60 hover:text-navy transition-colors">
+            <Link href="/dashboard" className="text-navy/60 dark:text-[#F0F4F8]/60 hover:text-navy dark:hover:text-white transition-colors">
               DASHBOARD
             </Link>
-            <span className="text-fog">/</span>
-            <span className="font-bold text-navy">SETTINGS & PREFERENCES</span>
+            <span className="text-fog dark:text-[#1E3652]">/</span>
+            <span className="font-bold text-navy dark:text-[#F0F4F8]">SETTINGS & PREFERENCES</span>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={handleSaveAll}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] font-mono text-xs font-bold uppercase transition-all shadow-[2px_2px_0_0_#0F2B4A] active:translate-y-[1px] cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] font-mono text-xs font-bold uppercase transition-all shadow-[2px_2px_0_0_#0F2B4A] dark:shadow-[2px_2px_0_0_#040910] active:translate-y-[1px] cursor-pointer ${
                 savedFeedback
                   ? "bg-emerald-600 text-white border-2 border-emerald-700"
                   : "bg-gap-orange text-white border-2 border-gap-orange hover:bg-[#e05809]"
@@ -192,10 +192,10 @@ function SettingsContent() {
             <span className="w-2 h-2 rounded-full bg-cobalt animate-pulse" />
             CURIO SYSTEM CONTROL
           </div>
-          <h1 className="font-heading text-2xl md:text-3xl font-extrabold text-navy tracking-tight">
+          <h1 className="font-heading text-2xl md:text-3xl font-extrabold text-navy dark:text-[#F0F4F8] tracking-tight">
             Settings & Laboratory Preferences
           </h1>
-          <p className="font-sans text-sm text-navy/70 max-w-2xl mt-1">
+          <p className="font-sans text-sm text-navy/70 dark:text-[#F0F4F8]/70 max-w-2xl mt-1">
             Customize your Feynman inquiry rigor, theme aesthetics, speech synthesis, and identity details.
           </p>
         </div>
@@ -203,8 +203,8 @@ function SettingsContent() {
         {/* 2-Column Responsive Layout: Tabs on left, Active panel on right */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Navigation Tabs */}
-          <div className="lg:col-span-4 space-y-1 bg-white border border-fog rounded-[6px] p-2.5 shadow-xs">
-            <div className="px-3 py-2 font-mono text-[10px] uppercase tracking-wider font-bold text-navy/50">
+          <div className="lg:col-span-4 space-y-1 bg-white dark:bg-[#0B1524] border border-fog dark:border-[#1E3652] rounded-[6px] p-2.5 shadow-xs">
+            <div className="px-3 py-2 font-mono text-[10px] uppercase tracking-wider font-bold text-navy/50 dark:text-[#F0F4F8]/50">
               CONFIG SECTIONS
             </div>
             {tabs.map((tab) => {
@@ -216,27 +216,27 @@ function SettingsContent() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-[4px] text-xs font-mono font-bold uppercase transition-all cursor-pointer ${
                     isActive
-                      ? "bg-navy text-white shadow-[2px_2px_0_0_#0F2B4A]"
-                      : "text-navy/75 hover:text-navy hover:bg-ice/70"
+                      ? "bg-navy dark:bg-cobalt text-white shadow-[2px_2px_0_0_#0F2B4A] dark:shadow-[2px_2px_0_0_#040910]"
+                      : "text-navy/75 dark:text-[#F0F4F8]/75 hover:text-navy dark:hover:text-white hover:bg-ice/70 dark:hover:bg-[#101F33]"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <Icon
                       className={`w-4 h-4 ${
-                        isActive ? "text-gap-orange" : "text-navy/50"
+                        isActive ? "text-gap-orange dark:text-white" : "text-navy/50 dark:text-[#F0F4F8]/50"
                       }`}
                     />
                     <span>{tab.label}</span>
                   </div>
-                  {isActive && <ArrowRight className="w-3.5 h-3.5 text-gap-orange" />}
+                  {isActive && <ArrowRight className="w-3.5 h-3.5 text-gap-orange dark:text-white" />}
                 </button>
               );
             })}
 
             {/* Quick Profile Snapshot Card in Sidebar */}
-            <div className="mt-4 pt-4 border-t border-fog p-2 bg-ice/40 rounded-[4px]">
+            <div className="mt-4 pt-4 border-t border-fog dark:border-[#1E3652] p-2 bg-ice/40 dark:bg-[#101F33] rounded-[4px]">
               <div className="flex items-center gap-2.5 mb-2">
-                <div className="w-8 h-8 rounded-[4px] bg-navy text-white flex items-center justify-center font-mono text-xs font-bold border border-navy">
+                <div className="w-8 h-8 rounded-[4px] bg-navy text-white flex items-center justify-center font-mono text-xs font-bold border border-navy shadow-[1px_1px_0_0_#0F2B4A] dark:shadow-[1px_1px_0_0_#040910]">
                   {profile.characterAvatar === "STUDENT"
                     ? "🎓"
                     : profile.characterAvatar === "TEACHER"
@@ -244,7 +244,7 @@ function SettingsContent() {
                     : "⚡"}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-sans text-xs font-bold text-navy truncate">
+                  <div className="font-sans text-xs font-bold text-navy dark:text-[#F0F4F8] truncate">
                     {profileForm.displayName || "Learner"}
                   </div>
                   <div className="font-mono text-[10px] text-cobalt font-semibold">
@@ -252,7 +252,7 @@ function SettingsContent() {
                   </div>
                 </div>
               </div>
-              <div className="flex justify-between items-center text-[10px] font-mono text-navy/60 pt-2 border-t border-fog/50">
+              <div className="flex justify-between items-center text-[10px] font-mono text-navy/60 dark:text-[#F0F4F8]/60 pt-2 border-t border-fog/50 dark:border-[#1E3652]">
                 <span>GAPS RESOLVED:</span>
                 <span className="font-bold text-gap-orange">{stats.gapsResolved}</span>
               </div>
@@ -270,14 +270,14 @@ function SettingsContent() {
                 className="space-y-6"
               >
                 {/* Theme Selector */}
-                <div className="bg-white border border-fog rounded-[6px] p-6 shadow-sm">
+                <div className="bg-white dark:bg-[#0B1524] border border-fog dark:border-[#1E3652] rounded-[6px] p-6 shadow-sm">
                   <div className="flex items-center gap-2.5 mb-2">
                     <Sun className="w-5 h-5 text-gap-orange" />
-                    <h3 className="font-heading text-base font-bold text-navy">
+                    <h3 className="font-heading text-base font-bold text-navy dark:text-[#F0F4F8]">
                       Interface Theme & Color System
                     </h3>
                   </div>
-                  <p className="font-sans text-xs text-navy/70 mb-5">
+                  <p className="font-sans text-xs text-navy/70 dark:text-[#F0F4F8]/70 mb-5">
                     Curio supports both pure Light Editorial and Deep Obsidian Blueprint themes without disrupting readability or isometric keycap aesthetics.
                   </p>
 
@@ -288,14 +288,14 @@ function SettingsContent() {
                       onClick={() => setTheme("light")}
                       className={`flex flex-col items-start p-4 rounded-[6px] border-2 transition-all cursor-pointer text-left relative ${
                         theme === "light"
-                          ? "border-navy bg-ice shadow-[3px_3px_0_0_#0F2B4A]"
-                          : "border-fog bg-white hover:border-navy/50"
+                          ? "border-navy dark:border-cobalt bg-ice dark:bg-[#101F33] shadow-[3px_3px_0_0_#0F2B4A] dark:shadow-[3px_3px_0_0_#040910]"
+                          : "border-fog dark:border-[#1E3652] bg-white dark:bg-[#0E1A2B] hover:border-navy/50 dark:hover:border-cobalt/50"
                       }`}
                     >
                       <div className="flex items-center justify-between w-full mb-3">
                         <div className="flex items-center gap-2">
                           <Sun className="w-4 h-4 text-gap-orange" />
-                          <span className="font-mono text-xs font-bold uppercase text-navy">
+                          <span className="font-mono text-xs font-bold uppercase text-navy dark:text-[#F0F4F8]">
                             Light Mode
                           </span>
                         </div>
@@ -310,7 +310,7 @@ function SettingsContent() {
                           <div className="w-1/4 h-3 bg-[#3A63FF] rounded" />
                         </div>
                       </div>
-                      <span className="font-mono text-[10px] text-navy/60 mt-2">
+                      <span className="font-mono text-[10px] text-navy/60 dark:text-[#F0F4F8]/60 mt-2">
                         Curio Ice & Editorial Navy
                       </span>
                     </button>
@@ -321,14 +321,14 @@ function SettingsContent() {
                       onClick={() => setTheme("dark")}
                       className={`flex flex-col items-start p-4 rounded-[6px] border-2 transition-all cursor-pointer text-left relative ${
                         theme === "dark"
-                          ? "border-cobalt bg-navy shadow-[3px_3px_0_0_#3A63FF]"
-                          : "border-fog bg-white hover:border-navy/50"
+                          ? "border-cobalt bg-navy dark:bg-[#101F33] shadow-[3px_3px_0_0_#3A63FF]"
+                          : "border-fog dark:border-[#1E3652] bg-white dark:bg-[#0E1A2B] hover:border-navy/50 dark:hover:border-cobalt/50"
                       }`}
                     >
                       <div className="flex items-center justify-between w-full mb-3">
                         <div className="flex items-center gap-2">
                           <Moon className="w-4 h-4 text-cobalt" />
-                          <span className={`font-mono text-xs font-bold uppercase ${theme === "dark" ? "text-white" : "text-navy"}`}>
+                          <span className="font-mono text-xs font-bold uppercase text-navy dark:text-[#F0F4F8]">
                             Dark Mode
                           </span>
                         </div>
@@ -343,7 +343,7 @@ function SettingsContent() {
                           <div className="w-1/4 h-3 bg-[#4D76FF] rounded" />
                         </div>
                       </div>
-                      <span className={`font-mono text-[10px] mt-2 ${theme === "dark" ? "text-slate-300" : "text-navy/60"}`}>
+                      <span className="font-mono text-[10px] text-navy/60 dark:text-[#F0F4F8]/70 mt-2">
                         Obsidian & Cobalt Blueprint
                       </span>
                     </button>
@@ -354,27 +354,27 @@ function SettingsContent() {
                       onClick={() => setTheme("system")}
                       className={`flex flex-col items-start p-4 rounded-[6px] border-2 transition-all cursor-pointer text-left relative ${
                         theme === "system"
-                          ? "border-navy bg-ice shadow-[3px_3px_0_0_#0F2B4A]"
-                          : "border-fog bg-white hover:border-navy/50"
+                          ? "border-navy dark:border-cobalt bg-ice dark:bg-[#101F33] shadow-[3px_3px_0_0_#0F2B4A] dark:shadow-[3px_3px_0_0_#040910]"
+                          : "border-fog dark:border-[#1E3652] bg-white dark:bg-[#0E1A2B] hover:border-navy/50 dark:hover:border-cobalt/50"
                       }`}
                     >
                       <div className="flex items-center justify-between w-full mb-3">
                         <div className="flex items-center gap-2">
-                          <Laptop className="w-4 h-4 text-navy/70" />
-                          <span className="font-mono text-xs font-bold uppercase text-navy">
+                          <Laptop className="w-4 h-4 text-navy/70 dark:text-[#F0F4F8]/70" />
+                          <span className="font-mono text-xs font-bold uppercase text-navy dark:text-[#F0F4F8]">
                             System
                           </span>
                         </div>
                         {theme === "system" && (
-                          <span className="w-2 h-2 rounded-full bg-navy" />
+                          <span className="w-2 h-2 rounded-full bg-navy dark:bg-cobalt" />
                         )}
                       </div>
-                      <div className="w-full h-16 rounded bg-gradient-to-r from-[#E8EEF3] to-[#080F1A] border border-fog p-2 flex items-center justify-center">
-                        <span className="font-mono text-[10px] font-bold text-navy/80 bg-white/80 px-2 py-0.5 rounded">
+                      <div className="w-full h-16 rounded bg-gradient-to-r from-[#E8EEF3] to-[#080F1A] border border-fog dark:border-[#1E3652] p-2 flex items-center justify-center">
+                        <span className="font-mono text-[10px] font-bold text-navy/80 dark:text-[#F0F4F8] bg-white/80 dark:bg-[#101F33]/80 px-2 py-0.5 rounded">
                           AUTO SYNC
                         </span>
                       </div>
-                      <span className="font-mono text-[10px] text-navy/60 mt-2">
+                      <span className="font-mono text-[10px] text-navy/60 dark:text-[#F0F4F8]/60 mt-2">
                         Matches your device settings
                       </span>
                     </button>

@@ -372,15 +372,15 @@ export function InputArea({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-white border-2 rounded-[8px] p-3 transition-all duration-150 relative ${
+        className={`bg-white dark:bg-[#0B1524] border-2 rounded-[8px] p-3 transition-all duration-150 relative ${
           isDragging
-            ? "border-dashed border-cobalt bg-ice/40 shadow-[0_4px_0_0_#3A63FF]"
-            : "border-navy shadow-[0_4px_0_0_#0F2B4A] focus-within:border-cobalt focus-within:shadow-[0_4px_0_0_#3A63FF]"
+            ? "border-dashed border-cobalt bg-ice/40 dark:bg-cobalt/10 shadow-[0_4px_0_0_#3A63FF]"
+            : "border-navy dark:border-[#2F4D73] shadow-[0_4px_0_0_#0F2B4A] dark:shadow-[0_4px_0_0_#040910] focus-within:border-cobalt dark:focus-within:border-cobalt focus-within:shadow-[0_4px_0_0_#3A63FF]"
         }`}
       >
         {/* Drag Overlay Hint */}
         {isDragging && (
-          <div className="absolute inset-0 bg-white/90 backdrop-blur-[1px] rounded-[6px] z-20 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 bg-white/90 dark:bg-[#0B1524]/90 backdrop-blur-[1px] rounded-[6px] z-20 flex items-center justify-center pointer-events-none">
             <div className="flex items-center gap-2 text-cobalt font-mono font-bold text-xs uppercase tracking-wider">
               <Upload className="w-4 h-4 animate-bounce" />
               Drop document to attach (.pdf, .txt, .docx up to 10MB)
@@ -467,7 +467,7 @@ export function InputArea({
         {(attachedDoc || uploadPhase !== "idle") && (
           <div
             id="attached-doc-chip"
-            className="flex items-center justify-between gap-2 px-2.5 py-1.5 mb-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-mono transition-all animate-in fade-in"
+            className="flex items-center justify-between gap-2 px-2.5 py-1.5 mb-2.5 bg-slate-50 dark:bg-[#101F33] border border-slate-200 dark:border-[#1E3652] rounded-[6px] text-xs font-mono transition-all animate-in fade-in"
           >
             <div className="flex items-center gap-2 min-w-0">
               <div
@@ -570,8 +570,8 @@ export function InputArea({
               onClick={() => setAttachMenuOpen((prev) => !prev)}
               className={`p-2 rounded-[4px] transition-colors ${
                 attachedDoc
-                  ? "text-cobalt bg-ice/60 hover:bg-ice"
-                  : "text-navy/40 hover:text-cobalt hover:bg-ice"
+                  ? "text-cobalt bg-ice/60 dark:bg-cobalt/20 hover:bg-ice dark:hover:bg-cobalt/30"
+                  : "text-navy/40 dark:text-[#829AB1] hover:text-cobalt dark:hover:text-[#4D7CFF] hover:bg-ice dark:hover:bg-[#1A3254]"
               }`}
               title="Attach grounding document (PDF, TXT, DOCX)"
               aria-label="Attach document options"
@@ -581,14 +581,14 @@ export function InputArea({
 
             {/* Attachment Dropdown Menu */}
             {attachMenuOpen && (
-              <div className="absolute bottom-full left-0 mb-2 w-56 bg-white border-2 border-navy rounded-[6px] shadow-[0_4px_0_0_#0F2B4A] p-1.5 z-30 animate-in fade-in slide-in-from-bottom-1 font-sans text-xs">
+              <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-[#0B1524] border-2 border-navy dark:border-[#2F4D73] rounded-[6px] shadow-[0_4px_0_0_#0F2B4A] dark:shadow-[0_4px_0_0_#040910] p-1.5 z-30 animate-in fade-in slide-in-from-bottom-1 font-sans text-xs">
                 <button
                   type="button"
                   onClick={() => {
                     setAttachMenuOpen(false);
                     fileInputRef.current?.click();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-left rounded-[4px] hover:bg-ice text-navy hover:text-cobalt font-medium transition-colors"
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-left rounded-[4px] hover:bg-ice dark:hover:bg-[#1A3254] text-navy dark:text-[#F0F4F8] hover:text-cobalt dark:hover:text-[#4D7CFF] font-medium transition-colors cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5 text-cobalt" />
                   <span>Upload from device</span>
@@ -600,22 +600,22 @@ export function InputArea({
                     setAttachMenuOpen(false);
                     setPickerOpen(true);
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-left rounded-[4px] hover:bg-ice text-navy hover:text-cobalt font-medium transition-colors"
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-left rounded-[4px] hover:bg-ice dark:hover:bg-[#1A3254] text-navy dark:text-[#F0F4F8] hover:text-cobalt dark:hover:text-[#4D7CFF] font-medium transition-colors cursor-pointer"
                 >
-                  <FolderOpen className="w-3.5 h-3.5 text-navy/60" />
+                  <FolderOpen className="w-3.5 h-3.5 text-navy/60 dark:text-[#829AB1]" />
                   <span>Select from library</span>
                 </button>
 
                 {attachedDoc && (
                   <>
-                    <div className="border-t border-slate-100 my-1" />
+                    <div className="border-t border-slate-100 dark:border-[#1E3652] my-1" />
                     <button
                       type="button"
                       onClick={() => {
                         setAttachMenuOpen(false);
                         handleDetach();
                       }}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 text-left rounded-[4px] hover:bg-rose-50 text-rose-700 font-medium transition-colors"
+                      className="w-full flex items-center gap-2 px-2.5 py-2 text-left rounded-[4px] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-400 font-medium transition-colors cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                       <span>Detach document</span>
@@ -635,7 +635,7 @@ export function InputArea({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled}
-            className="flex-1 resize-none bg-transparent font-sans text-sm md:text-base text-navy placeholder:text-navy/40 focus:outline-none min-h-[48px] max-h-[180px] py-1 leading-relaxed"
+            className="flex-1 resize-none bg-transparent font-sans text-sm md:text-base text-navy dark:text-[#F0F4F8] placeholder:text-navy/40 dark:placeholder:text-[#627D98] focus:outline-none min-h-[48px] max-h-[180px] py-1 leading-relaxed"
           />
 
           {/* Microphone recording button */}
@@ -656,8 +656,8 @@ export function InputArea({
                 : isTranscribing
                 ? "bg-cobalt/15 text-cobalt border-2 border-cobalt/40"
                 : isRequestingPermission
-                ? "bg-amber-100 text-amber-800 border-2 border-amber-300"
-                : "bg-white text-navy/70 border-2 border-navy/20 hover:text-cobalt hover:border-cobalt hover:bg-cobalt/5 shadow-[0_2px_0_0_#0F2B4A] active:translate-y-[2px] active:shadow-none"
+                ? "bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-2 border-amber-300 dark:border-amber-700"
+                : "bg-white dark:bg-[#101F33] text-navy/70 dark:text-[#C5D0DE] border-2 border-navy/20 dark:border-[#2F4D73] hover:text-cobalt dark:hover:text-white hover:border-cobalt hover:bg-cobalt/5 dark:hover:bg-cobalt shadow-[0_2px_0_0_#0F2B4A] dark:shadow-[0_2px_0_0_#040910] active:translate-y-[2px] active:shadow-none"
             }`}
             title={
               isRecording
@@ -697,9 +697,9 @@ export function InputArea({
         </div>
 
         {/* Composer Footer Hints */}
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-fog/50 px-1 text-[11px] font-mono text-navy/50">
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-fog/50 dark:border-[#1E3652] px-1 text-[11px] font-mono text-navy/50 dark:text-[#829AB1]">
           <span>
-            Press <kbd className="font-semibold text-navy bg-ice px-1 py-0.5 rounded-[2px]">Enter ↵</kbd> to send, <kbd className="font-semibold text-navy bg-ice px-1 py-0.5 rounded-[2px]">Shift+Enter</kbd> for newline
+            Press <kbd className="font-semibold text-navy dark:text-[#F0F4F8] bg-ice dark:bg-[#16273F] px-1 py-0.5 rounded-[2px]">Enter ↵</kbd> to send, <kbd className="font-semibold text-navy dark:text-[#F0F4F8] bg-ice dark:bg-[#16273F] px-1 py-0.5 rounded-[2px]">Shift+Enter</kbd> for newline
           </span>
           <span className="hidden sm:inline">
             {content.length > 0 ? `${content.length} chars` : ""}

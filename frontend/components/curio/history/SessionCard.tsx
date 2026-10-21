@@ -21,49 +21,49 @@ export function SessionCard({ session }: SessionCardProps) {
 
   return (
     <div
-      className={`bg-white rounded-[6px] p-5 shadow-sm transition-all duration-200 hover:shadow-md border border-fog flex flex-col justify-between ${
+      className={`bg-white dark:bg-[#0E1A2B] rounded-[6px] p-5 shadow-sm transition-all duration-200 hover:shadow-md border border-fog dark:border-[#1E3652] flex flex-col justify-between ${
         isInProgress ? "border-l-[3px] border-l-cobalt" : ""
       } ${hasGaps ? "border-b-[2px] border-b-gap-orange" : ""}`}
     >
       <div>
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-heading text-lg font-bold text-navy">
+          <h3 className="font-heading text-lg font-bold text-navy dark:text-[#F0F4F8]">
             {session.topicName}
           </h3>
-          <span className="font-mono text-xs text-navy/50 whitespace-nowrap">
+          <span className="font-mono text-xs text-navy/50 dark:text-[#829AB1] whitespace-nowrap">
             {dateStr}
           </span>
         </div>
 
-        <div className="flex items-center gap-2 font-mono text-xs text-navy/75 mb-3 flex-wrap">
-          <span className="font-semibold text-navy">{session.masteryLevel}</span>
-          <span className="text-fog">·</span>
-          <span className="font-semibold text-cobalt">{session.understandingScore}/100</span>
+        <div className="flex items-center gap-2 font-mono text-xs text-navy/75 dark:text-[#BAC7D5] mb-3 flex-wrap">
+          <span className="font-semibold text-navy dark:text-[#F0F4F8]">{session.masteryLevel}</span>
+          <span className="text-fog dark:text-[#2F4D73]">·</span>
+          <span className="font-semibold text-cobalt dark:text-[#4D7CFF]">{session.understandingScore}/100</span>
           {session.turnCount > 0 && (
             <>
-              <span className="text-fog">·</span>
+              <span className="text-fog dark:text-[#2F4D73]">·</span>
               <span>{session.turnCount} turns</span>
             </>
           )}
           {session.durationMinutes > 0 && (
             <>
-              <span className="text-fog">·</span>
+              <span className="text-fog dark:text-[#2F4D73]">·</span>
               <span>{session.durationMinutes} min</span>
             </>
           )}
         </div>
 
-        <div className="py-2.5 my-2 border-y border-fog/60 font-sans text-xs text-navy/80 flex items-center justify-between">
+        <div className="py-2.5 my-2 border-y border-fog/60 dark:border-[#1E3652] font-sans text-xs text-navy/80 dark:text-[#BAC7D5] flex items-center justify-between">
           <span>
             {session.unresolvedGaps > 0 ? (
               <span className="text-gap-orange font-semibold">
                 {session.unresolvedGaps} unresolved gap{session.unresolvedGaps === 1 ? "" : "s"}
               </span>
             ) : (
-              <span className="text-navy/60">No unresolved gaps</span>
+              <span className="text-navy/60 dark:text-[#829AB1]">No unresolved gaps</span>
             )}
           </span>
-          <span className="text-fog">·</span>
+          <span className="text-fog dark:text-[#2F4D73]">·</span>
           <span>
             {session.resolvedMisconceptions} misconception{session.resolvedMisconceptions === 1 ? "" : "s"} resolved
           </span>

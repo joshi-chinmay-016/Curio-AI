@@ -39,7 +39,7 @@ export function ModeChip({ mode, className }: ModeChipProps) {
     return (
       <span
         className={cn(
-          "inline-flex items-center px-1.5 py-0.5 rounded-[2px] font-mono text-[10px] font-bold tracking-wider uppercase bg-navy text-white",
+          "inline-flex items-center px-1.5 py-0.5 rounded-[2px] font-mono text-[10px] font-bold tracking-wider uppercase bg-navy dark:bg-[#152E4D] border dark:border-[#2F4D73] text-white",
           className
         )}
       >
@@ -51,7 +51,7 @@ export function ModeChip({ mode, className }: ModeChipProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center px-1.5 py-0.5 rounded-[2px] font-mono text-[10px] font-bold tracking-wider uppercase bg-navy/10 text-navy",
+        "inline-flex items-center px-1.5 py-0.5 rounded-[2px] font-mono text-[10px] font-bold tracking-wider uppercase bg-navy/10 dark:bg-cobalt/20 text-navy dark:text-[#F0F4F8]",
         className
       )}
     >
