@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -8,19 +8,28 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading, initAuth } = useAuthStore();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    initAuth();
-  }, [initAuth]);
+    setMounted(true);
+    if (!isAuthenticated) {
+      initAuth();
+    }
+  }, [isAuthenticated, initAuth]);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (mounted && !isLoading && !isAuthenticated) {
       const returnTo = encodeURIComponent(pathname || "/dashboard");
       router.replace(`/login?returnTo=${returnTo}`);
     }
-  }, [isLoading, isAuthenticated, router, pathname]);
+  }, [mounted, isLoading, isAuthenticated, router, pathname]);
 
-  if (isLoading) {
+  // If already authenticated, render children immediately without flicker
+  if (isAuthenticated) {
+    return <>{children}</>;
+  }
+
+  if (!mounted || isLoading) {
     return (
       <div className="min-h-screen bg-ice flex flex-col items-center justify-center p-6 text-navy">
         <div className="flex flex-col items-center gap-4">
@@ -33,9 +42,5 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  return <>{children}</>;
+  return null;
 }

@@ -35,17 +35,23 @@ export type CurioNavRoute =
 
 export interface CurioNavProps {
   activeRoute?: CurioNavRoute;
+  showProfile?: boolean;
 }
 
-export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
+export function CurioNav({ activeRoute = "home", showProfile }: CurioNavProps) {
   const router = useRouter();
   const { user, isAuthenticated, initAuth, logout } = useAuthStore();
   const { theme, setTheme } = useSettingsStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const shouldShowProfile =
+    showProfile !== undefined ? showProfile : activeRoute !== "home";
+
   useEffect(() => {
-    initAuth();
-  }, [initAuth]);
+    if (!isAuthenticated) {
+      initAuth();
+    }
+  }, [isAuthenticated, initAuth]);
 
   const navLinks = [
     {
@@ -105,13 +111,13 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
   );
 
   return (
-    <header className="w-full bg-white/95 backdrop-blur-[4px] border-b border-fog sticky top-0 z-40 px-4 md:px-6 py-3 shadow-xs">
+    <header className="w-full bg-white/95 dark:bg-[#080F1A]/95 backdrop-blur-[4px] border-b border-fog dark:border-[#1E3652] sticky top-0 z-40 px-4 md:px-6 py-3 shadow-xs transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         {/* Brand Logo & Desktop Nav Links */}
         <div className="flex items-center gap-6 lg:gap-8">
           <Link
             href="/"
-            className="font-mono text-xl font-bold tracking-wider text-navy hover:text-cobalt transition-colors shrink-0"
+            className="font-mono text-xl font-bold tracking-wider text-navy dark:text-[#F0F4F8] hover:text-cobalt dark:hover:text-cobalt transition-colors shrink-0"
           >
             CURIO<span className="text-gap-orange">.</span>
           </Link>
@@ -128,13 +134,13 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
                   className={`inline-flex items-center gap-1.5 pb-0.5 transition-colors ${
                     isActive
                       ? "text-cobalt border-b-2 border-cobalt font-bold"
-                      : "text-navy/70 hover:text-navy"
+                      : "text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white"
                   }`}
                 >
                   {Icon && (
                     <Icon
                       className={`w-3.5 h-3.5 ${
-                        item.iconColor || (isActive ? "text-cobalt" : "text-navy/50")
+                        item.iconColor || (isActive ? "text-cobalt" : "text-navy/50 dark:text-[#F0F4F8]/50")
                       }`}
                     />
                   )}
@@ -153,7 +159,7 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Curio AI on GitHub"
-            className="hidden sm:inline-flex p-2 text-navy/70 hover:text-navy hover:bg-ice/80 rounded-md transition-colors"
+            className="hidden sm:inline-flex p-2 text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice/80 dark:hover:bg-[#101F33] rounded-md transition-colors"
             title="GitHub Repository"
           >
             <svg
@@ -177,12 +183,27 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
                 </Link>
               )}
 
-              {/* Top AI Product Profile Trigger & Menu */}
-              <ProfileDropdown />
+              {/* Show profile dropdown only on non-landing pages */}
+              {shouldShowProfile ? (
+                <ProfileDropdown />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    router.replace("/");
+                  }}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono uppercase font-bold text-navy/70 dark:text-[#F0F4F8]/70 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-fog dark:border-[#1E3652] rounded-[4px] transition-colors cursor-pointer"
+                  title="Sign out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>LOGOUT</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2 sm:gap-2.5">
-              <ProfileDropdown />
+              {shouldShowProfile && <ProfileDropdown />}
               <Link href="/login" className="hidden sm:inline-block">
                 <KeycapButton variant="ghost" size="sm">
                   SIGN IN
@@ -199,7 +220,7 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
           {/* Mobile Hamburger Toggle */}
           <button
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            className="p-1.5 text-navy/70 hover:text-navy hover:bg-ice rounded-[4px] lg:hidden cursor-pointer"
+            className="p-1.5 text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] rounded-[4px] lg:hidden cursor-pointer"
             aria-label="Toggle navigation menu"
             title="Navigation Menu"
           >
@@ -210,7 +231,7 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
 
       {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden mt-3 pt-3 border-t border-fog/80 animate-fade-in">
+        <div className="lg:hidden mt-3 pt-3 border-t border-fog/80 dark:border-[#1E3652] animate-fade-in bg-white dark:bg-[#080F1A]">
           <nav className="flex flex-col gap-1 text-xs font-mono font-semibold uppercase">
             {visibleLinks.map((item) => {
               const isActive = activeRoute === item.id;
@@ -222,16 +243,16 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-[4px] transition-colors ${
                     isActive
-                      ? "bg-navy text-white font-bold"
-                      : "text-navy/80 hover:bg-ice hover:text-navy"
+                      ? "bg-navy dark:bg-cobalt text-white font-bold"
+                      : "text-navy/80 dark:text-[#F0F4F8]/80 hover:bg-ice dark:hover:bg-[#101F33] hover:text-navy dark:hover:text-white"
                   }`}
                 >
                   {Icon && (
                     <Icon
                       className={`w-4 h-4 ${
                         isActive
-                          ? "text-gap-orange"
-                          : item.iconColor || "text-navy/50"
+                          ? "text-gap-orange dark:text-white"
+                          : item.iconColor || "text-navy/50 dark:text-[#F0F4F8]/50"
                       }`}
                     />
                   )}
@@ -242,18 +263,18 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
           </nav>
 
           {/* Quick Theme Switcher in Mobile Drawer */}
-          <div className="pt-3 mt-2 border-t border-fog/60 flex items-center justify-between px-2 py-1">
-            <span className="text-[11px] font-mono text-navy/60 font-bold uppercase">
+          <div className="pt-3 mt-2 border-t border-fog/60 dark:border-[#1E3652] flex items-center justify-between px-2 py-1">
+            <span className="text-[11px] font-mono text-navy/60 dark:text-[#F0F4F8]/60 font-bold uppercase">
               THEME:
             </span>
-            <div className="inline-flex items-center gap-1 bg-white border border-fog p-0.5 rounded-[4px]">
+            <div className="inline-flex items-center gap-1 bg-white dark:bg-[#101F33] border border-fog dark:border-[#1E3652] p-0.5 rounded-[4px]">
               <button
                 type="button"
                 onClick={() => setTheme("light")}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-[3px] text-[10px] font-mono font-bold uppercase transition-all ${
                   theme === "light"
                     ? "bg-navy text-white shadow-xs"
-                    : "text-navy/60 hover:text-navy hover:bg-ice"
+                    : "text-navy/60 dark:text-[#F0F4F8]/60 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#142842]"
                 }`}
               >
                 <Sun className="w-3 h-3" />
@@ -265,7 +286,7 @@ export function CurioNav({ activeRoute = "home" }: CurioNavProps) {
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-[3px] text-[10px] font-mono font-bold uppercase transition-all ${
                   theme === "dark"
                     ? "bg-cobalt text-white shadow-xs"
-                    : "text-navy/60 hover:text-navy hover:bg-ice"
+                    : "text-navy/60 dark:text-[#F0F4F8]/60 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#142842]"
                 }`}
               >
                 <Moon className="w-3 h-3" />

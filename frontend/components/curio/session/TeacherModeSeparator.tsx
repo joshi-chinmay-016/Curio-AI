@@ -21,8 +21,8 @@ export function TeacherModeSeparator({ type }: TeacherModeSeparatorProps) {
       <div
         className={`px-4 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-center select-none ${
           isActivated
-            ? "border border-dashed border-gap-orange text-gap-orange bg-[#FFF8F5] rounded-[3px]"
-            : "text-navy/50 tracking-widest"
+            ? "border border-dashed border-gap-orange text-gap-orange bg-[#FFF8F5] dark:bg-[#211510] rounded-[3px]"
+            : "text-navy/50 dark:text-[#829AB1] tracking-widest"
         }`}
       >
         {isActivated

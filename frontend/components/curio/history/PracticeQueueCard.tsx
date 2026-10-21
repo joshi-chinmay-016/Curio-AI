@@ -28,13 +28,13 @@ export function PracticeQueueCard({ item }: PracticeQueueCardProps) {
   };
 
   return (
-    <div className="bg-white rounded-[6px] p-5 shadow-sm border border-fog border-l-[3px] border-l-gap-orange flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="bg-white dark:bg-[#0E1A2B] rounded-[6px] p-5 shadow-sm border border-fog dark:border-[#1E3652] border-l-[3px] border-l-gap-orange flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <div className="flex items-center gap-2 mb-1.5">
-          <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-navy/50">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-navy/50 dark:text-[#829AB1]">
             {item.topicName}
           </span>
-          <span className="text-fog">·</span>
+          <span className="text-fog dark:text-[#2F4D73]">·</span>
           <span
             className={`font-mono text-[10px] font-bold uppercase px-2 py-0.5 rounded-[2px] ${getSeverityBadge(
               item.severity
@@ -42,11 +42,11 @@ export function PracticeQueueCard({ item }: PracticeQueueCardProps) {
           >
             {item.severity} PRIORITY
           </span>
-          <span className="text-fog">·</span>
-          <span className="font-mono text-[10px] text-navy/40">Saved {dateStr}</span>
+          <span className="text-fog dark:text-[#2F4D73]">·</span>
+          <span className="font-mono text-[10px] text-navy/40 dark:text-[#829AB1]">Saved {dateStr}</span>
         </div>
 
-        <h4 className="font-heading text-base font-bold text-navy">
+        <h4 className="font-heading text-base font-bold text-navy dark:text-[#F0F4F8]">
           {item.conceptName}
         </h4>
       </div>

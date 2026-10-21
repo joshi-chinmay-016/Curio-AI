@@ -77,12 +77,12 @@ export default function LearningSessionPage() {
       {/* Central Learning Workspace */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-ice relative">
         {/* Top Header */}
-        <header className="w-full bg-white border-b border-fog px-4 md:px-6 py-3 flex items-center justify-between z-30 shrink-0">
+        <header className="w-full bg-white dark:bg-[#080F1A] border-b border-fog dark:border-[#1E3652] px-4 md:px-6 py-3 flex items-center justify-between z-30 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             {/* Mobile menu trigger */}
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="p-1.5 text-navy/70 hover:text-navy md:hidden"
+              className="p-1.5 text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white md:hidden"
               aria-label="Open sessions sidebar"
             >
               <Menu className="w-5 h-5" />
@@ -91,18 +91,18 @@ export default function LearningSessionPage() {
             {/* Quick Link to Dashboard */}
             <Link
               href="/dashboard"
-              className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-[3px] font-mono text-xs font-semibold text-navy/70 hover:text-navy hover:bg-ice transition-colors border border-fog/60 shrink-0"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-[3px] font-mono text-xs font-semibold text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] transition-colors border border-fog/60 dark:border-[#1E3652] shrink-0"
               title="Return to Dashboard"
             >
               <LayoutDashboard className="w-3.5 h-3.5 text-cobalt" />
               <span>DASHBOARD</span>
             </Link>
-            <span className="text-fog hidden sm:inline">/</span>
+            <span className="text-fog dark:text-[#1E3652] hidden sm:inline">/</span>
 
-            <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-navy/40 hidden sm:inline">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-navy/40 dark:text-[#F0F4F8]/40 hidden sm:inline">
               TOPIC:
             </span>
-            <h2 className="font-heading text-sm md:text-base font-bold text-navy truncate">
+            <h2 className="font-heading text-sm md:text-base font-bold text-navy dark:text-[#F0F4F8] truncate">
               {topicName || "Learning Session"}
             </h2>
           </div>
@@ -112,29 +112,29 @@ export default function LearningSessionPage() {
             {documentId && (
               <button
                 onClick={() => setDocPanelOpen((prev) => !prev)}
-                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer"
                 title="Toggle document context panel"
               >
-                <FileText className="w-3 h-3 text-emerald-700" />
+                <FileText className="w-3 h-3 text-emerald-700 dark:text-emerald-400" />
                 <span className="hidden md:inline">Document Grounded</span>
               </button>
             )}
 
             {/* Mode status indicator */}
             {mode === "STUDENT" && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-cobalt/10 text-cobalt border border-cobalt/20">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-cobalt/10 dark:bg-cobalt/20 text-cobalt border border-cobalt/20 dark:border-cobalt/30">
                 <span className="w-2 h-2 rounded-full bg-cobalt animate-pulse" />
                 <span className="hidden sm:inline">Student Mode</span>
               </span>
             )}
             {mode === "TEACHER" && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-gap-orange/10 text-gap-orange border border-gap-orange/30">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-gap-orange/10 dark:bg-gap-orange/20 text-gap-orange border border-gap-orange/30 dark:border-gap-orange/40">
                 <span className="text-xs">◆</span>
                 <span className="hidden sm:inline">Teacher Mode</span>
               </span>
             )}
             {mode === "EVALUATING" && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-navy text-white">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] font-mono text-xs font-semibold bg-navy dark:bg-cobalt text-white">
                 <span className="animate-spin text-xs">◈</span>
                 <span className="hidden sm:inline">Evaluating</span>
               </span>

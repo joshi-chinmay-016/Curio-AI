@@ -406,7 +406,7 @@ function AudioLearningStage() {
   };
 
   return (
-    <div className="h-screen flex bg-ice text-navy overflow-hidden selection:bg-cobalt selection:text-white">
+    <div className="h-screen flex bg-ice dark:bg-[#070D18] text-navy dark:text-[#F0F4F8] overflow-hidden selection:bg-cobalt selection:text-white">
       <DiagonalSweepTransition />
 
       {/* Collapsible Session History Sidebar */}
@@ -422,15 +422,15 @@ function AudioLearningStage() {
       />
 
       {/* Central Audio Learning Workspace */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-ice relative">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-ice dark:bg-[#070D18] relative">
         {/* Header Bar */}
-        <header className="w-full bg-white border-b border-fog px-4 md:px-6 py-3 sticky top-0 z-30 shadow-xs shrink-0">
+        <header className="w-full bg-white dark:bg-[#080F1A] border-b border-fog dark:border-[#1E3652] px-4 md:px-6 py-3 sticky top-0 z-30 shadow-xs shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* Mobile menu trigger */}
               <button
                 onClick={() => setMobileSidebarOpen(true)}
-                className="p-1.5 text-navy/70 hover:text-navy hover:bg-ice rounded-[4px] md:hidden cursor-pointer"
+                className="p-1.5 text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice dark:hover:bg-[#101F33] rounded-[4px] md:hidden cursor-pointer"
                 aria-label="Open sessions sidebar"
                 title="Open previous sessions"
               >
@@ -439,7 +439,7 @@ function AudioLearningStage() {
 
               <Link
                 href="/dashboard"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ice hover:bg-ice/80 border border-fog rounded-[6px] font-mono text-xs font-bold text-navy/70 hover:text-navy transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ice dark:bg-[#101F33] hover:bg-ice/80 dark:hover:bg-[#162B47] border border-fog dark:border-[#1E3652] rounded-[6px] font-mono text-xs font-bold text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">DASHBOARD</span>
@@ -447,35 +447,35 @@ function AudioLearningStage() {
 
               <Link
                 href="/"
-                className="font-mono text-xl font-bold tracking-wider text-navy hover:text-cobalt transition-colors"
+                className="font-mono text-xl font-bold tracking-wider text-navy dark:text-[#F0F4F8] hover:text-cobalt transition-colors"
               >
                 CURIO<span className="text-gap-orange">.</span>
               </Link>
 
               {sessionPhase === "conversation" ? (
-                <div className="hidden md:flex items-center gap-2 pl-3 border-l border-fog">
-                  <span className="font-mono text-[10px] uppercase font-bold text-navy/40">
+                <div className="hidden md:flex items-center gap-2 pl-3 border-l border-fog dark:border-[#1E3652]">
+                  <span className="font-mono text-[10px] uppercase font-bold text-navy/40 dark:text-[#F0F4F8]/40">
                     TOPIC:
                   </span>
-                  <span className="font-heading text-xs font-bold text-navy truncate max-w-[200px]">
+                  <span className="font-heading text-xs font-bold text-navy dark:text-[#F0F4F8] truncate max-w-[200px]">
                     {topic}
                   </span>
                 </div>
               ) : (
-                <nav className="hidden lg:flex items-center gap-4 text-xs font-mono font-semibold uppercase text-navy/70 pl-2">
-                  <Link href="/dashboard" className="hover:text-navy transition-colors">
+                <nav className="hidden lg:flex items-center gap-4 text-xs font-mono font-semibold uppercase text-navy/70 dark:text-[#F0F4F8]/70 pl-2">
+                  <Link href="/dashboard" className="hover:text-navy dark:hover:text-white transition-colors">
                     DASHBOARD
                   </Link>
-                  <Link href="/topics" className="hover:text-navy transition-colors">
+                  <Link href="/topics" className="hover:text-navy dark:hover:text-white transition-colors">
                     TOPICS
                   </Link>
-                  <Link href="/documents" className="hover:text-navy transition-colors">
+                  <Link href="/documents" className="hover:text-navy dark:hover:text-white transition-colors">
                     DOCUMENTS
                   </Link>
-                  <Link href="/history" className="hover:text-navy transition-colors">
+                  <Link href="/history" className="hover:text-navy dark:hover:text-white transition-colors">
                     HISTORY
                   </Link>
-                  <Link href="/characters" className="hover:text-navy transition-colors">
+                  <Link href="/characters" className="hover:text-navy dark:hover:text-white transition-colors">
                     CHARACTERS
                   </Link>
                 </nav>
@@ -486,32 +486,32 @@ function AudioLearningStage() {
             <div className="flex items-center gap-3">
               {sessionPhase === "conversation" && (
                 <>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-ice border border-fog rounded-full">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-ice dark:bg-[#101F33] border border-fog dark:border-[#1E3652] rounded-full">
                     <span
                       className={`w-2 h-2 rounded-full ${
                         isTeacherActive
                           ? "bg-gap-orange animate-pulse"
                           : mode === "PROFESSOR"
-                          ? "bg-navy"
+                          ? "bg-navy dark:bg-cobalt"
                           : "bg-cobalt"
                       }`}
                     />
-                    <span className="font-mono text-[11px] font-bold text-navy uppercase">
+                    <span className="font-mono text-[11px] font-bold text-navy dark:text-[#F0F4F8] uppercase">
                       {isTeacherActive
                         ? "TEACHER INTERVENTION"
                         : mode === "PROFESSOR"
                         ? "PROFESSOR MODE"
                         : "STUDENT MODE"}
                     </span>
-                    <span className="font-mono text-[10px] text-navy/40">·</span>
-                    <span className="font-mono text-[10px] uppercase font-semibold text-navy/60">
+                    <span className="font-mono text-[10px] text-navy/40 dark:text-[#F0F4F8]/40">·</span>
+                    <span className="font-mono text-[10px] uppercase font-semibold text-navy/60 dark:text-[#F0F4F8]/60">
                       Turn {turnIndex}
                     </span>
                   </div>
 
                   <button
                     onClick={handleEndSession}
-                    className="px-3 py-1.5 text-xs font-mono font-bold uppercase text-navy/60 hover:text-rose-600 border border-fog hover:bg-rose-50 rounded-[6px] transition-colors cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-mono font-bold uppercase text-navy/60 dark:text-[#F0F4F8]/60 hover:text-rose-600 dark:hover:text-rose-400 border border-fog dark:border-[#1E3652] hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-[6px] transition-colors cursor-pointer"
                   >
                     FINISH SESSION
                   </button>
@@ -590,24 +590,24 @@ function AudioLearningStage() {
       {/* Previous Session Detail & Review Modal */}
       {viewingSession && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 dark:bg-black/75 backdrop-blur-xs animate-fade-in"
           onClick={() => setViewingSession(null)}
         >
           <div
-            className="bg-white border-2 border-navy rounded-[10px] shadow-[8px_8px_0_0_#0F2B4A] w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden text-navy"
+            className="bg-white dark:bg-[#0B1524] border-2 border-navy dark:border-[#2F4D73] rounded-[10px] shadow-[8px_8px_0_0_#0F2B4A] dark:shadow-[8px_8px_0_0_#040910] w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden text-navy dark:text-[#F0F4F8]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="p-4 md:p-5 border-b border-fog flex items-center justify-between bg-ice/40 shrink-0">
+            <div className="p-4 md:p-5 border-b border-fog dark:border-[#1E3652] flex items-center justify-between bg-ice/40 dark:bg-[#101F33] shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-gap-orange" />
-                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-navy/60">
+                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-navy/60 dark:text-[#829AB1]">
                   PREVIOUS SESSION OVERVIEW
                 </span>
               </div>
               <button
                 onClick={() => setViewingSession(null)}
-                className="p-1.5 text-navy/50 hover:text-navy hover:bg-fog/30 rounded-[4px] transition-colors cursor-pointer"
+                className="p-1.5 text-navy/50 dark:text-[#829AB1] hover:text-navy dark:hover:text-white hover:bg-fog/30 dark:hover:bg-[#1E3652] rounded-[4px] transition-colors cursor-pointer"
                 title="Close modal"
               >
                 <X className="w-4 h-4" />
@@ -617,11 +617,11 @@ function AudioLearningStage() {
             {/* Modal Content */}
             <div className="p-5 md:p-6 overflow-y-auto space-y-5">
               <div>
-                <h3 className="font-heading text-xl md:text-2xl font-extrabold text-navy leading-tight">
+                <h3 className="font-heading text-xl md:text-2xl font-extrabold text-navy dark:text-[#F0F4F8] leading-tight">
                   {viewingSession.topicName}
                 </h3>
-                <div className="flex items-center gap-2 mt-1.5 text-xs font-mono text-navy/60">
-                  <Clock className="w-3.5 h-3.5 text-navy/40" />
+                <div className="flex items-center gap-2 mt-1.5 text-xs font-mono text-navy/60 dark:text-[#829AB1]">
+                  <Clock className="w-3.5 h-3.5 text-navy/40 dark:text-[#829AB1]" />
                   <span>
                     {new Date(viewingSession.createdAt).toLocaleDateString([], {
                       month: "short",
@@ -635,8 +635,8 @@ function AudioLearningStage() {
                   <span
                     className={`px-2 py-0.5 rounded-[3px] text-[10px] font-bold uppercase ${
                       viewingSession.status === "COMPLETED"
-                        ? "bg-emerald-50 text-emerald-800 border border-emerald-300"
-                        : "bg-amber-50 text-amber-800 border border-amber-300"
+                        ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60"
+                        : "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60"
                     }`}
                   >
                     {viewingSession.status}
@@ -646,21 +646,21 @@ function AudioLearningStage() {
 
               {/* Stats Bar */}
               <div className="grid grid-cols-3 gap-2.5">
-                <div className="bg-ice/50 border border-fog rounded-[6px] p-2.5 text-center">
-                  <span className="font-mono text-[10px] uppercase font-bold text-navy/40 block">Score</span>
-                  <span className="font-mono text-lg font-extrabold text-navy">
+                <div className="bg-ice/50 dark:bg-[#101F33] border border-fog dark:border-[#1E3652] rounded-[6px] p-2.5 text-center">
+                  <span className="font-mono text-[10px] uppercase font-bold text-navy/40 dark:text-[#829AB1] block">Score</span>
+                  <span className="font-mono text-lg font-extrabold text-navy dark:text-[#F0F4F8]">
                     {viewingSession.understandingScore}%
                   </span>
                 </div>
-                <div className="bg-ice/50 border border-fog rounded-[6px] p-2.5 text-center">
-                  <span className="font-mono text-[10px] uppercase font-bold text-navy/40 block">Turns</span>
-                  <span className="font-mono text-lg font-extrabold text-navy">
+                <div className="bg-ice/50 dark:bg-[#101F33] border border-fog dark:border-[#1E3652] rounded-[6px] p-2.5 text-center">
+                  <span className="font-mono text-[10px] uppercase font-bold text-navy/40 dark:text-[#829AB1] block">Turns</span>
+                  <span className="font-mono text-lg font-extrabold text-navy dark:text-[#F0F4F8]">
                     {viewingSession.turnCount}
                   </span>
                 </div>
-                <div className="bg-ice/50 border border-fog rounded-[6px] p-2.5 text-center">
-                  <span className="font-mono text-[10px] uppercase font-bold text-navy/40 block">Mastery</span>
-                  <span className="font-mono text-xs font-bold text-cobalt block mt-1">
+                <div className="bg-ice/50 dark:bg-[#101F33] border border-fog dark:border-[#1E3652] rounded-[6px] p-2.5 text-center">
+                  <span className="font-mono text-[10px] uppercase font-bold text-navy/40 dark:text-[#829AB1] block">Mastery</span>
+                  <span className="font-mono text-xs font-bold text-cobalt dark:text-blue-400 block mt-1">
                     {viewingSession.masteryLevel || "Developing"}
                   </span>
                 </div>
@@ -668,23 +668,23 @@ function AudioLearningStage() {
 
               {/* Dialogue History / Messages Preview */}
               <div>
-                <label className="font-mono text-xs uppercase font-bold text-navy/60 block mb-2 tracking-wider">
+                <label className="font-mono text-xs uppercase font-bold text-navy/60 dark:text-[#829AB1] block mb-2 tracking-wider">
                   SESSION DIALOGUE EXCERPT
                 </label>
                 {isLoadingDetail ? (
-                  <div className="flex items-center justify-center p-8 bg-ice/30 border border-fog rounded-[6px] text-xs font-mono text-navy/50 gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-cobalt" />
+                  <div className="flex items-center justify-center p-8 bg-ice/30 dark:bg-[#101F33] border border-fog dark:border-[#1E3652] rounded-[6px] text-xs font-mono text-navy/50 dark:text-[#829AB1] gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-cobalt dark:text-blue-400" />
                     <span>Loading dialogue transcript...</span>
                   </div>
                 ) : sessionDetail?.messages && sessionDetail.messages.length > 0 ? (
-                  <div className="max-h-56 overflow-y-auto space-y-2 p-3 bg-ice/40 border border-fog rounded-[6px]">
+                  <div className="max-h-56 overflow-y-auto space-y-2 p-3 bg-ice/40 dark:bg-[#101F33] border border-fog dark:border-[#1E3652] rounded-[6px]">
                     {sessionDetail.messages.map((m, idx) => (
                       <div
                         key={idx}
                         className={`p-2.5 rounded-[4px] text-xs leading-relaxed ${
                           m.sender === "USER"
-                            ? "bg-white border border-fog/80 text-navy"
-                            : "bg-navy text-white"
+                            ? "bg-white dark:bg-[#0E1A2B] border border-fog/80 dark:border-[#1E3652] text-navy dark:text-[#F0F4F8]"
+                            : "bg-navy dark:bg-[#152E4D] text-white border dark:border-[#2F4D73]"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1 text-[10px] font-mono font-bold uppercase opacity-70">
@@ -696,7 +696,7 @@ function AudioLearningStage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="p-4 bg-ice/30 border border-fog rounded-[6px] text-center font-mono text-xs text-navy/50">
+                  <div className="p-4 bg-ice/30 dark:bg-[#101F33] border border-fog dark:border-[#1E3652] rounded-[6px] text-center font-mono text-xs text-navy/50 dark:text-[#829AB1]">
                     No transcript messages recorded for this session.
                   </div>
                 )}
@@ -704,7 +704,7 @@ function AudioLearningStage() {
             </div>
 
             {/* Modal Actions */}
-            <div className="p-4 border-t border-fog bg-ice/30 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+            <div className="p-4 border-t border-fog dark:border-[#1E3652] bg-ice/30 dark:bg-[#0E1A2B] flex flex-wrap items-center justify-between gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => handlePracticeTopicFromPreviousSession(viewingSession.topicName)}
@@ -717,15 +717,15 @@ function AudioLearningStage() {
               <div className="flex items-center gap-2">
                 <Link
                   href={`/session/${viewingSession.sessionId}?topic=${encodeURIComponent(viewingSession.topicName)}`}
-                  className="inline-flex items-center gap-1 px-3 py-2 bg-white hover:bg-ice border border-fog rounded-[4px] font-mono text-xs font-bold text-navy transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 px-3 py-2 bg-white dark:bg-[#101F33] hover:bg-ice dark:hover:bg-[#162B47] border border-fog dark:border-[#1E3652] rounded-[4px] font-mono text-xs font-bold text-navy dark:text-[#F0F4F8] transition-colors cursor-pointer"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-cobalt" />
+                  <ExternalLink className="w-3.5 h-3.5 text-cobalt dark:text-blue-400" />
                   FULL CHAT
                 </Link>
 
                 <Link
                   href={`/session/${viewingSession.sessionId}/report`}
-                  className="inline-flex items-center gap-1 px-3 py-2 bg-navy hover:bg-[#183d66] text-white rounded-[4px] font-mono text-xs font-bold transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 px-3 py-2 bg-navy dark:bg-[#152E4D] hover:bg-[#183d66] dark:hover:bg-[#1E3652] text-white rounded-[4px] font-mono text-xs font-bold transition-colors cursor-pointer"
                 >
                   <BookOpen className="w-3.5 h-3.5 text-gap-orange" />
                   GAP REPORT

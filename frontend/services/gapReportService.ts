@@ -162,7 +162,7 @@ export async function getGapReport(
     if (sessions.length > 0) {
       sessionId = sessions[0].session_id;
     } else {
-      sessionId = "session_mock_active";
+      return null;
     }
   }
 
@@ -176,11 +176,7 @@ export async function getGapReport(
   const availableTopics: TopicOption[] =
     sessions.length > 0
       ? sessions.map((s) => ({ id: s.session_id, name: s.topic }))
-      : [
-          { id: sessionId, name: topicName },
-          { id: "session_mock_sort", name: "QuickSort & Partitioning" },
-          { id: "session_mock_trees", name: "Binary Search Trees" },
-        ];
+      : [{ id: sessionId, name: topicName }];
 
   try {
     const reportData = await apiClient<BackendReportResponse>(`/sessions/${sessionId}/report`);
@@ -195,10 +191,6 @@ export async function getGapReport(
       return null;
     }
     console.warn(`Backend report unavailable for session ${sessionId}:`, err);
-    // Offline unauthenticated fallback for visitors without a token
-    if (!hasToken) {
-      return getMockGapReport(sessionId, topicName, availableTopics);
-    }
     return null;
   }
 }

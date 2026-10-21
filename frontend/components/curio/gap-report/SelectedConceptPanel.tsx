@@ -95,13 +95,13 @@ export function SelectedConceptPanel({
 
         {/* Tabs if gap exists */}
         {isGapOrMisconception && (
-          <div className="flex items-center gap-4 mt-4 border-b border-fog -mb-5">
+          <div className="flex items-center gap-4 mt-4 border-b border-fog dark:border-[#1E3652] -mb-5">
             <button
               onClick={() => onTabChange("overview")}
               className={`pb-2.5 font-mono text-xs font-semibold uppercase tracking-wider border-b-2 transition-colors ${
                 activeTab === "overview"
-                  ? "border-navy text-navy"
-                  : "border-transparent text-navy/50 hover:text-navy"
+                  ? "border-navy dark:border-white text-navy dark:text-white"
+                  : "border-transparent text-navy/50 dark:text-[#F0F4F8]/50 hover:text-navy dark:hover:text-white"
               }`}
             >
               OVERVIEW
@@ -111,7 +111,7 @@ export function SelectedConceptPanel({
               className={`pb-2.5 font-mono text-xs font-semibold uppercase tracking-wider border-b-2 transition-colors flex items-center gap-1.5 ${
                 activeTab === "gap_details"
                   ? "border-gap-orange text-gap-orange font-bold"
-                  : "border-transparent text-navy/50 hover:text-navy"
+                  : "border-transparent text-navy/50 dark:text-[#F0F4F8]/50 hover:text-navy dark:hover:text-white"
               }`}
             >
               <AlertCircle className="w-3.5 h-3.5" />
@@ -129,10 +129,10 @@ export function SelectedConceptPanel({
             <div className="space-y-3">
               <div>
                 <div className="flex justify-between text-xs font-mono mb-1">
-                  <span className="text-navy/70 uppercase">Understanding Score</span>
+                  <span className="text-navy/70 dark:text-[#F0F4F8]/70 uppercase">Understanding Score</span>
                   <span className="font-bold text-cobalt">{concept.score}%</span>
                 </div>
-                <div className="w-full h-2 bg-ice rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-ice dark:bg-[#101F33] rounded-full overflow-hidden">
                   <div
                     className="h-full bg-cobalt transition-all duration-500"
                     style={{ width: `${concept.score}%` }}
@@ -142,12 +142,12 @@ export function SelectedConceptPanel({
 
               <div>
                 <div className="flex justify-between text-xs font-mono mb-1">
-                  <span className="text-navy/70 uppercase">Confidence</span>
-                  <span className="font-bold text-navy">{concept.confidence}%</span>
+                  <span className="text-navy/70 dark:text-[#F0F4F8]/70 uppercase">Confidence</span>
+                  <span className="font-bold text-navy dark:text-[#F0F4F8]">{concept.confidence}%</span>
                 </div>
-                <div className="w-full h-2 bg-ice rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-ice dark:bg-[#101F33] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-navy transition-all duration-500"
+                    className="h-full bg-navy dark:bg-cobalt transition-all duration-500"
                     style={{ width: `${concept.confidence}%` }}
                   />
                 </div>
@@ -157,10 +157,10 @@ export function SelectedConceptPanel({
             {/* Description */}
             {concept.description && (
               <div>
-                <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-navy/50 block mb-1">
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-navy/50 dark:text-[#F0F4F8]/50 block mb-1">
                   ANALYSIS
                 </span>
-                <p className="font-sans text-sm text-navy/80 leading-relaxed bg-ice/50 p-3 rounded-[4px] border border-fog/60">
+                <p className="font-sans text-sm text-navy/80 dark:text-[#F0F4F8]/80 leading-relaxed bg-ice/50 dark:bg-[#101F33] p-3 rounded-[4px] border border-fog/60 dark:border-[#1E3652]">
                   {concept.description}
                 </p>
               </div>
