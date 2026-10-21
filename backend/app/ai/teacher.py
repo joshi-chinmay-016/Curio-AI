@@ -67,12 +67,9 @@ class TeacherModeHandler:
         # Count question marks
         q_indices = [i for i, char in enumerate(cleaned) if char == "?"]
         if len(q_indices) > 1:
-            # Keep everything up to the first question mark or truncate secondary questions
-            # If the first question is at the end, keep up to that question mark
-            # Find the paragraph or sentence boundary before extraneous questions
-            # Keep up to the first question mark to satisfy the single question rule
-            first_q_end = q_indices[0] + 1
-            cleaned = cleaned[:first_q_end].strip()
+            # Replace all question marks except the last one with periods, preserving the full explanation
+            parts = cleaned.split("?")
+            cleaned = ".".join(parts[:-1]).strip() + "?" + parts[-1]
         elif len(q_indices) == 0:
             # No question mark: append a verification question
             cleaned = cleaned.rstrip(".") + f"\n\nCan you explain how this applies to {gap}?"

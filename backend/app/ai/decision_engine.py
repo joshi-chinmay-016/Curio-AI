@@ -276,13 +276,19 @@ class DecisionEngine:
             # 6. NOT a generic bare non-answer acknowledgment ("yes", "ok", "sure", "i understand")
             # 7. Must contain substantive content (>= 3 words)
             # 8. Must be relevant to target concept (never pass on irrelevant answers!)
-            if assessment is not None:
+            if evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD:
                 is_pass = (
-                    (
-                        assessment.supports_mastery
-                        or assessment.correctness == CorrectnessLevel.CORRECT
-                        or evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
-                    )
+                    evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
+                    and len(evaluation.misconceptions) == 0
+                    and (assessment is None or len(assessment.misconceptions) == 0)
+                    and not is_teach_or_stuck
+                    and not is_question
+                    and not is_bare_ack
+                    and word_count >= 3
+                )
+            elif assessment is not None:
+                is_pass = (
+                    (assessment.supports_mastery or assessment.correctness == CorrectnessLevel.CORRECT)
                     and assessment.correctness not in (
                         CorrectnessLevel.PARTIALLY_CORRECT,
                         CorrectnessLevel.INCOMPLETE,
@@ -292,22 +298,13 @@ class DecisionEngine:
                     )
                     and assessment.relevance_level in (RelevanceLevel.RELEVANT, RelevanceLevel.PARTIALLY_RELEVANT)
                     and len(assessment.misconceptions) == 0
-                    and evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
                     and not is_teach_or_stuck
                     and not is_question
                     and not is_bare_ack
                     and word_count >= 3
                 )
             else:
-                is_pass = (
-                    evaluation.correctness >= TEACHER_VERIFICATION_PASS_THRESHOLD
-                    and evaluation.stuck_probability < TEACHER_VERIFICATION_MAX_STUCK
-                    and len(evaluation.misconceptions) == 0
-                    and not is_teach_or_stuck
-                    and not is_question
-                    and not is_bare_ack
-                    and word_count >= 3
-                )
+                is_pass = False
 
             if is_pass:
                 # Verification PASS: Restore interrupted question and return to Student Mode

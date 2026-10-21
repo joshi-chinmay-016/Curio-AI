@@ -604,8 +604,7 @@ def response_node(state: Dict[str, Any]) -> Dict[str, Any]:
     elif decision.should_restore_interrupted_question:
         # Exiting Teacher Mode: restore interrupted question
         restored_q = context.interrupted_question
-        curr_attempts = context.current_state.teacher_attempt_count or 0
-        is_limit_fallback = curr_attempts >= 3 or "Maximum Teacher attempts" in (decision.reason or "")
+        is_limit_fallback = "Maximum Teacher attempts" in (decision.reason or "")
 
         if restored_q:
             if is_limit_fallback:

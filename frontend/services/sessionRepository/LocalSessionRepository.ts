@@ -833,7 +833,7 @@ export class LocalSessionRepository implements SessionRepository {
           should_restore_interrupted_question: true,
         };
 
-        const responseText = `Exactly! ${feedback}\n\nNow let's return to the question we paused:\n\n${restoredQ}`;
+        const responseText = `Spot on! You understood this part perfectly. We're toggling back to Student Mode so you can continue teaching me.\n\nNow, picking up right where we left off:\n\n${restoredQ}`;
         return { evaluation: evalData, decision: decData, aiResponseContent: responseText };
       } else if (isPartial) {
         // PARTIAL: Remain in Teacher Mode and probe missing detail
@@ -1719,10 +1719,11 @@ export class LocalSessionRepository implements SessionRepository {
   }
 
   private generateAdaptedTeacherExplanation(topic: string, gap: string, attempt: number, misconception?: string): string {
+    const errorPrefix = misconception ? `Notice that in your previous answer: "${misconception}". ` : "Let's take a closer look at what happened in that example: ";
     if (attempt === 2) {
-      return `Let's try looking at this with a simple concrete analogy:\n\nImagine a system where every component has a strict contract. If the prerequisites are met, the mechanism processes the input predictably; otherwise, it fails immediately.\n\n**Verification:**\nIn this framework, what allows the system to guarantee correct results without checking every possibility?`;
+      return `${errorPrefix}The essential rule in **${topic}** is that without satisfying the prerequisite (**${gap}**), we cannot safely discard portions of the input because values can appear on the wrong side.\n\n**Verification:**\nIf the list is unsorted, why does eliminating a half of the collection risk completely missing the target?`;
     }
-    return `Let's break this down more simply:\n\nBefore any operation can succeed, the foundation must be in place. If we attempt the operation without satisfying the prerequisite, the outcome is undefined or incorrect.\n\n**Verification:**\nWhy must the prerequisite condition be checked before the main operation begins?`;
+    return `${errorPrefix}Before any divide-and-conquer operation can succeed, the data must follow a known sequence. Otherwise, comparisons against a middle element lead to incorrect deductions.\n\n**Verification:**\nWhy must the collection be sorted before we can safely compare and discard either half?`;
   }
 
   private generateStudentQuestion(
@@ -1755,9 +1756,9 @@ export class LocalSessionRepository implements SessionRepository {
     // 1. CHALLENGE_MISCONCEPTION: Curious, skeptical student doubts directly addressing the user's statement
     if (strategy === "CHALLENGE_MISCONCEPTION" && misconceptions.length > 0) {
       const miscCandidates: string[] = [
-        `Wait, I have a doubt about that: you explained that "${cleanAnswer.length > 45 ? cleanAnswer.substring(0, 45) + "..." : cleanAnswer}", but why would that hold true in **${cleanTopic}**?`,
-        `Hold on, does "${cleanAnswer.length > 40 ? cleanAnswer.substring(0, 40) + "..." : cleanAnswer}" always apply, or could that fail in some cases?`,
-        `Wait, how does that work if the standard assumptions of **${cleanTopic}** don't hold?`,
+        `Wait, I have a doubt about that: you explained that "${cleanAnswer.length > 50 ? cleanAnswer.substring(0, 50) + "..." : cleanAnswer}", but I'm having trouble seeing why that would always hold true in **${cleanTopic}**. Could you clarify if that always applies or if there are situations where that breaks down?`,
+        `Hold on, I'm trying to follow your explanation of "${cleanAnswer.length > 45 ? cleanAnswer.substring(0, 45) + "..." : cleanAnswer}", but wouldn't that cause an issue under certain conditions? Could you explain what happens if those standard assumptions don't hold?`,
+        `Wait, I'm a bit confused about how that works in practice. How does that hold up if the usual prerequisites of **${cleanTopic}** aren't met?`,
       ];
 
       const chosen = pickUnique(miscCandidates);
@@ -1768,9 +1769,9 @@ export class LocalSessionRepository implements SessionRepository {
     if (strategy === "CLARIFY_TERM" && undefinedTerms.length > 0) {
       const term = undefinedTerms[0];
       const termCandidates = [
-        `I understand that, but what exactly does "${term}" represent here?`,
-        `Wait, could you clarify what "${term}" means in this context so I don't get confused?`,
-        `Could you explain what "${term}" stands for and what role it plays here?`,
+        `I think I follow the overall process you explained, but I'm getting a bit confused about the term "${term}". Could you explain what "${term}" actually means in simple, descriptive words and what role it plays here?`,
+        `I'm trying to visualize the steps you mentioned, but I'm not entirely sure about "${term}". What exactly does "${term}" represent in this context, and could you clarify it with a quick example so I don't get mixed up?`,
+        `That explanation helps me see the bigger picture, but I have a doubt regarding "${term}". Could you break down what "${term}" stands for and how it affects the rest of the steps?`,
       ];
       const chosen = pickUnique(termCandidates);
       if (chosen) return chosen;
@@ -1785,60 +1786,60 @@ export class LocalSessionRepository implements SessionRepository {
 
     // Category: Mechanism / Probe How (Innocent student wanting to know what happens first and how it works)
     if (cat === "mechanism" || strategy === "PROBE_HOW") {
-      universalCandidates.push(`Oh, I understand what it's used for! But could you walk me through how **${cleanTopic}** actually works step-by-step? What does it do first?`);
-      universalCandidates.push(`I see! But how does it actually find or process that—could you explain what steps it follows?`);
-      universalCandidates.push(`Wait, I didn't quite understand how it actually does that under the hood—what happens when it starts?`);
-      universalCandidates.push(`Could you explain the step-by-step process of what **${cleanTopic}** does from start to finish?`);
+      universalCandidates.push(`Oh, I think I understand what it's used for, but I'm having trouble picturing the actual mechanism. Could you walk me through how **${cleanTopic}** actually works step-by-step from the very beginning?`);
+      universalCandidates.push(`I see the main goal here! But I'm not quite sure how it actually processes everything under the hood—could you explain what steps it follows in simple, descriptive terms?`);
+      universalCandidates.push(`I follow the general idea so far, but I'm struggling to visualize what happens first when it runs. Could you break down the step-by-step process for me?`);
+      universalCandidates.push(`Could you explain the step-by-step process of what **${cleanTopic}** does from start to finish so I can understand the inner workings?`);
     }
 
     // Category: Application / Request Example
     if (cat === "application" || strategy === "REQUEST_EXAMPLE") {
-      universalCandidates.push(`Could you walk me through a small, concrete example so I can picture how **${cleanTopic}** works in action?`);
-      universalCandidates.push(`Could you show me a small example with real values or items so I can trace what it does at each step?`);
-      universalCandidates.push(`Can you give me a simple scenario to illustrate how that works in practice?`);
+      universalCandidates.push(`I understand the theoretical steps you shared, but I learn best when seeing things in action. Could you walk me through a simple, concrete example with real values so I can trace what happens at each step?`);
+      universalCandidates.push(`That makes sense on paper, but I'm having trouble picturing it with real data. Could you show me a small example with specific items so I can clearly see how **${cleanTopic}** executes?`);
+      universalCandidates.push(`Can you give me a simple, descriptive scenario to illustrate how **${cleanTopic}** works in practice?`);
     }
 
     // Category: Mechanism Doubt / Probe Why
     if (strategy === "PROBE_WHY") {
-      universalCandidates.push(`Wait, why does it take that specific step, and how does it know where to go next in **${cleanTopic}**?`);
-      universalCandidates.push(`Hold on, how can we be sure that step won't accidentally miss what we are looking for?`);
-      universalCandidates.push(`Wait, I have a doubt: why does that step guarantee that it works correctly?`);
+      universalCandidates.push(`Wait, I follow that step, but I don't fully understand the reasoning behind it. Why does it take that specific approach, and how does it know where to go next in **${cleanTopic}**?`);
+      universalCandidates.push(`Hold on, I have a doubt about that part: how can we be sure that step won't accidentally miss something or give an incorrect result?`);
+      universalCandidates.push(`Wait, I'm trying to make sure I understand the logic. Why does that step guarantee that **${cleanTopic}** works correctly?`);
     }
 
     // Category: Prerequisite / Condition Doubt
     if (cat === "prerequisite") {
-      universalCandidates.push(`Oh! Does that mean **${cleanTopic}** only works if certain conditions are met? What needs to be in place beforehand?`);
-      universalCandidates.push(`Wait, so what happens if those conditions aren't met before starting **${cleanTopic}**?`);
-      universalCandidates.push(`Why is that specific rule or setup necessary for **${cleanTopic}** to work?`);
+      universalCandidates.push(`Hold on, I think I see how the process works, but does **${cleanTopic}** require certain conditions or setup before starting? What happens if someone tries to run it without meeting those conditions?`);
+      universalCandidates.push(`Wait, I have a doubt about whether this always works. Does something need to be prepared or organized beforehand for **${cleanTopic}** to function properly?`);
+      universalCandidates.push(`Why is that specific rule or setup necessary before **${cleanTopic}** can begin?`);
     }
 
     // Category: Edge Cases / Boundaries
     if (cat === "edge_cases" || strategy === "TEST_EDGE_CASE") {
-      universalCandidates.push(`What happens if the item we want isn't even in there, or the input is completely empty?`);
-      universalCandidates.push(`What happens in tricky edge cases, like when there are duplicates or extreme values?`);
-      universalCandidates.push(`How does **${cleanTopic}** handle boundary situations when it reaches the very end without finding an answer?`);
+      universalCandidates.push(`I feel like I'm getting a good grasp of the normal flow, but what happens when things go wrong? For instance, what does **${cleanTopic}** do if the target isn't there at all, or if the input is completely empty?`);
+      universalCandidates.push(`That clears up the standard flow, but I'm curious about boundary limits. How does **${cleanTopic}** handle tricky edge cases, like duplicate values or unusual inputs?`);
+      universalCandidates.push(`How does **${cleanTopic}** handle boundary situations when it reaches the very end without finding what it was looking for?`);
     }
 
     // Category: Complexity / Performance
     if (cat === "complexity" || strategy === "DEPTH_EXPANSION") {
-      universalCandidates.push(`How fast does **${cleanTopic}** run when we have millions of items, and what causes it to slow down?`);
-      universalCandidates.push(`What is the difference between the best-case and worst-case performance of **${cleanTopic}**?`);
+      universalCandidates.push(`I see how it works for a small set of items, but I'm wondering how it scales. How fast does **${cleanTopic}** run when handling millions of elements, and what causes it to slow down?`);
+      universalCandidates.push(`I'm curious about efficiency in different situations. What is the difference between the best-case and worst-case performance of **${cleanTopic}**, and what causes the worst case?`);
     }
 
     // Category: Trade-offs / Synthesis
     if (cat === "trade_offs" || strategy === "CONNECT_CONCEPTS") {
-      universalCandidates.push(`When would you prefer using **${cleanTopic}** over alternative methods, and what are its main drawbacks?`);
-      universalCandidates.push(`Under what circumstances would you recommend NOT using **${cleanTopic}**, and what would you use instead?`);
+      universalCandidates.push(`Now that I understand how it functions, I'm trying to figure out when to use it in practice. When would you prefer **${cleanTopic}** over other approaches, and what are its biggest disadvantages?`);
+      universalCandidates.push(`Under what specific circumstances would you recommend NOT using **${cleanTopic}**, and what alternative approach would you choose instead?`);
     }
 
     // Category: Definition
     if (cat === "definition") {
-      universalCandidates.push(`Can you explain what **${cleanTopic}** is and what problem it solves in simple words?`);
+      universalCandidates.push(`I'm completely new to this topic and eager to learn it from scratch. Could you explain what **${cleanTopic}** is in simple, descriptive words and what real-world problem it was created to solve?`);
     }
 
     // 6. Dynamic Entity-Based Student Doubts (If user mentioned specific causal words)
     if (lowerAnswer.includes("because") || lowerAnswer.includes("so that") || lowerAnswer.includes("means that")) {
-      universalCandidates.push(`Wait, I have a doubt about that reasoning: why does that guarantee it works in **${cleanTopic}**?`);
+      universalCandidates.push(`Wait, I have a doubt about that reasoning: why does that specifically guarantee that it works correctly in **${cleanTopic}**?`);
       universalCandidates.push(`Hold on, does that reasoning always hold true, or are there cases where that assumption breaks down in **${cleanTopic}**?`);
     }
 
