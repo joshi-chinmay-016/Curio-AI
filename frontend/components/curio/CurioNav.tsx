@@ -160,7 +160,22 @@ export function CurioNav({ activeRoute = "home", showProfile }: CurioNavProps) {
         </div>
 
         {/* Right Actions & Auth */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Universal Theme Toggle (Light / Dark) */}
+          <button
+            type="button"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="inline-flex items-center justify-center p-2 text-navy/70 dark:text-[#F0F4F8]/70 hover:text-navy dark:hover:text-white hover:bg-ice/80 dark:hover:bg-[#101F33] border border-fog/80 dark:border-[#1E3652] rounded-[4px] transition-colors cursor-pointer"
+            title={theme === "dark" ? "Switch to Light Theme" : "Switch to Dark Theme"}
+            aria-label="Toggle light or dark theme"
+          >
+            {theme === "dark" ? (
+              <Sun className="w-4 h-4 text-gap-orange" />
+            ) : (
+              <Moon className="w-4 h-4 text-cobalt" />
+            )}
+          </button>
+
           {/* GitHub link */}
           <a
             href="https://github.com/joshi-chinmay-016/Curio-AI"

@@ -515,7 +515,7 @@ class ChatService:
         current_state = SessionState(
             session_id=str(session_id),
             current_mode=current_mode,
-            current_difficulty=getattr(db_session.state, "difficulty", 1) if db_session and db_session.state else 1,
+            difficulty=getattr(db_session.state, "difficulty", 1) if db_session and db_session.state else 1,
             understanding_confidence=getattr(db_session.state, "confidence", 0.0) if db_session and db_session.state else 0.0,
             active_concept=getattr(db_session.state, "active_concept", "") if db_session and db_session.state else "",
             current_question=current_question_obj,
@@ -578,10 +578,7 @@ class ChatService:
         if not db_session or not db_session.state:
             raise ValueError(f"Active session {session_id} not found.")
 
-        # 2. Persist User Message
-        user_msg = self.message_repo.create_message(db, session_id, "USER", message_in)
-
-        # 3. Compile AI Context
+        # 2. Compile AI Context (Groq external network call kept outside DB transaction)
         db_history = self.message_repo.list_by_session(db, session_id)
         ai_history = [
             ChatMessage(
@@ -590,9 +587,16 @@ class ChatService:
                 input_type=self._normalize_input_type(getattr(m, "input_type", None))
             ) for m in db_history
         ]
-        context = self._build_ai_context(db, session_id, db_session, ai_history, db_history)
+        ai_history.append(
+            ChatMessage(
+                role=Role.USER,
+                content=message_in.content,
+                input_type=self._normalize_input_type(message_in.input_type)
+            )
+        )
+        context = self._build_ai_context(db, session_id, db_session, ai_history=ai_history, db_history=db_history)
 
-        # 3b. Retrieve document context for RAG (if session is document-backed)
+        # 2b. Retrieve document context for RAG (if session is document-backed)
         source_context = self._retrieve_source_context(
             db=db,
             user_id=user_id,
@@ -603,22 +607,14 @@ class ChatService:
         if source_context:
             context.source_context = source_context
 
-        # 4. Invoke AI Engine
+        # 3. Invoke AI Engine (EXTERNAL NETWORK CALL - OUTSIDE DB TRANSACTION)
         ai_result: AIResult = self.ai_engine.process(context)
         evaluation = ai_result.evaluation
         decision = ai_result.decision
         response = ai_result.response
         updates = ai_result.state_updates
 
-        # 5. Persist AI Response Message
-        ai_msg = self.message_repo.create_message(
-            db,
-            session_id,
-            "AI",
-            MessageCreate(content=response.content, input_type=CommonInputType.TEXT)
-        )
-
-        # 6. Save Turn Evaluation
+        # 4. Prepare structured responses
         turn_eval_in = TurnEvaluationResponse(
             correctness=evaluation.correctness,
             clarity=evaluation.clarity,
@@ -634,38 +630,8 @@ class ChatService:
             recommended_strategy=LearningStrategy(evaluation.recommended_strategy.value if hasattr(evaluation.recommended_strategy, "value") else str(evaluation.recommended_strategy)),
             recommended_difficulty=evaluation.recommended_difficulty
         )
-        self.message_repo.create_evaluation(db, user_msg.id, turn_eval_in)
 
-        # 6b. Persist Turn Assessment (LearningAssessment, TurnInterpretation, LearningObjective, QuestionSpecification)
-        if ai_result.learning_assessment or ai_result.turn_interpretation or ai_result.learning_objective or ai_result.question_specification:
-            # Get user_id from session for ownership
-            session_user_id = db_session.user_id
-            learning_assessment_dict = None
-            turn_interpretation_dict = None
-            learning_objective_dict = None
-            question_specification_dict = None
-
-            if ai_result.learning_assessment:
-                learning_assessment_dict = ai_result.learning_assessment.model_dump(mode="json")
-            if ai_result.turn_interpretation:
-                turn_interpretation_dict = ai_result.turn_interpretation.model_dump(mode="json")
-            if ai_result.learning_objective:
-                learning_objective_dict = ai_result.learning_objective.model_dump(mode="json")
-            if ai_result.question_specification:
-                question_specification_dict = ai_result.question_specification.model_dump(mode="json")
-
-            self.turn_assessment_repo.create_assessment(
-                db=db,
-                message_id=user_msg.id,
-                session_id=session_id,
-                user_id=session_user_id,
-                learning_assessment=learning_assessment_dict,
-                turn_interpretation=turn_interpretation_dict,
-                learning_objective=learning_objective_dict,
-                question_specification=question_specification_dict,
-            )
-
-        # 7. Update Session State in DB (Merging StateUpdates with existing DB state)
+        # Prepare mode update
         if updates.current_mode is not None:
             new_mode = LearningMode(updates.current_mode.value if hasattr(updates.current_mode, "value") else str(updates.current_mode))
         else:
@@ -712,28 +678,7 @@ class ChatService:
         else:
             new_misconceptions = list(existing_misconceptions)
 
-        # Question ID tracking
-        current_qid = ai_msg.id
-        if updates.current_question and updates.current_question.id:
-            try:
-                current_qid = UUID(str(updates.current_question.id))
-            except (ValueError, AttributeError):
-                current_qid = ai_msg.id
-
-        # Interrupted question tracking
-        if decision and decision.should_restore_interrupted_question:
-            new_interrupted_qid = None
-        elif updates.interrupted_question is not None:
-            try:
-                new_interrupted_qid = UUID(str(updates.interrupted_question.id)) if updates.interrupted_question.id else None
-            except (ValueError, AttributeError):
-                new_interrupted_qid = db_session.state.interrupted_question_id
-        elif (db_session.state.current_mode.value if hasattr(db_session.state.current_mode, "value") else str(db_session.state.current_mode)) == "STUDENT" and new_mode == LearningMode.TEACHER:
-            new_interrupted_qid = db_session.state.current_question_id
-        else:
-            new_interrupted_qid = db_session.state.interrupted_question_id
-
-        # Teacher intervention persistence
+        # Teacher intervention persistence data preparation
         ti_data = getattr(db_session.state, "teacher_intervention_data", None)
         new_ti_data = None
         if updates.teacher_intervention is not None and hasattr(updates.teacher_intervention, "model_dump"):
@@ -750,6 +695,7 @@ class ChatService:
                     new_msh.append(t.model_dump())
                 elif isinstance(t, dict):
                     new_msh.append(t)
+
         # Teacher Mode attempt count and intervention tracking
         if (decision and decision.should_restore_interrupted_question) or new_mode == LearningMode.STUDENT:
             new_teacher_attempts = 0
@@ -818,7 +764,6 @@ class ChatService:
 
         # Recent strategy history: replace if updates provided (not None), else preserve existing
         if updates.recent_strategy_history is not None:
-            # Convert Strategy enums to strings
             new_recent_strategy_history = [
                 s.value if hasattr(s, "value") else str(s)
                 for s in updates.recent_strategy_history
@@ -837,9 +782,7 @@ class ChatService:
         else:
             new_mode_switch_history = _safe_list(getattr(db_session.state, "mode_switch_history", None))
 
-        # ConceptModel persistence:
-        # Serialize valid ConceptModel instances via model_dump(mode="json").
-        # If the update is None or has no concepts (failed build), preserve existing valid model if topics match.
+        # ConceptModel persistence
         raw_existing_cm = getattr(db_session.state, "concept_model", None)
         new_concept_model: Optional[Dict[str, Any]] = None
 
@@ -848,7 +791,6 @@ class ChatService:
                 if updates.concept_model.concepts:
                     new_concept_model = updates.concept_model.model_dump(mode="json")
                 else:
-                    # Model has 0 concepts - preserve existing valid model if topics match
                     if raw_existing_cm and isinstance(raw_existing_cm, dict):
                         existing_topic = (raw_existing_cm.get("topic") or "").strip().lower()
                         sess_topic = (db_session.topic or "").strip().lower()
@@ -870,46 +812,118 @@ class ChatService:
             elif isinstance(raw_existing_cm, ConceptModel):
                 new_concept_model = raw_existing_cm.model_dump(mode="json")
 
-        state_update = SessionStateBase(
-            current_mode=new_mode,
-            difficulty=new_difficulty,
-            confidence=new_confidence,
-            active_concept=new_active_concept,
-            current_question_id=current_qid,
-            interrupted_question_id=new_interrupted_qid,
-            consecutive_strong_answers=consecutive_strong,
-            consecutive_weak_answers=consecutive_weak,
-            unresolved_misconceptions=new_misconceptions,
-            mastered_concepts=new_mastered,
-            concept_mastery=new_concept_mastery,
-            misconception_counts=new_misconception_counts,
-            recent_strategy_history=new_recent_strategy_history,
-            mode_switch_history=new_mode_switch_history,
-            concept_model=new_concept_model,
-            teacher_intervention_data=new_ti_data,
-            teacher_attempt_count=new_teacher_attempts,
-            teacher_intervention=new_teacher_intervention,
-        )
+        # 5. ATOMIC PERSISTENCE BOUNDARY: Persist user message, AI response, evaluation,
+        # assessment, session state, teacher intervention, and concept progress together.
+        try:
+            # 5a. Persist User Message (commit=False, flush to populate user_msg.id)
+            user_msg = self.message_repo.create_message(
+                db, session_id, "USER", message_in, commit=False
+            )
 
-        self.session_repo.update_state(db, session_id, state_update)
+            # 5b. Persist AI Response Message (commit=False, flush to populate ai_msg.id)
+            ai_msg = self.message_repo.create_message(
+                db,
+                session_id,
+                "AI",
+                MessageCreate(content=response.content, input_type=CommonInputType.TEXT),
+                commit=False
+            )
 
-        # 8. Persist Teacher Intervention Log (if Teacher Mode event occurred)
-        self._persist_teacher_intervention(
-            db=db,
-            session_id=session_id,
-            user_id=user_id,
-            db_session=db_session,
-            ai_result=ai_result,
-            ai_msg=ai_msg,
-            message_in=message_in,
-        )
+            # 5c. Persist Turn Evaluation (commit=False)
+            self.message_repo.create_evaluation(db, user_msg.id, turn_eval_in, commit=False)
 
-        # 9. Synchronize UserConceptProgress from structured AIResult StateUpdates
-        self._sync_user_concept_progress(
-            db=db,
-            user_id=user_id,
-            updates=ai_result.state_updates,
-        )
+            # 5d. Persist Turn Assessment if present (commit=False)
+            if ai_result.learning_assessment or ai_result.turn_interpretation or ai_result.learning_objective or ai_result.question_specification:
+                session_user_id = db_session.user_id
+                learning_assessment_dict = ai_result.learning_assessment.model_dump(mode="json") if ai_result.learning_assessment else None
+                turn_interpretation_dict = ai_result.turn_interpretation.model_dump(mode="json") if ai_result.turn_interpretation else None
+                learning_objective_dict = ai_result.learning_objective.model_dump(mode="json") if ai_result.learning_objective else None
+                question_specification_dict = ai_result.question_specification.model_dump(mode="json") if ai_result.question_specification else None
+
+                self.turn_assessment_repo.create_assessment(
+                    db=db,
+                    message_id=user_msg.id,
+                    session_id=session_id,
+                    user_id=session_user_id,
+                    learning_assessment=learning_assessment_dict,
+                    turn_interpretation=turn_interpretation_dict,
+                    learning_objective=learning_objective_dict,
+                    question_specification=question_specification_dict,
+                    commit=False,
+                )
+
+            # 5e. Question ID and Interrupted Question ID tracking
+            current_qid = ai_msg.id
+            if updates.current_question and updates.current_question.id:
+                try:
+                    current_qid = UUID(str(updates.current_question.id))
+                except (ValueError, AttributeError):
+                    current_qid = ai_msg.id
+
+            if decision and decision.should_restore_interrupted_question:
+                new_interrupted_qid = None
+            elif updates.interrupted_question is not None:
+                try:
+                    new_interrupted_qid = UUID(str(updates.interrupted_question.id)) if updates.interrupted_question.id else None
+                except (ValueError, AttributeError):
+                    new_interrupted_qid = db_session.state.interrupted_question_id
+            elif (db_session.state.current_mode.value if hasattr(db_session.state.current_mode, "value") else str(db_session.state.current_mode)) == "STUDENT" and new_mode == LearningMode.TEACHER:
+                new_interrupted_qid = db_session.state.current_question_id
+            else:
+                new_interrupted_qid = db_session.state.interrupted_question_id
+
+            state_update = SessionStateBase(
+                current_mode=new_mode,
+                difficulty=new_difficulty,
+                confidence=new_confidence,
+                active_concept=new_active_concept,
+                current_question_id=current_qid,
+                interrupted_question_id=new_interrupted_qid,
+                consecutive_strong_answers=consecutive_strong,
+                consecutive_weak_answers=consecutive_weak,
+                unresolved_misconceptions=new_misconceptions,
+                mastered_concepts=new_mastered,
+                concept_mastery=new_concept_mastery,
+                misconception_counts=new_misconception_counts,
+                recent_strategy_history=new_recent_strategy_history,
+                mode_switch_history=new_mode_switch_history,
+                concept_model=new_concept_model,
+                teacher_intervention_data=new_ti_data,
+                teacher_attempt_count=new_teacher_attempts,
+                teacher_intervention=new_teacher_intervention,
+            )
+
+            # Update session state (commit=False)
+            self.session_repo.update_state(db, session_id, state_update, commit=False)
+
+            # 5f. Persist Teacher Intervention Log (commit=False)
+            self._persist_teacher_intervention(
+                db=db,
+                session_id=session_id,
+                user_id=user_id,
+                db_session=db_session,
+                ai_result=ai_result,
+                ai_msg=ai_msg,
+                message_in=message_in,
+                commit=False,
+            )
+
+            # 5g. Synchronize UserConceptProgress (commit=False)
+            self._sync_user_concept_progress(
+                db=db,
+                user_id=user_id,
+                updates=ai_result.state_updates,
+                commit=False,
+            )
+
+            # 5h. Single cohesive commit for the complete conversational turn
+            db.commit()
+            db.refresh(user_msg)
+            db.refresh(ai_msg)
+        except Exception as e:
+            db.rollback()
+            logger.exception("Transaction failed in send_message, rolling back turn: %s", e)
+            raise
 
         return ChatTurnResponse(
             user_message=self._to_message_response(user_msg),
@@ -923,9 +937,9 @@ class ChatService:
                 reason=decision.reason,
                 active_concept=decision.active_concept,
                 should_offer_termination=decision.should_offer_termination,
-                should_restore_interrupted_question=decision.should_restore_interrupted_question
-)
-    )
+                should_restore_interrupted_question=decision.should_restore_interrupted_question,
+            ),
+        )
 
     def _persist_teacher_intervention(
         self,
@@ -936,6 +950,7 @@ class ChatService:
         ai_result: AIResult,
         ai_msg: Any,
         message_in: MessageCreate,
+        commit: bool = True,
     ) -> None:
         """
         Persist Teacher Intervention Log based on structured AIResult data.
@@ -998,9 +1013,6 @@ class ChatService:
         # EXIT or LIMIT_FALLBACK: Was TEACHER, now STUDENT with restoration
         # Check this FIRST, before enter/continue, since updates may have cleared ti
         if prev_mode == "TEACHER" and new_mode == "STUDENT" and decision.should_restore_interrupted_question:
-            # We cannot reliably distinguish exit vs limit_fallback from structured data alone
-            # without parsing response text. Default to "exit" and leave verification_passed NULL
-            # since the backend doesn't have structured verification result.
             intervention_type = "exit"
 
         # ENTER: Previous was STUDENT, now TEACHER with active intervention
@@ -1014,9 +1026,8 @@ class ChatService:
         if not intervention_type:
             return
 
-        try:
+        def _execute_write():
             if intervention_type in ("enter", "continue"):
-                # Check for existing open intervention at this attempt to avoid duplicates
                 existing = self.teacher_intervention_repo.get_latest_open_by_session(
                     db=db,
                     session_id=session_id,
@@ -1024,14 +1035,13 @@ class ChatService:
                     attempt_count=attempt_count,
                 )
                 if existing:
-                    # Update existing open intervention if gap changed
                     if existing.gap != gap:
                         existing.gap = gap
-                    db.commit()
+                    if commit:
+                        db.commit()
+                    else:
+                        db.flush()
                 else:
-                    # Create new intervention record
-                    # Note: We do NOT extract teacher_explanation or verification_question
-                    # from AI response text per architectural boundary.
                     self.teacher_intervention_repo.create(
                         db=db,
                         session_id=session_id,
@@ -1041,10 +1051,10 @@ class ChatService:
                         teacher_explanation=None,
                         verification_question=None,
                         intervention_type=intervention_type,
+                        commit=commit,
                     )
 
             elif intervention_type == "exit":
-                # Find the latest open intervention and update it
                 open_log = self.teacher_intervention_repo.get_latest_open_by_session(
                     db=db,
                     session_id=session_id,
@@ -1053,14 +1063,19 @@ class ChatService:
                 if open_log:
                     open_log.verification_answer = message_in.content if message_in.content else None
                     open_log.intervention_type = "exit"
-                    db.commit()
+                    if commit:
+                        db.commit()
+                    else:
+                        db.flush()
 
-        except Exception:
-            # If persistence fails, rollback this specific operation
-            # but don't fail the entire turn (consistent with current architecture)
-            db.rollback()
-# Log error in production; here we silently continue
-            pass
+        if commit:
+            try:
+                _execute_write()
+            except Exception:
+                db.rollback()
+                pass
+        else:
+            _execute_write()
 
     def _retrieve_source_context(
         self,
@@ -1177,6 +1192,7 @@ class ChatService:
         db: SQLAlchemySession,
         user_id: Optional[UUID],
         updates: Any,
+        commit: bool = True,
     ) -> None:
         """
         Synchronize UserConceptProgress from structured AIResult StateUpdates.
@@ -1204,7 +1220,8 @@ class ChatService:
         if not concept_mastery:
             return
 
-        try:
+        def _execute_sync():
+            batch_items = []
             for concept, mastery_score in concept_mastery.items():
                 # Only sync valid mastery values (0.0-1.0)
                 if not isinstance(mastery_score, (int, float)):
@@ -1218,7 +1235,6 @@ class ChatService:
                 if misconception_count is not None and not isinstance(misconception_count, bool):
                     misconception_count = int(misconception_count)
                 else:
-                    # Preserve existing misconception count when AI doesn't provide it
                     misconception_count = None
 
                 # Difficulty: only update if explicitly provided by AI
@@ -1226,20 +1242,36 @@ class ChatService:
                 if difficulty is not None and isinstance(difficulty, int) and not isinstance(difficulty, bool):
                     last_difficulty = difficulty
 
-                self.concept_progress_repo.upsert(
-                    db=db,
-                    user_id=user_id,
-                    concept=concept,
-                    mastery_score=mastery_score,
-                    misconception_count=misconception_count,
-                    last_difficulty=last_difficulty,
-                    last_practiced_at=datetime.now(timezone.utc),
-                )
-        except Exception:
-            # If synchronization fails, rollback this specific operation
-            # but don't fail the entire turn (consistent with current architecture)
-            db.rollback()
-            # Log error in production; here we silently continue
-            pass
+                batch_items.append({
+                    "concept": concept,
+                    "mastery_score": mastery_score,
+                    "misconception_count": misconception_count,
+                    "last_difficulty": last_difficulty,
+                    "last_practiced_at": datetime.now(timezone.utc),
+                })
 
+            if batch_items:
+                if hasattr(self.concept_progress_repo, "upsert_batch"):
+                    self.concept_progress_repo.upsert_batch(
+                        db=db,
+                        user_id=user_id,
+                        items=batch_items,
+                        commit=commit,
+                    )
+                else:
+                    for item in batch_items:
+                        self.concept_progress_repo.upsert(
+                            db=db,
+                            user_id=user_id,
+                            commit=commit,
+                            **item,
+                        )
 
+        if commit:
+            try:
+                _execute_sync()
+            except Exception:
+                db.rollback()
+                pass
+        else:
+            _execute_sync()

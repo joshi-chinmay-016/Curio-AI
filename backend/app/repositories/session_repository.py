@@ -125,7 +125,9 @@ class SessionRepository:
             return None
         return self.update(db, db_session, obj_in)
 
-    def update_state(self, db: SQLAlchemySession, session_id: UUID, state_in: SessionStateBase) -> SessionState:
+    def update_state(
+        self, db: SQLAlchemySession, session_id: UUID, state_in: SessionStateBase, commit: bool = True
+    ) -> SessionState:
         db_state = db.query(SessionState).filter(SessionState.session_id == session_id).first()
         if not db_state:
             db_state = SessionState(session_id=session_id)
@@ -294,8 +296,11 @@ class SessionRepository:
             db_state.teacher_intervention = state_in["teacher_intervention"]
 
         db.add(db_state)
-        db.commit()
-        db.refresh(db_state)
+        if commit:
+            db.commit()
+            db.refresh(db_state)
+        else:
+            db.flush()
         return db_state
 
     def delete(self, db: SQLAlchemySession, id: UUID) -> bool:

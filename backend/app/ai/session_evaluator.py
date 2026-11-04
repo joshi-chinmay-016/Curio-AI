@@ -113,12 +113,18 @@ class SessionEvaluator:
 
         return final_eval
 
-    def generate_report(self, evidence: SessionEvidence) -> LearningReport:
+    def generate_report(
+        self,
+        evidence: SessionEvidence,
+        evaluation: Optional[SessionEvaluation] = None,
+    ) -> LearningReport:
         """
         Convenience pipeline:
         SessionEvidence -> SessionEvaluation -> LearningReport.
+        Re-uses precomputed SessionEvaluation if provided to avoid duplicate evaluation.
         """
-        evaluation = self.evaluate_session(evidence)
+        if evaluation is None:
+            evaluation = self.evaluate_session(evidence)
         max_diff = max(evidence.difficulty_progression) if evidence.difficulty_progression else 1
         teacher_count = len(evidence.teacher_interventions)
         return self.report_builder.build_report(

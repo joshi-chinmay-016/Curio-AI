@@ -105,10 +105,10 @@ class CurioEngine:
         evaluator = SessionEvaluator(self.provider)
         return evaluator.evaluate_session(evidence)
 
-    def generate_report(self, evidence: Any) -> Any:
+    def generate_report(self, evidence: Any, evaluation: Optional[Any] = None) -> Any:
         """
         Generate a complete UI-agnostic LearningReport from structured SessionEvidence.
         """
         from backend.app.ai.session_evaluator import SessionEvaluator
         evaluator = SessionEvaluator(self.provider)
-        return evaluator.generate_report(evidence)
+        return evaluator.generate_report(evidence, evaluation=evaluation)

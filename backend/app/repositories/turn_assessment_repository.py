@@ -18,6 +18,7 @@ class TurnAssessmentRepository:
         turn_interpretation: Optional[dict] = None,
         learning_objective: Optional[dict] = None,
         question_specification: Optional[dict] = None,
+        commit: bool = True,
     ) -> TurnAssessment:
         db_assessment = TurnAssessment(
             message_id=message_id,
@@ -29,8 +30,11 @@ class TurnAssessmentRepository:
             question_specification=question_specification,
         )
         db.add(db_assessment)
-        db.commit()
-        db.refresh(db_assessment)
+        if commit:
+            db.commit()
+            db.refresh(db_assessment)
+        else:
+            db.flush()
         return db_assessment
 
     def get_by_message_id(self, db: SQLAlchemySession, message_id: UUID) -> Optional[TurnAssessment]:

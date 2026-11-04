@@ -7,7 +7,14 @@ from backend.app.models.evaluation import TurnEvaluation
 from backend.app.schemas.message import MessageCreate, TurnEvaluationResponse
 
 class MessageRepository:
-    def create_message(self, db: SQLAlchemySession, session_id: UUID, sender: str, obj_in: MessageCreate) -> Message:
+    def create_message(
+        self,
+        db: SQLAlchemySession,
+        session_id: UUID,
+        sender: str,
+        obj_in: MessageCreate,
+        commit: bool = True,
+    ) -> Message:
         db_message = Message(
             session_id=session_id,
             sender=sender,
@@ -15,11 +22,20 @@ class MessageRepository:
             input_type=obj_in.input_type.value
         )
         db.add(db_message)
-        db.commit()
-        db.refresh(db_message)
+        if commit:
+            db.commit()
+            db.refresh(db_message)
+        else:
+            db.flush()
         return db_message
 
-    def create_evaluation(self, db: SQLAlchemySession, message_id: UUID, eval_in: TurnEvaluationResponse) -> TurnEvaluation:
+    def create_evaluation(
+        self,
+        db: SQLAlchemySession,
+        message_id: UUID,
+        eval_in: TurnEvaluationResponse,
+        commit: bool = True,
+    ) -> TurnEvaluation:
         db_eval = TurnEvaluation(
             message_id=message_id,
             correctness=eval_in.correctness,
@@ -37,8 +53,11 @@ class MessageRepository:
             recommended_difficulty=eval_in.recommended_difficulty
         )
         db.add(db_eval)
-        db.commit()
-        db.refresh(db_eval)
+        if commit:
+            db.commit()
+            db.refresh(db_eval)
+        else:
+            db.flush()
         return db_eval
 
     def list_by_session(self, db: SQLAlchemySession, session_id: UUID) -> List[Message]:
@@ -61,5 +80,3 @@ class MessageRepository:
             .all()
         )
         return list(reversed(subquery))
-
-

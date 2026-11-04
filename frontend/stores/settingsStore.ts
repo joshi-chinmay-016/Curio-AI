@@ -78,10 +78,7 @@ function applyThemeToDOM(theme: AppTheme) {
   if (typeof window === "undefined") return;
 
   const root = document.documentElement;
-  const isDark =
-    theme === "dark" ||
-    (theme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const isDark = theme === "dark";
 
   if (isDark) {
     root.classList.add("dark");
@@ -125,18 +122,20 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       }
 
       if (parsed) {
+        const activeTheme = parsed.theme === "dark" ? "dark" : "light";
         set((state) => ({
           ...state,
           ...parsed,
+          theme: activeTheme,
           profile: { ...state.profile, ...parsed.profile },
           learning: { ...state.learning, ...parsed.learning },
           audio: { ...state.audio, ...parsed.audio },
           privacy: { ...state.privacy, ...parsed.privacy },
           stats: { ...state.stats, ...parsed.stats },
         }));
-        applyThemeToDOM(parsed.theme || "light");
+        applyThemeToDOM(activeTheme);
       } else {
-        applyThemeToDOM(get().theme);
+        applyThemeToDOM("light");
       }
 
       // Automatically sync real stats in background

@@ -45,17 +45,25 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              try {
-                var stored = localStorage.getItem("curio_user_settings_v1");
-                if (stored) {
-                  var theme = JSON.parse(stored).theme;
-                  if (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+              (function() {
+                try {
+                  var stored = localStorage.getItem("curio_user_settings_v1");
+                  var isDark = false;
+                  if (stored) {
+                    var parsed = JSON.parse(stored);
+                    if (parsed && parsed.theme === "dark") {
+                      isDark = true;
+                    }
+                  }
+                  if (isDark) {
                     document.documentElement.classList.add("dark");
                   } else {
                     document.documentElement.classList.remove("dark");
                   }
+                } catch (e) {
+                  document.documentElement.classList.remove("dark");
                 }
-              } catch (e) {}
+              })();
             `,
           }}
         />
@@ -67,4 +75,3 @@ export default function RootLayout({
     </html>
   );
 }
-

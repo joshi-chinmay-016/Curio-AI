@@ -231,12 +231,7 @@ function AudioLearningStage() {
 
     try {
       const repo = getSessionRepository();
-
-      // Ensure note-taking / marking animation is visibly performed for at least 1.4s
-      const [turnResult] = await Promise.all([
-        repo.sendMessage(sessionId, spokenText.trim(), "VOICE"),
-        new Promise((resolve) => setTimeout(resolve, 1400)),
-      ]);
+      const turnResult = await repo.sendMessage(sessionId, spokenText.trim(), "VOICE");
 
       setIsBusyProcessing(false);
 
