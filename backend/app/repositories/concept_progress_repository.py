@@ -36,6 +36,7 @@ class ConceptProgressRepository:
         last_practiced_at: Optional[datetime] = None,
         last_difficulty: Optional[int] = None,
         misconception_count: Optional[int] = None,
+        commit: bool = True,
     ) -> UserConceptProgress:
         """
         Create or update concept progress for a user.
@@ -70,9 +71,43 @@ class ConceptProgressRepository:
             if misconception_count is not None:
                 progress.misconception_count = misconception_count
 
-        db.commit()
-        db.refresh(progress)
+        if commit:
+            db.commit()
+            db.refresh(progress)
+        else:
+            db.flush()
         return progress
+
+    def upsert_batch(
+        self,
+        db: SQLAlchemySession,
+        user_id: UUID,
+        items: List[dict],
+        commit: bool = True,
+    ) -> List[UserConceptProgress]:
+        """
+        Batch create or update multiple concept progress records in a single database transaction.
+        """
+        results = []
+        for item in items:
+            p = self.upsert(
+                db=db,
+                user_id=user_id,
+                concept=item["concept"],
+                mastery_score=item.get("mastery_score"),
+                total_attempts=item.get("total_attempts"),
+                successful_attempts=item.get("successful_attempts"),
+                last_practiced_at=item.get("last_practiced_at"),
+                last_difficulty=item.get("last_difficulty"),
+                misconception_count=item.get("misconception_count"),
+                commit=False,
+            )
+            results.append(p)
+        if commit:
+            db.commit()
+            for p in results:
+                db.refresh(p)
+        return results
 
     def delete(self, db: SQLAlchemySession, user_id: UUID, concept: str) -> bool:
         """Delete a concept progress record for a user."""

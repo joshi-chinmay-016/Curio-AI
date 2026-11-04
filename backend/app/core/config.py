@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     # Test Database Configuration (Required only for live database integration tests)
     TEST_DATABASE_URL: str = ""
 
+    # Database Connection Pool Configuration (Conservative sizing for 2-worker / multi-replica stability)
+    DATABASE_POOL_SIZE: int = 5
+    DATABASE_MAX_OVERFLOW: int = 5
+    DATABASE_POOL_TIMEOUT: float = 15.0
+    DATABASE_POOL_RECYCLE: int = 300
+
     # AI Keys and Model Settings
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
@@ -199,4 +205,3 @@ class Settings(BaseSettings):
         return self.validate_test_database_url(raw_url)
 
 settings = Settings()
-

@@ -3,7 +3,8 @@ Voice transcription service using faster-whisper.
 
 Production-conscious service providing:
 - Lazy, thread-safe Whisper model initialization (never loaded at import time)
-- Memory and CPU resource throttling via concurrency semaphore
+- Memory and CPU resource throttling via concurrency semaphore and bounded CPU threads
+- Process-level singleton caching to avoid redundant model loads in the same worker process
 - Robust audio format and decodability validation via PyAV container probing
 - Maximum upload size and audio duration enforcement
 - Secure temporary file handling with guaranteed cleanup on success and failure
@@ -18,7 +19,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Tuple, Any
+from typing import Dict, Optional, Tuple, Any
 
 import av
 from fastapi import HTTPException, UploadFile, status
@@ -27,6 +28,10 @@ from backend.app.core.config import settings
 from backend.app.schemas.voice import TranscriptionResponse
 
 logger = logging.getLogger("curio_voice")
+
+# Process-level model cache to prevent reloading large Whisper model weights across service instances
+_GLOBAL_WHISPER_MODELS: Dict[Tuple[str, str, str], Any] = {}
+_GLOBAL_MODEL_LOCK = threading.Lock()
 
 
 class VoiceService:
@@ -60,30 +65,39 @@ class VoiceService:
     def _get_model(self) -> Any:
         """
         Thread-safe lazy initialization of faster-whisper WhisperModel.
+        Uses process-level singleton caching and bounded CPU thread allocation.
         """
         if self._model is not None:
             return self._model
 
-        with self._model_lock:
-            if self._model is not None:
+        model_key = (self._model_size, self._device, self._compute_type)
+
+        with _GLOBAL_MODEL_LOCK:
+            if model_key in _GLOBAL_WHISPER_MODELS:
+                self._model = _GLOBAL_WHISPER_MODELS[model_key]
                 return self._model
 
             try:
                 from faster_whisper import WhisperModel
 
+                cpu_threads = min(2, os.cpu_count() or 2)
                 logger.info(
-                    "Initializing WhisperModel (model=%s, device=%s, compute_type=%s)",
+                    "Initializing WhisperModel (model=%s, device=%s, compute_type=%s, cpu_threads=%d)",
                     self._model_size,
                     self._device,
                     self._compute_type,
+                    cpu_threads,
                 )
                 start_time = time.time()
-                self._model = WhisperModel(
+                loaded_model = WhisperModel(
                     self._model_size,
                     device=self._device,
                     compute_type=self._compute_type,
+                    cpu_threads=cpu_threads,
                 )
                 logger.info("WhisperModel successfully initialized in %.2fs", time.time() - start_time)
+                _GLOBAL_WHISPER_MODELS[model_key] = loaded_model
+                self._model = loaded_model
                 return self._model
             except Exception as e:
                 logger.error("Failed to load WhisperModel: %s", str(e))

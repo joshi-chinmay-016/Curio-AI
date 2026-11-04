@@ -27,21 +27,24 @@ export class ApiSessionRepository implements SessionRepository {
   }
 
   async getSession(sessionId: string): Promise<StoredSession | null> {
-    let data: any;
-    try {
-      data = await apiClient<any>(`/sessions/${sessionId}`);
-    } catch (err: any) {
-      if (err.status === 404 || (err.message && err.message.toLowerCase().includes("not found"))) {
+    const [sessionRes, messagesRes] = await Promise.allSettled([
+      apiClient<any>(`/sessions/${sessionId}`),
+      apiClient<any[]>(`/sessions/${sessionId}/messages`),
+    ]);
+
+    if (sessionRes.status === "rejected") {
+      const err = sessionRes.reason;
+      if (err?.status === 404 || (err?.message && err.message.toLowerCase().includes("not found"))) {
         return null;
       }
       throw err;
     }
 
-    const stored = this.mapBackendSessionToStored(data);
+    const stored = this.mapBackendSessionToStored(sessionRes.value);
 
-    // Fetch messages
-    try {
-      const msgs = await apiClient<any[]>(`/sessions/${sessionId}/messages`);
+    // Process fetched messages if successful
+    if (messagesRes.status === "fulfilled") {
+      const msgs = messagesRes.value;
       if (Array.isArray(msgs)) {
         stored.messages = msgs.map((m: any) => ({
           id: m.message_id || m.id,
@@ -54,8 +57,9 @@ export class ApiSessionRepository implements SessionRepository {
           type: m.sender === "USER" ? "answer" : "question",
         }));
       }
-    } catch (err: any) {
-      if (err.status === 401 || err.status === 403) {
+    } else {
+      const err = messagesRes.reason;
+      if (err?.status === 401 || err?.status === 403) {
         throw err;
       }
       console.warn("Failed to fetch messages for session:", err);

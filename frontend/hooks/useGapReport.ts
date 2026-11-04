@@ -69,8 +69,6 @@ export function useGapReport(sessionId?: string) {
       const gap = report?.gaps.find((g) => g.id === gapId);
       if (!gap) return;
 
-      // Simulated network action
-      await new Promise((res) => setTimeout(res, 600));
       curioToast.success("PRACTICE SESSION CREATED.", `Targeting ${gap.title}`);
     },
     [report]
@@ -99,7 +97,6 @@ export function useGapReport(sessionId?: string) {
 
   // Action: Mark For Review
   const handleMarkForReview = useCallback(async (gapId: string) => {
-    await new Promise((res) => setTimeout(res, 400));
     curioToast.info("MARKED FOR REVIEW.");
   }, []);
 

@@ -17,6 +17,7 @@ class TeacherInterventionRepository:
         verification_answer: Optional[str] = None,
         verification_passed: Optional[bool] = None,
         intervention_type: Optional[str] = None,
+        commit: bool = True,
     ) -> TeacherInterventionLog:
         """
         Create a new teacher intervention log record.
@@ -33,8 +34,11 @@ class TeacherInterventionRepository:
             intervention_type=intervention_type,
         )
         db.add(intervention)
-        db.commit()
-        db.refresh(intervention)
+        if commit:
+            db.commit()
+            db.refresh(intervention)
+        else:
+            db.flush()
         return intervention
 
     def get_latest_open_by_session(

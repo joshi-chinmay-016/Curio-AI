@@ -4,9 +4,24 @@ import React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, BookOpen, Brain, Sparkles } from "lucide-react";
+import dynamic from "next/dynamic";
 import { CurioNav } from "@/components/curio/CurioNav";
 import { KeycapButton } from "@/components/curio/KeycapButton";
-import { Hero3DScene } from "@/components/curio/landing/Hero3DScene";
+import { useSettingsStore } from "@/stores/settingsStore";
+
+const Hero3DScene = dynamic(
+  () => import("@/components/curio/landing/Hero3DScene").then((mod) => mod.Hero3DScene),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[400px] flex items-center justify-center bg-sand/30 dark:bg-navy/30 border border-navy/10 dark:border-white/10 rounded-2xl animate-pulse">
+        <span className="font-mono text-xs text-navy/40 dark:text-cream/40 uppercase tracking-widest">
+          Loading 3D Visualizer...
+        </span>
+      </div>
+    ),
+  }
+);
 import { HowCurioThinks } from "@/components/curio/landing/HowCurioThinks";
 import { LearningParadox3D } from "@/components/curio/landing/LearningParadox3D";
 import { TypewriterHeadline } from "@/components/curio/landing/TypewriterHeadline";
@@ -20,11 +35,13 @@ import { useAuthStore } from "@/stores/authStore";
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuthStore();
+  const { initSettings } = useSettingsStore();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
+    initSettings();
     setMounted(true);
-  }, []);
+  }, [initSettings]);
 
   const ctaDestination = mounted && isAuthenticated ? "/dashboard" : "/register";
 

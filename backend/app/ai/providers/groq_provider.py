@@ -83,7 +83,7 @@ class GroqLLMProvider(BaseLLMProvider):
         if not self.client:
             return self.mock_fallback.generate_structured(prompt, response_model)
 
-        schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+        schema_json = json.dumps(response_model.model_json_schema(), separators=(",", ":"))
         system_prompt = (
             "You are a pedagogical AI system that strictly outputs valid JSON.\n"
             f"You MUST conform to the following JSON schema:\n{schema_json}\n"

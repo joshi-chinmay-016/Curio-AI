@@ -198,9 +198,6 @@ export function useSessionWebSocket(sessionId: string) {
         const { getSessionRepository } = await import("@/services/sessionRepository");
         const repo = getSessionRepository();
 
-        // Brief realistic thinking delay for natural conversation feel
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
         const turnResult = await repo.sendMessage(sessionId, cleanContent);
         setThinking(false);
 

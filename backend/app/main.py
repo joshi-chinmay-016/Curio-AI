@@ -46,6 +46,19 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
+# Performance timing and tracing middleware
+@app.middleware("http")
+async def add_process_time_and_request_id(request, call_next):
+    import time
+    import uuid
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    process_time_ms = (time.perf_counter() - start_time) * 1000.0
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Response-Time"] = f"{process_time_ms:.2f}ms"
+    return response
+
 # Register Exception Handlers
 register_exception_handlers(app)
 

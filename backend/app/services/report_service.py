@@ -153,7 +153,7 @@ class ReportService:
         )
 
         session_evaluation: SessionEvaluation = self.ai_engine.evaluate_session(evidence)
-        learning_report: LearningReport = self.ai_engine.generate_report(evidence)
+        learning_report: LearningReport = self.ai_engine.generate_report(evidence, evaluation=session_evaluation)
 
         roadmap_dump = [
             item.model_dump() if hasattr(item, "model_dump") else item
